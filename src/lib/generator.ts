@@ -346,8 +346,10 @@ function surfaceRules(cfg: ThemeConfig): string {
     out += rule(`${P} div[class*="bg-card/30"]`, [`background: ${rowFade('var(--card)', alpha * 0.5)} !important`,
       `border-color: ${bw === 0 ? 'transparent' : rowFade(stroke, Math.min(100, s.borderOpacity))} !important`]);
     out += rule([`${P} ${PROFILE}`, PINNED], [`backdrop-filter: ${blur} !important`, `border-width: ${bw}px !important`]);
-    // Свой цвет рамок - и у профилей: их рамка - отдельная переменная клиента
-    if (s.borderColor !== 'auto') out += rule(`${P} ${PROFILE}`, [`--stroke-profile-inactive: ${border}`]);
+    // Рамка профилей - отдельная переменная клиента (border-stroke-profile-inactive) со своим цветом из
+    // палитры. Задаём её всегда, а не только при своём цвете: иначе при «Авто» заметность рамок до
+    // профилей не доходила. Рамку текущего профиля оформляет его стиль
+    out += rule(`${P} ${PROFILE}`, [`--stroke-profile-inactive: ${border}`]);
     // Окна и меню остаются читаемыми при любом фоне карточек
     out += rule(`${P} :is(${POPUPS})`, [
       `background: ${grain}${cm('var(--popover)', Math.max(alpha, 78))} !important`,
