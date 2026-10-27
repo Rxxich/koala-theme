@@ -26,6 +26,8 @@ const SELECTED = `${P} [data-slot="card"][class*="border-primary/"]`;
 const PINNED = `${P} [data-slot="card"][class*="bg-amber-500"]`;
 const PROXY = `${P} ${PROXY_SEL}`;
 const TILE = 'div.rounded-2xl.border-stroke';
+/** Тень клиента shadow-sm - к ней добавляется блик по кромке при тенях «Как в клиенте» */
+const APP_SHADOW_SM = '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)';
 const PROFILE = 'div.rounded-2xl[aria-busy]';
 const POPUPS = ['dialog-content', 'alert-dialog-content', 'dropdown-menu-content', 'select-content', 'popover-content', 'context-menu-content']
   .map((s) => `[data-slot="${s}"]`).join(', ');
@@ -379,7 +381,7 @@ function surfaceRules(cfg: ThemeConfig): string {
   } else if (s.highlight) {
     // Блик по кромке при тенях «Как в клиенте»: раньше он рисовался только вместе с тенями темы и при
     // тенях клиента молча пропадал. У карточек он идёт одним списком с их тенью клиента (shadow-sm)
-    out += rule([`${P} ${CARD_BASE}`, `${P} [data-slot="accordion"]`], ['box-shadow: var(--kt-highlight), 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important']);
+    out += rule([`${P} ${CARD_BASE}`, `${P} [data-slot="accordion"]`], [`box-shadow: var(--kt-highlight), ${APP_SHADOW_SM} !important`]);
     out += rule([`${P} ${TILE}`, `${P} ${PROFILE}`], ['box-shadow: var(--kt-highlight) !important']);
   }
 
@@ -443,11 +445,15 @@ function surfaceRules(cfg: ThemeConfig): string {
 
   // Боковая панель
   const sbSel = `${P} [data-slot="sidebar-inner"]`;
+  // Тень панели - как у карточек: тенью темы, а при тенях «Как в клиенте» - бликом поверх своей тени
+  // клиента (shadow-sm). Раньше блик у панели был только вместе с тенями темы
+  const sbShadow = sh ? cfg.shadows.cards && 'box-shadow: var(--kt-shadow-card) !important'
+    : s.highlight && `box-shadow: var(--kt-highlight), ${APP_SHADOW_SM} !important`;
   // "Как карточки": тот же фон, рамка и стекло, что у карточек (если у карточек свои настройки)
   if (s.sidebar === 'cards' && s.custom) out += rule(sbSel, [`background: ${grain}${fill} !important`, `border-color: ${border} !important`, `border-width: ${bw}px !important`, `backdrop-filter: ${blur} !important`,
-    sh && cfg.shadows.cards && (s.fill === 'glass' || s.fill === 'solid') ? 'box-shadow: var(--kt-shadow-card) !important' : 'box-shadow: none !important']);
-  if (s.sidebar === 'glass') out += rule(sbSel, [`background: ${glassGrain}${glassFill} !important`, `border-color: ${border} !important`, `backdrop-filter: ${glassBlur} !important`, sh && cfg.shadows.cards && 'box-shadow: var(--kt-shadow-card) !important']);
-  if (s.sidebar === 'solid') out += rule(sbSel, ['background: var(--card) !important', `border-color: ${border} !important`, 'backdrop-filter: none !important', sh && cfg.shadows.cards && 'box-shadow: var(--kt-shadow-card) !important']);
+    (s.fill === 'glass' || s.fill === 'solid') && sbShadow || 'box-shadow: none !important']);
+  if (s.sidebar === 'glass') out += rule(sbSel, [`background: ${glassGrain}${glassFill} !important`, `border-color: ${border} !important`, `backdrop-filter: ${glassBlur} !important`, sbShadow]);
+  if (s.sidebar === 'solid') out += rule(sbSel, ['background: var(--card) !important', `border-color: ${border} !important`, 'backdrop-filter: none !important', sbShadow]);
   if (s.sidebar === 'transparent') out += rule(sbSel, ['background: transparent !important', 'border-color: transparent !important', 'box-shadow: none !important', 'backdrop-filter: none !important']);
   if (s.sidebar === 'outline') out += rule(sbSel, ['background: transparent !important', `border-color: ${border} !important`, 'box-shadow: none !important', 'backdrop-filter: none !important']);
   // Переключатель режима внизу панели (Правила/Глобальный) - отдельное окошко со своими фоном и рамкой

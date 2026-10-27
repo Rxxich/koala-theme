@@ -636,7 +636,11 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 .tb-pages .tb-btn.active .tb-label { display: inline; }
 
 .stage-area { position: relative; flex: 1; min-height: 0; min-width: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; overflow: hidden; }
+/* Прокрутка, когда окно крупнее сцены. По центру - автоотступами: при justify-content: center
+   выступающий за край верх и левый бок окна прокруткой было бы не достать */
 .stage-scroll { overflow: auto; justify-content: flex-start; align-items: flex-start; }
+.stage-scroll > .window-holder { margin: auto auto 0; }
+.stage-scroll > .stage-caption { margin: 0 auto auto; }
 .window-holder { position: relative; flex-shrink: 0; }
 .app-window {
   position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 9px; overflow: hidden;

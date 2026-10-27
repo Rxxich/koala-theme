@@ -115,14 +115,17 @@ export function Stage() {
     if (config.mode === 'light' && dark) set({ dark: false });
   }, [config.mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Масштаб окна под размер сцены
+  // Масштаб окна под размер сцены: «Вписать» - не крупнее 100%, «Увеличить» - на всю сцену, но не мельче
+  // 100% (на тесном экране - натуральная величина с прокруткой). 48 - поля сцены, 14 - отступ до подписи
   useLayoutEffect(() => {
     const el = area.current;
     if (!el) return;
     const calc = () => {
       const r = el.getBoundingClientRect();
-      const s = Math.min((r.width - 48) / win.w, (r.height - 48) / win.h);
-      setScale(fit ? Math.max(0.3, Math.min(1, s)) : 1);
+      const cap = (el.querySelector<HTMLElement>('.stage-caption')?.offsetHeight ?? 16) + 14;
+      // Вниз до процента - без лишних долей пикселя, из-за которых появлялась прокрутка
+      const s = Math.floor(Math.min((r.width - 48) / win.w, (r.height - 48 - cap) / win.h) * 100) / 100;
+      setScale(fit ? Math.max(0.3, Math.min(1, s)) : Math.max(1, s));
     };
     calc();
     const ro = new ResizeObserver(calc);
@@ -187,7 +190,7 @@ export function Stage() {
           <select className="tb-select" value={size} onChange={(e) => { setSize(e.target.value); writeLocal('koala-theme:size', e.target.value); }} title="Размер окна">
             {SIZES.map((s) => <option key={s.id} value={s.id}>{s.label}{s.note ? ` · ${s.note}` : ''}</option>)}
           </select>
-          <button className={cx('tb-btn', fit && 'active')} onClick={() => setFit(!fit)} title={fit ? 'Показать в натуральную величину' : 'Вписать в экран'}>
+          <button className={cx('tb-btn', fit && 'active')} onClick={() => setFit(!fit)} title={fit ? 'Увеличить на всю сцену' : 'Вписать в экран'}>
             {fit ? <Maximize2 size={15} /> : <ScanLine size={15} />}
           </button>
           {tab === 'editor' && !viewing && (
