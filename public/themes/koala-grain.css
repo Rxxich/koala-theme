@@ -1,0 +1,997 @@
+/* Koala Grain */
+/*
+  Тема для Koala Clash 1.5.0: зернистые градиенты, лёгкий шум, фактура и мягкое свечение.
+
+  ИДЕЯ - "НАТРИЕВЫЕ СУМЕРКИ"
+  Плёночная фотография вечернего города: сливовое небо, тёплый свет натриевых
+  фонарей и плёночное зерно поверх всего. Цвет не нарисован плоско, а "напылён":
+  мягкие цветовые поля сливового и охристого, по ним - зерно. От этого фон
+  перестаёт выглядеть компьютерным, а глубина появляется без теней и 3D.
+    - Фон: два цветовых поля (слива и охра) и крупное зерно, смешанное с ними.
+    - Поверх всего окна - мелкое плёночное зерно, оно чуть "живёт" (8 кадров в секунду).
+    - Панели - матовая бумага с собственной фактурой и мягкой окрашенной тенью.
+    - Кнопка питания - жемчужина: выключена - холодная, подключена - тёплая,
+      как зажжённый фонарь, и вокруг дышит мягкое свечение.
+    - Выбранное отмечено тёплым охристым свечением.
+  Заголовки и цифры - Candara (тёплый гуманистический шрифт), текст - Segoe UI.
+
+  Светлая тема - сумеречная бумага (сиренево-серая), тёмная - вечер (слива почти в чёрное).
+
+  КАК ПОДКЛЮЧАЕТСЯ
+  Тема вставляется через webContents.insertCSS() и в каскаде идёт раньше CSS клиента,
+  поэтому все правила начинаются с :root. Палитры: html:not(.dark) и html.dark.
+  Зерно - встроенные SVG (feTurbulence), их разрешает политика безопасности приложения.
+
+  НАСТРОЙКА
+  Силу зерна меняют три переменные в разделе 0: --gr-grain-bg (зерно фона),
+  --gr-grain-film (зерно поверх окна, 0 - выключить), --gr-grain-surface (фактура панелей).
+
+  СОДЕРЖАНИЕ
+    0. Шрифты, зерно, движение
+    1. Светлая палитра - сумеречная бумага
+    2. Тёмная палитра - вечер
+    3. Фон и плёночное зерно
+    4. Поверхности
+    5. Главная
+    6. Жемчужина (кнопка питания)
+    7. Прокси, профили, подключения
+    8. Боковая панель
+    9. Кнопки
+   10. Поля, переключатели, вкладки
+   11. Меню, окна, подсказки, тосты
+   12. Мелочи
+   13. Уменьшение анимации
+*/
+
+
+/* =====================================================================
+   0. ШРИФТЫ, ЗЕРНО, ДВИЖЕНИЕ
+   ===================================================================== */
+
+:root {
+    --radius: 1.25rem !important;
+
+    --gr-font: "Segoe UI Variable Text", "Segoe UI", -apple-system, system-ui, sans-serif;
+    --gr-font-display: "Candara", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+
+    --gr-noise-coarse: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' seed='9' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    --gr-noise-fine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    --gr-noise-tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0.14'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+    --gr-grain-bg: 0.55;          /* зерно фона: 0 - гладкий фон */
+    --gr-grain-film: 0.14;        /* плёночное зерно поверх окна: 0 - выключить */
+    --gr-grain-surface: 1;        /* фактура панелей: 0 - гладкие панели */
+
+    --gr-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --gr-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+
+/* =====================================================================
+   1. СВЕТЛАЯ ПАЛИТРА - СУМЕРЕЧНАЯ БУМАГА
+   ===================================================================== */
+
+html:not(.dark) {
+    --gr-paper: #ecebf0;
+    --gr-plum: #7d5aa6;
+    --gr-ochre: #e3a03e;
+    --gr-mauve: #c98aa8;
+    --gr-ink: #241d2c;
+    --gr-ink-2: #685f73;
+    --gr-surface: rgba(250, 248, 252, 0.74);
+    --gr-surface-hover: rgba(255, 253, 255, 0.9);
+    --gr-surface-strong: rgba(250, 248, 252, 0.94);
+    --gr-well: rgba(36, 29, 44, 0.05);
+    --gr-edge: rgba(36, 29, 44, 0.09);
+    --gr-edge-2: rgba(36, 29, 44, 0.18);
+    --gr-glow: rgba(227, 160, 62, 0.5);           /* тёплое свечение выбранного */
+    --gr-shade: 0 1px 2px rgba(60, 40, 80, 0.06), 0 18px 40px -22px rgba(90, 60, 130, 0.45);
+    --gr-blend: multiply;                          /* как зерно ложится на фон */
+
+    --background: #ecebf0 !important;
+    --foreground: #241d2c !important;
+    --card: #faf8fc !important;
+    --card-foreground: #241d2c !important;
+    --popover: #faf8fc !important;
+    --popover-foreground: #241d2c !important;
+    --primary: #3d2a55 !important;
+    --primary-foreground: #f6f2fa !important;
+    --secondary: rgba(36, 29, 44, 0.05) !important;
+    --secondary-foreground: #241d2c !important;
+    --muted: rgba(36, 29, 44, 0.05) !important;
+    --muted-foreground: #685f73 !important;
+    --accent: rgba(36, 29, 44, 0.06) !important;
+    --accent-foreground: #241d2c !important;
+    --border: rgba(36, 29, 44, 0.09) !important;
+    --input: rgba(36, 29, 44, 0.16) !important;
+    --ring: #c27a17 !important;
+    --stroke: rgba(36, 29, 44, 0.12) !important;
+    --destructive: #c23a4a !important;
+    --success: #4f8a4a !important;
+    --warning: #c27a17 !important;
+
+    --stroke-power-on: #c27a17 !important;
+    --gradient-start-power-on: #e3a03e !important;
+    --gradient-end-power-on: #7d5aa6 !important;
+    --stroke-power-off: rgba(36, 29, 44, 0.16) !important;
+    --gradient-start-power-off: #ffffff !important;
+    --gradient-end-power-off: #c9bfd8 !important;
+
+    --profile-active: rgba(227, 160, 62, 0.12) !important;
+    --stroke-profile-active: rgba(194, 122, 23, 0.5) !important;
+    --profile-inactive: rgba(250, 248, 252, 0.74) !important;
+    --stroke-profile-inactive: rgba(36, 29, 44, 0.09) !important;
+
+    --chart-1: #7d5aa6 !important;
+    --chart-2: #e3a03e !important;
+    --chart-3: #c98aa8 !important;
+    --chart-4: #4f8a8a !important;
+    --chart-5: #3d2a55 !important;
+
+    --sidebar: rgba(250, 248, 252, 0.74) !important;
+    --sidebar-foreground: #241d2c !important;
+    --sidebar-primary: #3d2a55 !important;
+    --sidebar-primary-foreground: #f6f2fa !important;
+    --sidebar-accent: rgba(36, 29, 44, 0.06) !important;
+    --sidebar-accent-foreground: #241d2c !important;
+    --sidebar-border: rgba(36, 29, 44, 0.09) !important;
+    --sidebar-ring: #c27a17 !important;
+
+    /* Жемчужина */
+    --gr-pearl-off: radial-gradient(circle at 34% 28%, #ffffff 0%, #ece6f2 32%, #cfc5dd 72%, #b8acc9 100%);
+    --gr-pearl-on: radial-gradient(circle at 34% 28%, #fff4dc 0%, #f2bd66 34%, #d4842e 70%, #8f5a8a 100%);
+    --gr-icon-off: brightness(0) opacity(0.62);
+}
+
+
+/* =====================================================================
+   2. ТЁМНАЯ ПАЛИТРА - ВЕЧЕР
+   ===================================================================== */
+
+html.dark {
+    --gr-paper: #120e17;
+    --gr-plum: #5b3a8f;
+    --gr-ochre: #e09a3a;
+    --gr-mauve: #9a5b8a;
+    --gr-ink: #ede6f3;
+    --gr-ink-2: #a79cb4;
+    --gr-surface: rgba(30, 24, 38, 0.7);
+    --gr-surface-hover: rgba(42, 34, 52, 0.78);
+    --gr-surface-strong: rgba(26, 21, 33, 0.94);
+    --gr-well: rgba(0, 0, 0, 0.22);
+    --gr-edge: rgba(255, 255, 255, 0.07);
+    --gr-edge-2: rgba(255, 255, 255, 0.15);
+    --gr-glow: rgba(224, 154, 58, 0.45);
+    --gr-shade: 0 1px 2px rgba(0, 0, 0, 0.3), 0 20px 46px -22px rgba(0, 0, 0, 0.8);
+    --gr-blend: overlay;
+
+    --background: #120e17 !important;
+    --foreground: #ede6f3 !important;
+    --card: #1e1826 !important;
+    --card-foreground: #ede6f3 !important;
+    --popover: #1a1521 !important;
+    --popover-foreground: #ede6f3 !important;
+    --primary: #e3a547 !important;
+    --primary-foreground: #1b1206 !important;
+    --secondary: rgba(255, 255, 255, 0.05) !important;
+    --secondary-foreground: #ede6f3 !important;
+    --muted: rgba(255, 255, 255, 0.05) !important;
+    --muted-foreground: #a79cb4 !important;
+    --accent: rgba(255, 255, 255, 0.06) !important;
+    --accent-foreground: #ede6f3 !important;
+    --border: rgba(255, 255, 255, 0.07) !important;
+    --input: rgba(255, 255, 255, 0.13) !important;
+    --ring: #e3a547 !important;
+    --stroke: rgba(255, 255, 255, 0.1) !important;
+    --destructive: #f0697a !important;
+    --success: #8fc98a !important;
+    --warning: #e3a547 !important;
+
+    --stroke-power-on: #e3a547 !important;
+    --gradient-start-power-on: #e3a547 !important;
+    --gradient-end-power-on: #5b3a8f !important;
+    --stroke-power-off: rgba(255, 255, 255, 0.12) !important;
+    --gradient-start-power-off: #4a3f57 !important;
+    --gradient-end-power-off: #1b1522 !important;
+
+    --profile-active: rgba(224, 154, 58, 0.1) !important;
+    --stroke-profile-active: rgba(227, 165, 71, 0.45) !important;
+    --profile-inactive: rgba(30, 24, 38, 0.7) !important;
+    --stroke-profile-inactive: rgba(255, 255, 255, 0.07) !important;
+
+    --chart-1: #e3a547 !important;
+    --chart-2: #9d7ad0 !important;
+    --chart-3: #c98aa8 !important;
+    --chart-4: #6fb3b0 !important;
+    --chart-5: #ede6f3 !important;
+
+    --sidebar: rgba(30, 24, 38, 0.7) !important;
+    --sidebar-foreground: #ede6f3 !important;
+    --sidebar-primary: #e3a547 !important;
+    --sidebar-primary-foreground: #1b1206 !important;
+    --sidebar-accent: rgba(255, 255, 255, 0.06) !important;
+    --sidebar-accent-foreground: #ede6f3 !important;
+    --sidebar-border: rgba(255, 255, 255, 0.07) !important;
+    --sidebar-ring: #e3a547 !important;
+
+    --gr-pearl-off: radial-gradient(circle at 34% 28%, #6a5e78 0%, #3c3247 34%, #241c2d 72%, #17111d 100%);
+    --gr-pearl-on: radial-gradient(circle at 34% 28%, #ffe6b3 0%, #eaa548 32%, #b0612a 68%, #4a2a5c 100%);
+    --gr-icon-off: opacity(0.8);
+}
+
+
+/* =====================================================================
+   3. ФОН И ПЛЁНОЧНОЕ ЗЕРНО
+   ===================================================================== */
+
+:root body {
+    font-family: var(--gr-font);
+    font-variant-numeric: tabular-nums;
+}
+
+:root ::selection {
+    background: color-mix(in oklab, var(--gr-ochre) 35%, transparent);
+}
+
+:root :focus-visible {
+    --tw-ring-color: color-mix(in oklab, var(--gr-ochre) 75%, transparent) !important;
+}
+
+/* Цветовые поля: слива сверху слева, охра снизу справа, розоватая дымка между ними */
+:root [data-slot="sidebar-wrapper"] {
+    background:
+        radial-gradient(65% 60% at 12% 8%, color-mix(in oklab, var(--gr-plum) 55%, transparent) 0%, transparent 70%),
+        radial-gradient(60% 55% at 92% 96%, color-mix(in oklab, var(--gr-ochre) 55%, transparent) 0%, transparent 70%),
+        radial-gradient(45% 40% at 70% 30%, color-mix(in oklab, var(--gr-mauve) 30%, transparent) 0%, transparent 70%),
+        var(--gr-paper) !important;
+    box-shadow: none !important;
+    isolation: isolate;
+}
+
+:root [data-slot="sidebar-wrapper"] > img.pointer-events-none {
+    display: none !important;
+}
+
+/* Крупное зерно, смешанное с цветовыми полями: из-за него градиент "напылён", а не нарисован */
+:root [data-slot="sidebar-wrapper"]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: var(--gr-noise-coarse) 0 0 / 260px 260px;
+    mix-blend-mode: var(--gr-blend);
+    opacity: var(--gr-grain-bg);
+}
+
+/* Мелкое плёночное зерно поверх всего окна. Чуть "живёт": тайл скачет на случайные
+   смещения 8 раз в секунду, как зерно на кинокадре */
+:root [data-slot="sidebar-wrapper"]::after {
+    content: "";
+    position: absolute;
+    inset: -60px;
+    z-index: 60;
+    pointer-events: none;
+    background: var(--gr-noise-fine) 0 0 / 200px 200px;
+    mix-blend-mode: overlay;
+    opacity: var(--gr-grain-film);
+    animation: gr-film 1s steps(1) infinite;
+}
+
+@keyframes gr-film {
+    0% { transform: translate(0, 0); }
+    12% { transform: translate(-23px, 14px); }
+    25% { transform: translate(17px, -31px); }
+    37% { transform: translate(-41px, -9px); }
+    50% { transform: translate(29px, 37px); }
+    62% { transform: translate(-13px, 44px); }
+    75% { transform: translate(38px, -18px); }
+    87% { transform: translate(-31px, -40px); }
+}
+
+/* Заголовок страницы */
+:root .title {
+    font-family: var(--gr-font-display);
+    font-size: 24px !important;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+}
+
+
+/* =====================================================================
+   4. ПОВЕРХНОСТИ
+   Матовая бумага: полупрозрачный фон, лёгкое размытие, своя фактура и
+   мягкая тень, окрашенная в цвет неба (в светлой теме - сливовая).
+   ===================================================================== */
+
+:root [data-slot="card"],
+:root div.rounded-2xl[class*="bg-card/"]:not([data-slot]),
+:root [data-slot="accordion"].rounded-xl.border,
+:root .driver-popover {
+    background-color: var(--gr-surface) !important;
+    background-image: var(--gr-noise-tex) !important;
+    background-size: 220px 220px !important;
+    border: 1px solid var(--gr-edge) !important;
+    border-radius: 20px !important;
+    box-shadow: var(--gr-shade) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(120%) !important;
+    backdrop-filter: blur(14px) saturate(120%) !important;
+}
+
+:root [data-slot="card"] [data-slot="card"] {
+    box-shadow: none !important;
+}
+
+:root div.rounded-2xl[class*="bg-card/"] > .w-px.bg-stroke {
+    background: var(--gr-edge-2) !important;
+}
+
+:root [data-slot="sidebar-inner"] {
+    background-color: var(--gr-surface) !important;
+    background-image: var(--gr-noise-tex) !important;
+    background-size: 220px 220px !important;
+    border: 1px solid var(--gr-edge) !important;
+    border-radius: 22px !important;
+    box-shadow: var(--gr-shade) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(120%) !important;
+    backdrop-filter: blur(14px) saturate(120%) !important;
+}
+
+
+/* =====================================================================
+   5. ГЛАВНАЯ (pages/home.tsx)
+   ===================================================================== */
+
+:root [data-guide="home-profile-header"] .font-medium {
+    font-family: var(--gr-font-display);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+:root div.rounded-2xl[class*="bg-card/"] .font-bold {
+    font-family: var(--gr-font-display);
+    font-size: 19px !important;
+    font-weight: 700 !important;
+}
+
+:root div.rounded-2xl[class*="bg-card/"] .text-sm.text-foreground {
+    color: var(--gr-ink-2) !important;
+}
+
+:root .mb-3:has(+ [data-guide="home-power-toggle"]) > div {
+    text-transform: none !important;
+    font-family: var(--gr-font-display);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--gr-ink-2) !important;
+    transition: color 0.6s var(--gr-ease);
+}
+
+:root .mb-3:has(+ [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"]) > div {
+    color: var(--ring) !important;
+}
+
+:root [data-guide="home-power-toggle"] + div > div {
+    font-family: var(--gr-font-display);
+    font-size: 28px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.01em;
+}
+
+:root [data-guide="home-power-toggle"] ~ div svg.text-stroke-power-on {
+    color: var(--ring) !important;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]) {
+    border-radius: 999px !important;
+    transition: background-color 0.3s var(--gr-ease), box-shadow 0.4s var(--gr-ease), translate 0.4s var(--gr-ease-out) !important;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]):hover {
+    background-color: var(--gr-surface-hover) !important;
+    box-shadow: var(--gr-shade), 0 0 0 1px color-mix(in oklab, var(--gr-ochre) 35%, transparent), 0 8px 30px -10px var(--gr-glow) !important;
+    translate: 0 -1px;
+}
+
+/* "Добавить профиль" и "Оплатить" */
+:root [class*="bg-gradient-start-power-on/50"] {
+    background: var(--primary) var(--gr-noise-tex) !important;
+    color: var(--primary-foreground) !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    font-weight: 600;
+    box-shadow: 0 10px 26px -12px var(--gr-glow) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"] svg {
+    color: inherit !important;
+}
+
+
+/* =====================================================================
+   6. ЖЕМЧУЖИНА (кнопка питания, data-guide="home-power-toggle")
+   Разметка: <button> → <div> (круг 128px) → иконки клиента.
+     <div>    → жемчужина: объёмный радиальный градиент с собственным зерном;
+     ::before → мягкое свечение вокруг (размытый тёплый круг).
+   Выключено - холодный жемчуг, свечения нет. Подключено - тёплый, как фонарь,
+   свечение медленно дышит. Подключение - свечение пульсирует чаще.
+   Ошибка - жемчужина розовеет.
+   ===================================================================== */
+
+:root [data-guide="home-power-toggle"] {
+    border-radius: 50%;
+    isolation: isolate;
+    transition: translate 0.5s var(--gr-ease-out) !important;
+}
+
+:root [data-guide="home-power-toggle"]:hover:not(:disabled) {
+    translate: 0 -2px;
+}
+
+:root [data-guide="home-power-toggle"] > div {
+    position: relative;
+    z-index: 1;
+    border: 0 !important;
+    background: var(--gr-noise-tex), var(--gr-pearl-off) !important;
+    background-size: 160px 160px, 100% 100% !important;
+    box-shadow:
+        inset 0 -8px 18px rgba(0, 0, 0, 0.12),
+        inset 0 2px 2px rgba(255, 255, 255, 0.5),
+        0 22px 40px -18px rgba(60, 40, 90, 0.55) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: box-shadow 0.8s var(--gr-ease) !important;
+}
+
+:root [data-guide="home-power-toggle"] > div img {
+    filter: var(--gr-icon-off);
+    transition: filter 0.6s var(--gr-ease), opacity 0.3s var(--gr-ease), scale 0.3s var(--gr-ease) !important;
+}
+
+html:not(.dark) [data-guide="home-power-toggle"] svg[role="status"] {
+    color: var(--gr-ink) !important;
+}
+
+/* Свечение */
+:root [data-guide="home-power-toggle"]::before {
+    content: "";
+    position: absolute;
+    inset: -34px;
+    z-index: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    background: radial-gradient(circle, var(--gr-glow) 0%, color-mix(in oklab, var(--gr-plum) 25%, transparent) 45%, transparent 70%);
+    filter: blur(14px);
+    opacity: 0;
+    transition: opacity 0.9s var(--gr-ease);
+}
+
+/* Подключено: жемчужина теплеет, иконка белая, свечение дышит */
+:root [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"] {
+    background: var(--gr-noise-tex), var(--gr-pearl-on) !important;
+    background-size: 160px 160px, 100% 100% !important;
+    box-shadow:
+        inset 0 -8px 18px rgba(80, 30, 40, 0.25),
+        inset 0 2px 2px rgba(255, 255, 255, 0.55),
+        0 22px 44px -16px var(--gr-glow) !important;
+}
+
+:root [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"] img {
+    filter: drop-shadow(0 1px 3px rgba(80, 30, 20, 0.45));
+}
+
+:root [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"])::before {
+    opacity: 1;
+    animation: gr-breathe 4.5s var(--gr-ease) infinite alternate;
+}
+
+@keyframes gr-breathe {
+    from { scale: 0.9; opacity: 0.75; }
+    to { scale: 1.08; opacity: 1; }
+}
+
+:root [data-guide="home-power-toggle"]:has(svg[role="status"].opacity-100)::before {
+    opacity: 0.8;
+    animation: gr-breathe 0.9s var(--gr-ease) infinite alternate;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) > div {
+    background: var(--gr-noise-tex), radial-gradient(circle at 34% 28%, #ffe0e4 0%, #e88593 34%, #b13a52 72%, #6b2340 100%) !important;
+    background-size: 160px 160px, 100% 100% !important;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) img {
+    filter: none;
+}
+
+
+/* =====================================================================
+   7. ПРОКСИ, ПРОФИЛИ, ПОДКЛЮЧЕНИЯ
+   ===================================================================== */
+
+/* Карточка сервера (proxy-item.tsx: Card с cursor-pointer и overflow-hidden) */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate) {
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    transition: background-color 0.3s var(--gr-ease), border-color 0.3s var(--gr-ease), box-shadow 0.4s var(--gr-ease), translate 0.4s var(--gr-ease-out) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):not(:has(button:hover)):hover {
+    background-color: var(--gr-surface-hover) !important;
+    border-color: var(--gr-edge-2) !important;
+    box-shadow: var(--gr-shade) !important;
+    translate: 0 -1px;
+}
+
+/* Выбранный сервер - тёплое свечение по краю и внутри */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"] {
+    background-color: var(--gr-surface-hover) !important;
+    background-image: var(--gr-noise-tex), radial-gradient(120% 100% at 0% 50%, color-mix(in oklab, var(--gr-ochre) 22%, transparent), transparent 70%) !important;
+    background-size: 220px 220px, 100% 100% !important;
+    border-color: color-mix(in oklab, var(--gr-ochre) 55%, transparent) !important;
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--gr-ochre) 20%, transparent), 0 10px 30px -12px var(--gr-glow) !important;
+}
+
+:root [data-slot="card"][class*="border-primary/"] .flag-emoji {
+    font-weight: 600;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="bg-amber-500"] {
+    background-image: var(--gr-noise-tex), radial-gradient(120% 100% at 0% 50%, color-mix(in oklab, var(--gr-mauve) 22%, transparent), transparent 70%) !important;
+    background-size: 220px 220px, 100% 100% !important;
+    border-color: color-mix(in oklab, var(--gr-mauve) 55%, transparent) !important;
+}
+
+:root [data-slot="card"] [data-slot="button"][data-variant="ghost"] {
+    border-radius: 999px !important;
+}
+
+/* Заголовок группы */
+:root [data-slot="card"].cursor-pointer.isolate .font-semibold.flag-emoji {
+    font-family: var(--gr-font-display);
+    font-size: 15.5px !important;
+    font-weight: 700 !important;
+}
+
+:root [data-slot="card"].cursor-pointer.isolate {
+    transition: background-color 0.3s var(--gr-ease) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.isolate:not(:has(button:hover)):hover {
+    background-color: var(--gr-surface-hover) !important;
+}
+
+:root [data-slot="card"].isolate .size-9.rounded-md {
+    border-radius: 50% !important;
+}
+
+:root [data-slot="badge"] {
+    border-radius: 999px !important;
+}
+
+:root div.mx-2[class*="bg-card/30"] {
+    background: color-mix(in oklab, var(--gr-surface) 55%, transparent) !important;
+    border-color: var(--gr-edge) !important;
+}
+
+:root div.mx-2[class*="bg-card/30"].rounded-b-xl {
+    border-radius: 0 0 20px 20px !important;
+}
+
+/* Карточка профиля (profile-item.tsx, всегда с aria-busy) */
+:root div.rounded-2xl[aria-busy] {
+    background-color: var(--gr-surface) !important;
+    background-image: var(--gr-noise-tex) !important;
+    border: 1px solid var(--gr-edge) !important;
+    border-radius: 20px !important;
+    box-shadow: var(--gr-shade) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    backdrop-filter: blur(14px) !important;
+    transition: background-color 0.3s var(--gr-ease), box-shadow 0.4s var(--gr-ease), translate 0.4s var(--gr-ease-out), opacity 0.3s, scale 0.3s !important;
+}
+
+:root div.rounded-2xl[aria-busy]:not(:has(button:hover)):hover {
+    background-color: var(--gr-surface-hover) !important;
+    translate: 0 -1px;
+}
+
+:root div.rounded-2xl[aria-busy].border-stroke-profile-active {
+    border-color: color-mix(in oklab, var(--gr-ochre) 55%, transparent) !important;
+    background-image: var(--gr-noise-tex), radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, var(--gr-ochre) 18%, transparent), transparent 70%) !important;
+    box-shadow: var(--gr-shade), 0 10px 32px -14px var(--gr-glow) !important;
+}
+
+:root div.rounded-2xl[aria-busy] h3 {
+    font-family: var(--gr-font-display);
+    font-size: 16px !important;
+    font-weight: 700 !important;
+}
+
+:root div.rounded-2xl[aria-busy] .border-foreground\/10 {
+    border-color: var(--gr-edge) !important;
+}
+
+/* Строки подключений */
+:root div.rounded-xl.cursor-pointer:is([class*="bg-card/40"], [class*="to-card/40"]) {
+    background: var(--gr-noise-tex), var(--gr-surface) !important;
+    border: 1px solid var(--gr-edge) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    backdrop-filter: blur(14px) !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="bg-card/40"]:hover {
+    background: var(--gr-noise-tex), var(--gr-surface-hover) !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="to-card/40"] {
+    border-color: color-mix(in oklab, var(--gr-ochre) 50%, transparent) !important;
+    box-shadow: 0 10px 28px -14px var(--gr-glow) !important;
+}
+
+:root div.rounded-xl.cursor-pointer .size-12.rounded-lg {
+    border-radius: 50% !important;
+    background: var(--gr-well) !important;
+}
+
+
+/* =====================================================================
+   8. БОКОВАЯ ПАНЕЛЬ
+   ===================================================================== */
+
+:root [data-slot="sidebar-menu-button"] {
+    border-radius: 12px !important;
+    transition: width 200ms linear, height 200ms linear, padding 200ms linear,
+        background-color 0.25s var(--gr-ease), color 0.25s var(--gr-ease), box-shadow 0.3s var(--gr-ease) !important;
+}
+
+:root [data-slot="sidebar-menu-button"]:hover:not([data-active="true"]) {
+    background: var(--gr-well) !important;
+    box-shadow: none !important;
+}
+
+/* Активный пункт - тёплое пятно света */
+:root [data-slot="sidebar-menu-button"][data-active="true"] {
+    background: radial-gradient(circle at 50% 40%, color-mix(in oklab, var(--gr-ochre) 32%, transparent), color-mix(in oklab, var(--gr-ochre) 10%, transparent) 70%) !important;
+    color: var(--gr-ink) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--gr-ochre) 40%, transparent), 0 6px 18px -8px var(--gr-glow) !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] {
+    background: var(--gr-well) !important;
+    border: 1px solid var(--gr-edge) !important;
+    border-radius: 14px !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button {
+    border-radius: 10px !important;
+    border-color: transparent !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button[class*="border-stroke-power-on/50"] {
+    background: var(--gr-surface-strong) !important;
+    color: var(--gr-ink) !important;
+    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.18), inset 0 0 0 1px color-mix(in oklab, var(--gr-ochre) 40%, transparent) !important;
+}
+
+
+/* =====================================================================
+   9. КНОПКИ
+   ===================================================================== */
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]) {
+    border-radius: 999px !important;
+    transition: background-color 0.25s var(--gr-ease), box-shadow 0.35s var(--gr-ease), filter 0.25s var(--gr-ease), scale 0.2s var(--gr-ease-out) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]):active:not(:disabled) {
+    scale: 0.97;
+}
+
+/* Основная - с фактурой и тёплым свечением при наведении */
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"] {
+    background: var(--gr-noise-tex), var(--primary) !important;
+    color: var(--primary-foreground) !important;
+    font-weight: 600;
+    box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.45) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"]:hover:not(:disabled) {
+    box-shadow: 0 10px 28px -10px var(--gr-glow) !important;
+    filter: brightness(1.06);
+}
+
+:root [data-slot="button"][data-variant="destructive"] {
+    background: var(--gr-noise-tex), var(--destructive) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]) {
+    background: var(--gr-noise-tex), var(--gr-surface) !important;
+    border: 1px solid var(--gr-edge-2) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    backdrop-filter: blur(10px) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]):hover:not(:disabled) {
+    background: var(--gr-noise-tex), var(--gr-surface-hover) !important;
+}
+
+:root [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    background: var(--gr-well) !important;
+}
+
+:root .wc-win .wc-btn {
+    border-radius: 999px !important;
+}
+
+:root .wc-win .wc-btn:hover {
+    background: var(--gr-well) !important;
+}
+
+:root .wc-win .wc-close:hover {
+    background: var(--destructive) !important;
+    color: #ffffff !important;
+}
+
+
+/* =====================================================================
+   10. ПОЛЯ, ПЕРЕКЛЮЧАТЕЛИ, ВКЛАДКИ
+   ===================================================================== */
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="input-group"], [data-slot="select-trigger"], button[role="combobox"]) {
+    background: var(--gr-well) !important;
+    border: 1px solid var(--gr-edge-2) !important;
+    border-radius: 14px !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: border-color 0.25s var(--gr-ease), box-shadow 0.3s var(--gr-ease) !important;
+}
+
+:root [data-slot="select-trigger"],
+:root button[role="combobox"] {
+    border-radius: 999px !important;
+}
+
+:root [data-slot="input-group"] :is(input, textarea) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"]):focus,
+:root [data-slot="input-group"]:focus-within,
+:root :is([data-slot="select-trigger"], button[role="combobox"])[data-state="open"] {
+    border-color: color-mix(in oklab, var(--gr-ochre) 70%, transparent) !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06), 0 0 0 4px color-mix(in oklab, var(--gr-ochre) 18%, transparent), 0 6px 24px -10px var(--gr-glow) !important;
+    outline: none !important;
+}
+
+/* Переключатель: включён - тёплый, с зерном и свечением */
+:root [data-slot="switch"] {
+    border: 0 !important;
+    background: color-mix(in oklab, var(--gr-ink) 16%, transparent) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: background-color 0.35s var(--gr-ease), box-shadow 0.35s var(--gr-ease) !important;
+}
+
+:root [data-slot="switch"][data-state="checked"] {
+    background: var(--gr-noise-tex), linear-gradient(90deg, var(--gr-ochre), color-mix(in oklab, var(--gr-ochre) 70%, var(--gr-mauve))) !important;
+    box-shadow: 0 4px 14px -4px var(--gr-glow) !important;
+}
+
+:root [data-slot="switch-thumb"] {
+    background: #ffffff !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+    transition: translate 0.4s var(--gr-ease-out), transform 0.4s var(--gr-ease-out) !important;
+}
+
+:root [data-slot="checkbox"] {
+    border-radius: 6px !important;
+}
+
+/* Вкладки */
+:root [data-slot="tabs-list"][data-variant="default"] {
+    background: var(--gr-well) !important;
+    border: 1px solid var(--gr-edge) !important;
+    border-radius: 999px !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"] {
+    border-radius: 999px !important;
+    border-color: transparent !important;
+    transition: background-color 0.3s var(--gr-ease), color 0.3s var(--gr-ease), box-shadow 0.3s var(--gr-ease) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"][data-state="active"] {
+    background: var(--gr-noise-tex), var(--gr-surface-strong) !important;
+    color: var(--gr-ink) !important;
+    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.2), inset 0 0 0 1px color-mix(in oklab, var(--gr-ochre) 40%, transparent) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"]::after {
+    background: var(--gr-ochre) !important;
+}
+
+
+/* =====================================================================
+   11. МЕНЮ, ОКНА, ПОДСКАЗКИ, ТОСТЫ
+   ===================================================================== */
+
+:root :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+    [data-slot="select-content"], [data-slot="popover-content"],
+    [data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"]) {
+    background-color: var(--gr-surface-strong) !important;
+    background-image: var(--gr-noise-tex) !important;
+    background-size: 220px 220px !important;
+    border: 1px solid var(--gr-edge) !important;
+    box-shadow: var(--gr-shade), 0 30px 70px -30px rgba(40, 20, 60, 0.6) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    backdrop-filter: blur(20px) !important;
+}
+
+:root :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"], [data-slot="popover-content"]) {
+    border-radius: 18px !important;
+}
+
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"]) {
+    border-radius: 26px !important;
+}
+
+:root :is([data-slot="dialog-title"], [data-slot="alert-dialog-title"]) {
+    font-family: var(--gr-font-display);
+    font-size: 20px !important;
+    font-weight: 700 !important;
+}
+
+:root [data-slot="alert-dialog-media"] {
+    background: var(--gr-well) !important;
+    border: 1px solid var(--gr-edge) !important;
+    border-radius: 50% !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"], [data-slot="command-item"]) {
+    border-radius: 12px !important;
+    transition: background-color 0.2s var(--gr-ease) !important;
+}
+
+/* Пункт под курсором - тёплое пятно */
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted],
+:root [data-slot="dropdown-menu-sub-trigger"][data-state="open"],
+:root [data-slot="command-item"][data-selected="true"] {
+    background: radial-gradient(120% 140% at 0% 50%, color-mix(in oklab, var(--gr-ochre) 24%, transparent), color-mix(in oklab, var(--gr-ochre) 6%, transparent) 80%) !important;
+    color: var(--gr-ink) !important;
+}
+
+:root [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted] {
+    background: color-mix(in oklab, var(--destructive) 14%, transparent) !important;
+    color: var(--destructive) !important;
+}
+
+:root :is([data-slot="dropdown-menu-separator"], [data-slot="select-separator"]) {
+    background: var(--gr-edge-2) !important;
+}
+
+:root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background: var(--gr-noise-fine) 0 0 / 200px 200px, color-mix(in oklab, #1a1022 40%, transparent) !important;
+    background-blend-mode: overlay;
+    -webkit-backdrop-filter: blur(6px) !important;
+    backdrop-filter: blur(6px) !important;
+}
+
+:root [data-slot="tooltip-content"] {
+    background: var(--gr-ink) !important;
+    color: var(--gr-paper) !important;
+    border-radius: 10px !important;
+}
+
+:root [data-slot="tooltip-content"] svg[class*="fill-"] {
+    background: var(--gr-ink) !important;
+    fill: var(--gr-ink) !important;
+}
+
+:root [data-sonner-toast] {
+    background-color: var(--gr-surface-strong) !important;
+    background-image: var(--gr-noise-tex) !important;
+    border: 1px solid var(--gr-edge) !important;
+    border-radius: 18px !important;
+    box-shadow: var(--gr-shade) !important;
+}
+
+:root .driver-popover {
+    background-color: var(--gr-surface-strong) !important;
+}
+
+:root .driver-popover-title {
+    font-family: var(--gr-font-display) !important;
+}
+
+:root .driver-popover-navigation-btns button {
+    border-radius: 999px !important;
+    background: var(--gr-surface) !important;
+    border-color: var(--gr-edge-2) !important;
+}
+
+:root .driver-popover-navigation-btns .driver-popover-next-btn {
+    background: var(--primary) !important;
+    color: var(--primary-foreground) !important;
+}
+
+
+/* =====================================================================
+   12. МЕЛОЧИ
+   ===================================================================== */
+
+:root [data-slot="separator"] {
+    background: var(--gr-edge-2) !important;
+}
+
+:root [data-slot="progress"] {
+    background: var(--gr-well) !important;
+    border-radius: 999px !important;
+}
+
+:root [data-slot="progress-indicator"] {
+    background: var(--gr-noise-tex), linear-gradient(90deg, var(--gr-plum), var(--gr-ochre)) !important;
+}
+
+:root tbody tr:hover {
+    background: var(--gr-well) !important;
+}
+
+:root *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+:root *::-webkit-scrollbar-track,
+:root *::-webkit-scrollbar-corner {
+    background: transparent !important;
+}
+
+:root *::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--gr-ink) 22%, transparent) padding-box !important;
+    border: 3px solid transparent !important;
+    border-radius: 999px !important;
+}
+
+:root *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--gr-ochre) 70%, transparent) padding-box !important;
+}
+
+:root .floating-bg {
+    background: var(--gr-noise-tex), var(--gr-surface-strong) !important;
+    border-color: var(--gr-edge) !important;
+}
+
+
+/* =====================================================================
+   13. УМЕНЬШЕНИЕ АНИМАЦИИ
+   Зерно перестаёт "жить", свечение не дышит.
+   ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    :root *,
+    :root *::before,
+    :root *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    :root [data-slot="sidebar-wrapper"]::after {
+        animation: none !important;
+    }
+}

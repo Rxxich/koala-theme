@@ -1,0 +1,1406 @@
+/* Koala Sage & Night */
+/*
+  Тема для Koala Clash 1.5.0. Светлая палитра "Sage" (шалфей), тёмная "Night" (ночное небо).
+  Первая строка файла - название темы в списке "Настройки → Внешний вид", её не трогайте.
+
+  КАК УСТРОЕНА ТЕМА
+  Клиент собран на React + Tailwind v4 + shadcn/ui. Почти у каждого компонента есть атрибут
+  data-slot="..." (card, button, dialog-content, tooltip-content и т.д.) - тема цепляется
+  в первую очередь за них, это самые стабильные селекторы. Там, где data-slot нет
+  (плитки главной, карточки профилей, подключения), используются классы из исходников -
+  в комментарии к таким правилам указан файл, откуда взят класс.
+
+  Тема вставляется через webContents.insertCSS() поверх assets/main.css.
+  Переменные клиента лежат в :root и .dark, поэтому палитры ниже объявлены через
+  html:not(.dark) и html.dark - у них специфичность выше, и значения клиента перекрываются.
+
+  ОБОЗНАЧЕНИЯ
+    html:not(.dark)             - только светлая тема
+    html.dark                   - только тёмная тема
+    html:is(.dark, :not(.dark)) - обе темы сразу (заодно поднимает специфичность правила)
+
+  СОДЕРЖАНИЕ
+    0. Настройки                - радиус, размытие, скорость анимаций, зерно
+    1. Палитра Sage (светлая)
+    2. Палитра Night (тёмная)
+    3. База                     - текст, выделение, фокус, полоса прокрутки
+    4. Фон окна
+    5. Поверхности              - карточки, плитки главной, боковая панель
+    6. Список серверов          - наведение, выбранный, закреплённый, волна по клику
+    7. Профили и подключения
+    8. Боковая панель           - пункты меню, переключатель режима
+    9. Кнопки
+   10. Поля ввода и выбор
+   11. Переключатели, чекбоксы, вкладки
+   12. Окна и меню              - диалоги, выпадающие списки, тосты
+   13. Подсказки (tooltip)
+   14. Обучающий тур (driver.js)
+   15. Мелочи                   - таблицы, разделители
+   16. Кнопка подключения       - сфера из частиц
+   17. Флаги серверов
+   18. Уменьшение анимации      - для системной настройки "убрать анимации"
+*/
+
+
+/* =====================================================================
+   0. НАСТРОЙКИ
+   Всё, что удобно менять под себя, собрано здесь.
+   ===================================================================== */
+
+html:is(.dark, :not(.dark)) {
+    /* Скругление углов. Клиент считает от него все радиусы (sm/md/lg/xl) */
+    --radius: 1rem !important;
+
+    /* Размытие под затемнением диалогов. 0px - выключить */
+    --koala-overlay-blur: 4px;
+
+    /* Анимации. Кривые: ease-out - для появления и отклика, spring - пружина с перелётом.
+       Длительности: fast - наведение, base - смена состояния, slow - крупные переходы */
+    --koala-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --koala-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --koala-spring: linear(0, 0.4 8%, 1.15 18%, 0.9 30%, 1.06 42%, 0.97 55%, 1.02 68%, 0.995 82%, 1);
+    --koala-dur-fast: 140ms;
+    --koala-dur: 220ms;
+    --koala-dur-slow: 420ms;
+
+    /* Зерно поверх градиента фона - убирает "полосы" на плавных переходах цвета.
+       Если фон окна не отображается, замените значение на none */
+    --koala-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0 0.05'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+    --success-foreground: #ffffff !important;
+}
+
+
+/* =====================================================================
+   1. ПАЛИТРА SAGE (светлая тема)
+   Идея: шалфей. Спокойные серо-зелёные нейтральные цвета, почти белые карточки
+   и один насыщенный цвет - изумруд. Им отмечено только то, на что можно нажать
+   или что выбрано: кнопки, выбранный сервер, вкладки, переключатели, фокус.
+   Латунь - второй цвет, только для графиков и полосы прокрутки.
+   Все нейтральные (фон, рамки, подписи) подкрашены в тот же оттенок, что изумруд,
+   поэтому палитра выглядит цельной, а не "серой с зелёными кнопками".
+
+   Цвета подобраны в OKLCH (оттенок 160) и переведены в hex.
+   Контраст: основной текст 16:1, подписи 5.8:1, белый на изумрудной кнопке 5.2:1.
+
+   Первая группа - стандартные переменные клиента (из assets/main.css),
+   вторая (--koala-*) - собственные переменные темы.
+   ===================================================================== */
+
+html:not(.dark) {
+    /* --- Переменные клиента --- */
+    --background: #ebf2ee !important;          /* шалфейный туман */
+    --foreground: #13221a !important;          /* тёмно-хвойный текст */
+    --card: #fbfefc !important;
+    --card-foreground: #13221a !important;
+    --popover: #ffffff !important;
+    --popover-foreground: #13221a !important;
+    --primary: #177c52 !important;             /* изумруд - акцент */
+    --primary-foreground: #ffffff !important;
+    --secondary: #eef4f1 !important;           /* фон полей ввода */
+    --secondary-foreground: #13221a !important;
+    --muted: #eef4f1 !important;
+    --muted-foreground: #57685e !important;    /* подписи, второстепенный текст */
+    --accent: #def1e5 !important;              /* подсветка при наведении */
+    --accent-foreground: #13221a !important;
+    --border: #dce5e0 !important;
+    --input: #cdd9d2 !important;
+    --ring: #177c52 !important;
+    --stroke: #c4d2ca !important;   /* рамки карточек, полей и кнопок outline */
+    --success: #2d8949 !important;
+
+    /* Кнопка подключения. Эти же цвета клиент берёт для стрелок трафика и плавающего окна,
+       а сфера из раздела 16 - для частиц: мята → изумруд */
+    --stroke-power-on: #177c52 !important;
+    --gradient-start-power-on: #85e0be !important;
+    --gradient-end-power-on: #177c52 !important;
+    --stroke-power-off: #a9b4ae !important;
+    --gradient-start-power-off: #b3beb7 !important;
+    --gradient-end-power-off: #7f8d85 !important;
+
+    /* Карточки профилей (страница "Профили") */
+    --profile-active: rgba(23, 124, 82, 0.08) !important;
+    --stroke-profile-active: #9dcab1 !important;
+    --profile-inactive: #fbfefc !important;
+    --stroke-profile-inactive: #dce5e0 !important;
+
+    /* Графики: изумруд, латунь, сталь, слива, коралл */
+    --chart-1: #177c52 !important;
+    --chart-2: #b8892d !important;
+    --chart-3: #3977a8 !important;
+    --chart-4: #8f4d89 !important;
+    --chart-5: #c86556 !important;
+
+    /* Боковая панель */
+    --sidebar: rgba(255, 255, 255, 0.55) !important;
+    --sidebar-foreground: #13221a !important;
+    --sidebar-primary: #177c52 !important;
+    --sidebar-primary-foreground: #ffffff !important;
+    --sidebar-accent: rgba(23, 124, 82, 0.08) !important;
+    --sidebar-accent-foreground: #13221a !important;
+    --sidebar-border: rgba(19, 34, 26, 0.08) !important;
+    --sidebar-ring: #177c52 !important;
+
+    /* --- Переменные темы --- */
+
+    /* Фон окна: светлый шалфей вверху темнеет книзу, мягкий блик в левом верхнем углу */
+    --koala-custom-background:
+        var(--koala-noise),
+        radial-gradient(90% 60% at 15% 0%, rgba(255, 255, 255, 0.7) 0%, transparent 60%),
+        linear-gradient(170deg, #f3f8f4 0%, #ebf2ee 45%, #ddeae2 100%),
+        #ebf2ee;
+
+    /* Карточки: почти белые, градиент from → to еле заметный - только чтобы не было "плоско".
+       Тени подкрашены в зелёный: на шалфейном фоне серые тени выглядят грязно */
+    --koala-card-from: #fbfefc;
+    --koala-card-to: #f1f8f4;
+    --koala-card-border: rgba(19, 34, 26, 0.07);
+    --koala-custom-card-shadow: inset 0 1px 0 #ffffff, 0 1px 2px rgba(19, 45, 32, 0.06), 0 8px 24px rgba(19, 45, 32, 0.08);
+    --koala-card-shadow-sm: inset 0 1px 0 #ffffff, 0 1px 2px rgba(19, 45, 32, 0.07);
+    --koala-pop-shadow: 0 1px 3px rgba(19, 45, 32, 0.08), 0 20px 50px rgba(19, 45, 32, 0.18);
+    --koala-overlay: rgba(19, 34, 26, 0.24);
+
+    /* Подсказки: тёмные на светлом фоне */
+    --koala-tooltip-bg: #13221a;
+    --koala-tooltip-fg: #f1f7f3;
+
+    /* Выбранный элемент: заливка-градиент, рамка и свечение */
+    --koala-custom-selected-background: #e0f7e9;
+    --koala-selected-glow: 0 6px 18px rgba(23, 124, 82, 0.14);
+    --koala-selected-fill-start: rgba(23, 124, 82, 0.12);
+    --koala-selected-fill-end: rgba(23, 124, 82, 0.03);
+    --koala-selected-border: rgba(23, 124, 82, 0.4);
+
+    /* Изумрудные кнопки при наведении: в светлой теме темнеют */
+    --koala-primary-hover: color-mix(in oklab, var(--primary) 82%, black);
+    --koala-primary-halo: color-mix(in oklab, var(--primary) 22%, transparent);
+    --koala-primary-lift: color-mix(in oklab, var(--primary) 30%, transparent);
+
+    /* Выключенный переключатель */
+    --koala-switch-off: #cad6cf;
+
+    /* Полоса прокрутки: изумруд → латунь (R, G, B) */
+    --koala-scroll-a: 23, 124, 82;
+    --koala-scroll-b: 196, 159, 77;
+}
+
+
+/* =====================================================================
+   2. ПАЛИТРА NIGHT (тёмная тема)
+   ===================================================================== */
+
+html.dark {
+    /* --- Переменные клиента --- */
+    --background: #090a0f !important;
+    --foreground: #e6ebf2 !important;
+    --card: #131a24 !important;
+    --card-foreground: #e6ebf2 !important;
+    --popover: #151d28 !important;
+    --popover-foreground: #e6ebf2 !important;
+    --primary: #8ab8ee !important;
+    --primary-foreground: #090a0f !important;
+    --secondary: #1a2230 !important;
+    --secondary-foreground: #e6ebf2 !important;
+    --muted: #1a2230 !important;
+    --muted-foreground: #8f9bab !important;
+    --accent: #1c2838 !important;
+    --accent-foreground: #e6ebf2 !important;
+    --border: #1f2733 !important;
+    --input: #283242 !important;
+    --ring: #8ab8ee !important;
+    --stroke: #2e3949 !important;
+    --success: #3dbb83 !important;
+
+    /* Кнопка подключения: холодный звёздный свет */
+    --stroke-power-on: #8ab8ee !important;
+    --gradient-start-power-on: #dbe8ff !important;
+    --gradient-end-power-on: #6f9fdc !important;
+    --stroke-power-off: #4c5868 !important;
+    --gradient-start-power-off: #5d6878 !important;
+    --gradient-end-power-off: #3c4552 !important;
+
+    /* Карточки профилей */
+    --profile-active: rgba(138, 184, 238, 0.12) !important;
+    --stroke-profile-active: #4f7aa8 !important;
+    --profile-inactive: #131a24 !important;
+    --stroke-profile-inactive: #1f2733 !important;
+
+    /* Графики */
+    --chart-1: #8ab8ee !important;
+    --chart-2: #e8b26a !important;
+    --chart-3: #5fcfc4 !important;
+    --chart-4: #a996f0 !important;
+    --chart-5: #ec7f9c !important;
+
+    /* Боковая панель */
+    --sidebar: rgba(9, 10, 15, 0.45) !important;
+    --sidebar-foreground: #e6ebf2 !important;
+    --sidebar-primary: #8ab8ee !important;
+    --sidebar-primary-foreground: #090a0f !important;
+    --sidebar-accent: rgba(138, 184, 238, 0.12) !important;
+    --sidebar-accent-foreground: #e6ebf2 !important;
+    --sidebar-border: rgba(255, 255, 255, 0.06) !important;
+    --sidebar-ring: #8ab8ee !important;
+
+    /* --- Переменные темы --- */
+
+    /* Фон окна: ночное небо, светлее у горизонта */
+    --koala-custom-background:
+        var(--koala-noise),
+        radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%),
+        #090a0f;
+
+    /* Карточки */
+    --koala-card-from: #18212d;
+    --koala-card-to: #10151d;
+    --koala-card-border: rgba(255, 255, 255, 0.07);
+    --koala-custom-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.3);
+    --koala-card-shadow-sm: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.35);
+    --koala-pop-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 24px 60px rgba(0, 0, 0, 0.55);
+    --koala-overlay: rgba(4, 5, 8, 0.55);
+
+    /* Подсказки: светлые на тёмном фоне */
+    --koala-tooltip-bg: #e6ebf2;
+    --koala-tooltip-fg: #0d1117;
+
+    /* Выбранный элемент */
+    --koala-custom-selected-background: #172333;
+    --koala-selected-glow: 0 0 22px rgba(138, 184, 238, 0.16);
+    --koala-selected-fill-start: rgba(138, 184, 238, 0.2);
+    --koala-selected-fill-end: rgba(138, 184, 238, 0.04);
+    --koala-selected-border: rgba(138, 184, 238, 0.45);
+
+    /* Синие кнопки при наведении: в тёмной теме светлеют */
+    --koala-primary-hover: color-mix(in oklab, var(--primary) 70%, white);
+    --koala-primary-halo: color-mix(in oklab, var(--primary) 30%, transparent);
+    --koala-primary-lift: color-mix(in oklab, var(--primary) 45%, transparent);
+
+    --koala-switch-off: #2a3444;
+
+    --koala-scroll-a: 219, 232, 255;
+    --koala-scroll-b: 111, 159, 220;
+}
+
+
+/* =====================================================================
+   3. БАЗА
+   ===================================================================== */
+
+html:is(.dark, :not(.dark)) body {
+    font-variant-numeric: tabular-nums;   /* цифры одинаковой ширины - скорость и пинг не "прыгают" */
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* В светлой теме text-primary совпадает с основным текстом: клиент рассчитан
+   на почти чёрный primary и красит им заголовки, а синие заголовки выглядят шумно */
+html:not(.dark) body,
+html:not(.dark) .text-primary {
+    color: var(--foreground) !important;
+}
+
+/* Выделение текста мышью */
+html:is(.dark, :not(.dark)) ::selection {
+    background: color-mix(in oklab, var(--primary) 35%, transparent);
+    color: var(--foreground);
+}
+
+/* Фокус с клавиатуры (Tab). Клиент рисует кольцо цветом --stroke, на нашей палитре
+   оно почти не видно - перекрашиваем в акцентный. Мышью кольцо не появляется */
+html:is(.dark, :not(.dark)) :focus-visible {
+    --tw-ring-color: color-mix(in oklab, var(--ring) 65%, transparent) !important;
+}
+
+/* Полоса прокрутки. Зона захвата 10px, а видимая часть тоньше за счёт прозрачной рамки:
+   выглядит аккуратно, но попасть курсором легко. При наведении ползунок утолщается */
+html:is(.dark, :not(.dark)) *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+html:is(.dark, :not(.dark)) *::-webkit-scrollbar-track,
+html:is(.dark, :not(.dark)) *::-webkit-scrollbar-corner {
+    background: transparent !important;
+}
+
+html:is(.dark, :not(.dark)) *::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(var(--koala-scroll-a), 0.45), rgba(var(--koala-scroll-b), 0.45)) padding-box !important;
+    border: 2px solid transparent !important;
+    border-radius: 999px;
+    min-height: 32px;
+}
+
+html:is(.dark, :not(.dark)) *::-webkit-scrollbar-thumb:hover,
+html:is(.dark, :not(.dark)) *::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(180deg, rgba(var(--koala-scroll-a), 0.9), rgba(var(--koala-scroll-b), 0.9)) padding-box !important;
+    border-width: 1px !important;
+}
+
+
+/* =====================================================================
+   4. ФОН ОКНА
+   Корневой контейнер - SidebarProvider из App.tsx (data-slot="sidebar-wrapper").
+   Клиент задаёт ему цвет инлайн-стилем, поэтому здесь нужен !important.
+   Тени по краям окна (виньетки) нет намеренно: внутренняя тень на этом контейнере
+   то появлялась, то пропадала, когда содержимое страницы перерисовывалось поверх неё.
+   ===================================================================== */
+
+html:is(.dark, :not(.dark)) [data-slot="sidebar-wrapper"] {
+    background: var(--koala-custom-background) !important;
+    box-shadow: none !important;
+    isolation: isolate;
+}
+
+/* Карта мира на фоне (картинка map_darktheme/map_lighttheme.svg из App.tsx) скрыта.
+   Чтобы вернуть её, удалите это правило */
+html:is(.dark, :not(.dark)) [data-slot="sidebar-wrapper"] > img.pointer-events-none {
+    display: none !important;
+}
+
+
+/* =====================================================================
+   5. ПОВЕРХНОСТИ
+   В клиенте почти всё сделано "стеклом": bg-card/50 + backdrop-blur-xl.
+   Тема заменяет стекло на плотные карточки с градиентом - фон под ними не просвечивает.
+   ===================================================================== */
+
+/* Карточки (components/ui/card.tsx) и прочие элементы с фоном bg-card */
+html:is(.dark, :not(.dark)) :is(.bg-card, [data-slot="card"], .driver-popover) {
+    background-color: var(--card) !important;
+    background-image: linear-gradient(160deg, var(--koala-card-from) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--koala-card-border) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Тень - только у самих карточек, а не у любого элемента с классом bg-card */
+html:is(.dark, :not(.dark)) :is([data-slot="card"], .driver-popover) {
+    box-shadow: var(--koala-custom-card-shadow) !important;
+}
+
+/* Карточка внутри карточки - тень короче, чтобы не было "ступенек" */
+html:is(.dark, :not(.dark)) [data-slot="card"] [data-slot="card"] {
+    box-shadow: var(--koala-card-shadow-sm) !important;
+}
+
+/* Блоки без data-slot, которые выглядят как карточки:
+   - плитки главной: профиль, подписка, трафик, выбор группы (pages/home.tsx)
+   - баннер обновления (components/updater/update-banner.tsx)
+   - настройки с заголовком-аккордеоном (components/base/base-setting-card.tsx) */
+html:is(.dark, :not(.dark)) div.rounded-2xl[class*="bg-card/"]:not([data-slot]),
+html:is(.dark, :not(.dark)) [data-slot="accordion"].rounded-xl.border {
+    background-color: var(--card) !important;
+    background-image: linear-gradient(160deg, var(--koala-card-from) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--koala-card-border) !important;
+    box-shadow: var(--koala-custom-card-shadow) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Кнопка выбора группы внизу главной (у неё hover:bg-card/70) */
+html:is(.dark, :not(.dark)) div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]) {
+    transition: background-image var(--koala-dur) var(--koala-ease), border-color var(--koala-dur) var(--koala-ease);
+}
+
+html:is(.dark, :not(.dark)) div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]):hover {
+    background-image: linear-gradient(160deg, var(--accent) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--koala-selected-border) !important;
+}
+
+/* Кнопки "Добавить профиль" и "Продлить подписку" на главной (pages/home.tsx).
+   Клиент красит их bg-gradient-start-power-on/50, а в светлой теме этот цвет бывал почти чёрным -
+   текст терялся. Делаем их обычными акцентными кнопками */
+html:is(.dark, :not(.dark)) [class*="bg-gradient-start-power-on/50"] {
+    background-color: var(--primary) !important;
+    border-color: transparent !important;
+    color: var(--primary-foreground) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: background-color var(--koala-dur-fast) var(--koala-ease), box-shadow var(--koala-dur) var(--koala-ease-out), scale var(--koala-dur-fast) var(--koala-ease-out);
+}
+
+html:is(.dark, :not(.dark)) [class*="bg-gradient-start-power-on/50"]:hover {
+    background-color: var(--koala-primary-hover) !important;
+    box-shadow: 0 0 0 3px var(--koala-primary-halo), 0 6px 20px var(--koala-primary-lift) !important;
+}
+
+html:is(.dark, :not(.dark)) [class*="bg-gradient-start-power-on/50"] svg {
+    color: inherit !important;
+}
+
+/* Боковая панель - такая же карточка (components/ui/sidebar.tsx) */
+html:is(.dark, :not(.dark)) [data-slot="sidebar-inner"] {
+    background-color: var(--card) !important;
+    background-image: linear-gradient(160deg, var(--koala-card-from) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--koala-card-border) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="sidebar"][data-variant="floating"] [data-slot="sidebar-inner"] {
+    box-shadow: var(--koala-custom-card-shadow) !important;
+}
+
+
+/* =====================================================================
+   6. СПИСОК СЕРВЕРОВ (страница "Прокси")
+   Карточка сервера - components/proxies/proxy-item.tsx: Card с классами
+   cursor-pointer и overflow-hidden. Заголовок группы - тоже Card, но с классом isolate,
+   поэтому сервер выбирается как .cursor-pointer.overflow-hidden:not(.isolate).
+   ===================================================================== */
+
+/* Тень из двух inset-слоёв + внешние: одинаковый состав у всех состояний,
+   поэтому полоска выбора слева плавно "выезжает", а не появляется рывком */
+html:is(.dark, :not(.dark)) [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate) {
+    box-shadow: inset 0 0 0 0 transparent, var(--koala-card-shadow-sm) !important;
+    transition:
+        background-color var(--koala-dur) var(--koala-ease),
+        border-color var(--koala-dur) var(--koala-ease),
+        box-shadow var(--koala-dur-slow) var(--koala-ease-out),
+        translate var(--koala-dur) var(--koala-ease-out);
+}
+
+/* Наведение: подсветка и подъём на 1px.
+   Не срабатывает, пока курсор на кнопке внутри карточки (пинг, открепить) */
+html:is(.dark, :not(.dark)) [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):not([class*="border-primary/"]):not([class*="bg-amber-500"]):not(:has(button:hover)):hover {
+    background-image: linear-gradient(160deg, var(--accent) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--stroke) !important;
+    translate: 0 -1px;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):active {
+    translate: 0 0;
+}
+
+/* Выбранный сервер (классы bg-primary/10 border-primary/30): мягкая заливка,
+   акцентная рамка, полоска слева и свечение */
+/* (селектор повторяет базовый из начала раздела - иначе не перебить его тень) */
+html:is(.dark, :not(.dark)) [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"] {
+    background-color: var(--koala-custom-selected-background) !important;
+    background-image: linear-gradient(90deg, var(--koala-selected-fill-start) 0%, var(--koala-selected-fill-end) 100%) !important;
+    border-color: var(--koala-selected-border) !important;
+    box-shadow:
+        inset 3px 0 0 0 var(--primary),
+        var(--koala-card-shadow-sm),
+        var(--koala-selected-glow) !important;
+}
+
+/* Закреплённый сервер (классы bg-amber-500/8 border-amber-500/40): янтарный оттенок */
+html:is(.dark, :not(.dark)) [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="bg-amber-500"] {
+    background-image: linear-gradient(90deg, color-mix(in oklab, #f59e0b 16%, transparent) 0%, color-mix(in oklab, #f59e0b 3%, transparent) 100%) !important;
+    border-color: color-mix(in oklab, #f59e0b 45%, transparent) !important;
+    box-shadow: inset 3px 0 0 0 #f59e0b, var(--koala-card-shadow-sm) !important;
+}
+
+/* Кнопки внутри карточки сервера (пинг, открепить): своя полупрозрачная подсветка */
+html:is(.dark, :not(.dark)) [data-slot="card"] [data-slot="button"][data-variant="ghost"] {
+    transition: background-color var(--koala-dur-fast) var(--koala-ease), color var(--koala-dur-fast) var(--koala-ease);
+}
+
+html:is(.dark, :not(.dark)) [data-slot="card"] [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    background-color: color-mix(in oklab, var(--primary) 18%, transparent) !important;
+    border-radius: calc(var(--radius) - 6px) !important;
+}
+
+/* Волна из центра карточки при отпускании кнопки мыши.
+   Радиус волны - в % от размера карточки (--koala-rip). Переход одинаковый для всех
+   состояний, поэтому смена выбранного сервера волну не обрывает */
+@property --koala-rip {
+    syntax: "<percentage>";
+    inherits: false;
+    initial-value: 0%;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    --koala-rip: 112%;
+    background: radial-gradient(circle farthest-corner at 50% 50%,
+            transparent calc(var(--koala-rip) - 16px),
+            color-mix(in oklab, var(--primary) 38%, transparent) calc(var(--koala-rip) - 3px),
+            transparent var(--koala-rip));
+    transition: --koala-rip 1.75s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 1.75s linear;
+}
+
+/* Пока кнопка мыши зажата, волна сжата в центр. Не срабатывает при нажатии на пинг */
+html:is(.dark, :not(.dark)) [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):active:not(:has(button:active))::after {
+    --koala-rip: 0%;
+    opacity: 1;
+    transition: none;
+}
+
+/* Заголовок группы (pages/proxies.tsx): подсветка при наведении */
+html:is(.dark, :not(.dark)) [data-slot="card"].cursor-pointer.isolate {
+    transition: background-image var(--koala-dur) var(--koala-ease), border-color var(--koala-dur) var(--koala-ease), box-shadow var(--koala-dur) var(--koala-ease);
+}
+
+html:is(.dark, :not(.dark)) [data-slot="card"].cursor-pointer.isolate:not(:has(button:hover)):hover {
+    background-image: linear-gradient(160deg, var(--accent) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--stroke) !important;
+}
+
+/* Кнопки в заголовке группы (найти выбранный, тест задержки) */
+html:is(.dark, :not(.dark)) [data-slot="card"].isolate button:hover:not(:disabled) {
+    background-color: color-mix(in oklab, var(--primary) 18%, transparent) !important;
+}
+
+/* Подложка раскрытой группы под серверами: плотная, без градиента -
+   она собрана из отдельных строк, и градиент на каждой давал бы полосы */
+html:is(.dark, :not(.dark)) div.mx-2[class*="bg-card/30"] {
+    background-color: color-mix(in oklab, var(--koala-card-to) 70%, transparent) !important;
+    border-color: var(--koala-card-border) !important;
+}
+
+
+/* =====================================================================
+   7. ПРОФИЛИ И ПОДКЛЮЧЕНИЯ
+   ===================================================================== */
+
+/* Карточка профиля (components/profiles/profile-item.tsx).
+   У неё всегда есть атрибут aria-busy, по нему и находим */
+html:is(.dark, :not(.dark)) div.rounded-2xl[aria-busy] {
+    background-color: var(--card) !important;
+    background-image: linear-gradient(160deg, var(--koala-card-from) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--koala-card-border) !important;
+    box-shadow: var(--koala-custom-card-shadow) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition:
+        background-image var(--koala-dur) var(--koala-ease),
+        border-color var(--koala-dur) var(--koala-ease),
+        box-shadow var(--koala-dur-slow) var(--koala-ease-out),
+        translate var(--koala-dur) var(--koala-ease-out),
+        opacity var(--koala-dur) var(--koala-ease),
+        scale var(--koala-dur) var(--koala-ease-out) !important;
+}
+
+html:is(.dark, :not(.dark)) div.rounded-2xl[aria-busy]:not(.border-stroke-profile-active):not(:has(button:hover)):hover {
+    background-image: linear-gradient(160deg, var(--accent) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--stroke) !important;
+    translate: 0 -1px;
+}
+
+/* Текущий профиль */
+html:is(.dark, :not(.dark)) div.rounded-2xl[aria-busy].border-stroke-profile-active {
+    background-color: var(--koala-custom-selected-background) !important;
+    background-image: linear-gradient(160deg, var(--koala-selected-fill-start) 0%, var(--koala-selected-fill-end) 100%) !important;
+    border-color: var(--koala-selected-border) !important;
+    box-shadow: var(--koala-card-shadow-sm), var(--koala-selected-glow) !important;
+}
+
+/* Строки на странице "Подключения" (components/connections/connection-item.tsx
+   и process-item.tsx). Активное подключение - с полоской слева, как выбранный сервер */
+html:is(.dark, :not(.dark)) div.rounded-xl.cursor-pointer:is([class*="bg-card/40"], [class*="to-card/40"]) {
+    background-color: var(--card) !important;
+    background-image: linear-gradient(160deg, var(--koala-card-from) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--koala-card-border) !important;
+    box-shadow: inset 0 0 0 0 transparent, var(--koala-card-shadow-sm) !important;
+}
+
+html:is(.dark, :not(.dark)) div.rounded-xl.cursor-pointer[class*="bg-card/40"]:hover {
+    background-image: linear-gradient(160deg, var(--accent) 0%, var(--koala-card-to) 100%) !important;
+    border-color: var(--stroke) !important;
+}
+
+html:is(.dark, :not(.dark)) div.rounded-xl.cursor-pointer[class*="to-card/40"] {
+    background-image: linear-gradient(90deg, var(--koala-selected-fill-start) 0%, var(--koala-selected-fill-end) 100%) !important;
+    border-color: var(--koala-selected-border) !important;
+    box-shadow: inset 3px 0 0 0 var(--primary), var(--koala-card-shadow-sm) !important;
+}
+
+
+/* =====================================================================
+   8. БОКОВАЯ ПАНЕЛЬ
+   Пункты меню - SidebarMenuButton (data-slot="sidebar-menu-button"), активный
+   помечен data-active="true". Рамку (ring) рисует клиент, тема меняет только цвета.
+   ===================================================================== */
+
+html:is(.dark, :not(.dark)) :is([data-slot="sidebar-menu-button"], [data-slot="sidebar-menu-sub-button"]) {
+    /* width/height/padding - анимация сворачивания панели, её оставляем как у клиента */
+    transition:
+        width 200ms linear, height 200ms linear, padding 200ms linear,
+        background-color var(--koala-dur-fast) var(--koala-ease),
+        color var(--koala-dur-fast) var(--koala-ease),
+        box-shadow var(--koala-dur-fast) var(--koala-ease) !important;
+}
+
+/* Наведение: фон, цвет акцента и тонкая рамка */
+html:is(.dark, :not(.dark)) [data-slot="sidebar-menu-button"]:hover:not([data-active="true"]) {
+    background-color: var(--accent) !important;
+    color: var(--primary) !important;
+    --tw-ring-color: color-mix(in oklab, var(--primary) 30%, transparent) !important;
+}
+
+/* Активный пункт */
+html:is(.dark, :not(.dark)) :is([data-slot="sidebar-menu-button"], [data-slot="sidebar-menu-sub-button"])[data-active="true"] {
+    background-color: var(--koala-custom-selected-background) !important;
+    background-image: none !important;
+    color: var(--primary) !important;
+    --tw-ring-color: var(--koala-selected-border) !important;
+}
+
+/* Переключатель "Правила / Глобальный" внизу панели
+   (components/sider/outbound-mode-switcher.tsx) */
+html:is(.dark, :not(.dark)) [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] {
+    background-color: var(--secondary) !important;
+    border-color: var(--border) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+html:is(.dark, :not(.dark)) [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button {
+    transition: background-color var(--koala-dur) var(--koala-ease), color var(--koala-dur) var(--koala-ease), border-color var(--koala-dur) var(--koala-ease), box-shadow var(--koala-dur) var(--koala-ease) !important;
+}
+
+html:is(.dark, :not(.dark)) [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button:not([class*="border-stroke-power-on"]):hover {
+    background-color: var(--accent) !important;
+}
+
+/* Выбранный режим - тот же вид, что у активной вкладки (раздел 11) */
+html:is(.dark, :not(.dark)) [data-guide="app-sidebar"] button[class*="border-stroke-power-on/50"] {
+    background-color: var(--card) !important;
+    background-image: linear-gradient(135deg, var(--koala-selected-fill-start) 0%, var(--koala-selected-fill-end) 100%) !important;
+    border-color: var(--koala-selected-border) !important;
+    color: var(--primary) !important;
+    box-shadow: var(--koala-card-shadow-sm) !important;
+}
+
+
+/* =====================================================================
+   9. КНОПКИ (components/ui/button.tsx)
+   У кнопки есть data-slot="button" и data-variant: default, outline, secondary,
+   ghost, destructive, link. Кнопки диалогов подтверждения - те же Button,
+   но с data-slot="alert-dialog-action" / "alert-dialog-cancel".
+   ===================================================================== */
+
+/* Лёгкое "нажатие" у всех кнопок. scale - отдельное свойство, не мешает transform клиента */
+html:is(.dark, :not(.dark)) :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]) {
+    transition:
+        background-color var(--koala-dur-fast) var(--koala-ease),
+        border-color var(--koala-dur-fast) var(--koala-ease),
+        color var(--koala-dur-fast) var(--koala-ease),
+        box-shadow var(--koala-dur) var(--koala-ease-out),
+        opacity var(--koala-dur-fast) var(--koala-ease),
+        scale var(--koala-dur-fast) var(--koala-ease-out) !important;
+}
+
+html:is(.dark, :not(.dark)) :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]):active:not(:disabled) {
+    scale: 0.97;
+}
+
+/* Основная (синяя) кнопка: при наведении меняет яркость и получает ореол */
+html:is(.dark, :not(.dark)) :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"]:hover:not(:disabled) {
+    background-color: var(--koala-primary-hover) !important;
+    box-shadow: 0 0 0 3px var(--koala-primary-halo), 0 6px 20px var(--koala-primary-lift) !important;
+}
+
+/* Outline: в тон полям ввода, без стеклянного размытия */
+html:is(.dark, :not(.dark)) :is([data-slot="button"], [data-slot="alert-dialog-cancel"])[data-variant="outline"] {
+    background-color: var(--secondary) !important;
+    border-color: var(--input) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+html:is(.dark, :not(.dark)) :is([data-slot="button"], [data-slot="alert-dialog-cancel"])[data-variant="outline"]:hover:not(:disabled) {
+    background-color: var(--accent) !important;
+    border-color: var(--stroke) !important;
+}
+
+/* Secondary и ghost (иконки в шапке страниц и т.п.) */
+html:is(.dark, :not(.dark)) [data-slot="button"]:is([data-variant="secondary"], [data-variant="ghost"]):hover:not(:disabled) {
+    background-color: var(--accent) !important;
+}
+
+/* Кнопка-иконка в заголовке страницы (components/base/base-page.tsx) - акцентный цвет при наведении */
+html:is(.dark, :not(.dark)) .header [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    color: var(--primary) !important;
+}
+
+
+/* =====================================================================
+   10. ПОЛЯ ВВОДА И ВЫБОР
+   input → data-slot="input", textarea → "textarea", поле с иконкой → "input-group"
+   (внутри "input-group-control"), выпадающий список → "select-trigger".
+   ===================================================================== */
+
+html:is(.dark, :not(.dark)) :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="input-group"], [data-slot="select-trigger"], button[role="combobox"], select) {
+    background-color: var(--secondary) !important;
+    border: 1px solid var(--input) !important;
+    color: var(--foreground) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: border-color var(--koala-dur-fast) var(--koala-ease), box-shadow var(--koala-dur) var(--koala-ease-out), background-color var(--koala-dur-fast) var(--koala-ease) !important;
+}
+
+/* Поле внутри группы: рамку, фон и скругление рисует сама группа */
+html:is(.dark, :not(.dark)) [data-slot="input-group"] :is(input, textarea) {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Наведение */
+html:is(.dark, :not(.dark)) :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="input-group"], [data-slot="select-trigger"], button[role="combobox"]):hover:not(:disabled):not(:focus):not(:focus-within) {
+    border-color: var(--stroke) !important;
+}
+
+/* Фокус и открытый список: акцентная рамка и мягкий ореол */
+html:is(.dark, :not(.dark)) :is(input[data-slot="input"], textarea[data-slot="textarea"]):focus,
+html:is(.dark, :not(.dark)) [data-slot="input-group"]:focus-within,
+html:is(.dark, :not(.dark)) :is(button[role="combobox"], [data-slot="select-trigger"])[data-state="open"] {
+    border-color: var(--ring) !important;
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 22%, transparent) !important;
+}
+
+html:is(.dark, :not(.dark)) :is(input, textarea):focus-visible {
+    outline: none !important;
+}
+
+/* Поле с ошибкой (aria-invalid) - рамка цветом ошибки */
+html:is(.dark, :not(.dark)) :is(input, textarea, [data-slot="select-trigger"])[aria-invalid="true"] {
+    border-color: var(--destructive) !important;
+}
+
+
+/* =====================================================================
+   11. ПЕРЕКЛЮЧАТЕЛИ, ЧЕКБОКСЫ, ВКЛАДКИ
+   ===================================================================== */
+
+/* Переключатель (components/ui/switch.tsx). Во включённом состоянии клиент рисует
+   градиент через background-image - его нужно убрать, иначе наш цвет не виден */
+html:is(.dark, :not(.dark)) [data-slot="switch"] {
+    transition: background-color var(--koala-dur) var(--koala-ease), border-color var(--koala-dur) var(--koala-ease), box-shadow var(--koala-dur) var(--koala-ease) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="switch"][data-state="unchecked"] {
+    background-color: var(--koala-switch-off) !important;
+    border-color: transparent !important;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="switch"][data-state="checked"] {
+    background-color: var(--primary) !important;
+    background-image: none !important;
+    border-color: transparent !important;
+    box-shadow: 0 0 12px color-mix(in oklab, var(--primary) 35%, transparent);
+}
+
+/* Бегунок едет с лёгким перелётом */
+html:is(.dark, :not(.dark)) [data-slot="switch-thumb"] {
+    transition: translate var(--koala-dur-slow) var(--koala-spring), transform var(--koala-dur-slow) var(--koala-spring), background-color var(--koala-dur) var(--koala-ease) !important;
+}
+
+/* Чекбокс */
+html:is(.dark, :not(.dark)) [data-slot="checkbox"] {
+    transition: background-color var(--koala-dur-fast) var(--koala-ease), border-color var(--koala-dur-fast) var(--koala-ease), box-shadow var(--koala-dur) var(--koala-ease-out) !important;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="checkbox"][data-state="unchecked"]:hover:not(:disabled) {
+    border-color: var(--ring) !important;
+}
+
+/* Вкладки (components/ui/tabs.tsx): "таблетка" */
+html:is(.dark, :not(.dark)) [data-slot="tabs-list"][data-variant="default"] {
+    background-color: var(--secondary) !important;
+    border: 1px solid var(--border) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="tabs-trigger"]:hover:not([data-state="active"]) {
+    background-color: var(--accent) !important;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"][data-state="active"] {
+    background-color: var(--card) !important;
+    background-image: linear-gradient(135deg, var(--koala-selected-fill-start) 0%, var(--koala-selected-fill-end) 100%) !important;
+    border-color: var(--koala-selected-border) !important;
+    color: var(--foreground) !important;
+    box-shadow: var(--koala-card-shadow-sm) !important;
+}
+
+/* Вкладки-линии: подчёркивание активной вкладки цветом акцента */
+html:is(.dark, :not(.dark)) [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"]::after {
+    background-color: var(--primary) !important;
+}
+
+
+/* =====================================================================
+   12. ОКНА И МЕНЮ
+   Диалоги, боковые шторки, всплывающие панели, выпадающие меню и списки.
+   Полностью непрозрачные - фон и карточки под ними не просвечивают.
+   Анимацию появления (fade + zoom) рисует клиент, её не трогаем.
+   ===================================================================== */
+
+html:is(.dark, :not(.dark)) :is([data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"],
+    [data-slot="sheet-content"],
+    [data-slot="popover-content"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="select-content"],
+    .bg-popover) {
+    background-color: var(--popover) !important;
+    background-image: none !important;
+    border-color: var(--border) !important;
+    color: var(--popover-foreground) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: var(--koala-pop-shadow) !important;
+}
+
+/* Затемнение под диалогом */
+html:is(.dark, :not(.dark)) :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background-color: var(--koala-overlay) !important;
+    -webkit-backdrop-filter: blur(var(--koala-overlay-blur)) !important;
+    backdrop-filter: blur(var(--koala-overlay-blur)) !important;
+}
+
+/* Иконка в диалоге подтверждения (корзина при удалении профиля и т.п.) */
+html:is(.dark, :not(.dark)) [data-slot="alert-dialog-media"] {
+    background-color: var(--secondary) !important;
+    border-color: var(--border) !important;
+}
+
+/* Пункты меню и списков: подсвеченный пункт (мышь или стрелки клавиатуры) */
+html:is(.dark, :not(.dark)) :is([data-slot="dropdown-menu-item"],
+    [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"],
+    [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"],
+    [data-slot="command-item"]) {
+    border-radius: calc(var(--radius) - 8px) !important;
+    transition: background-color var(--koala-dur-fast) var(--koala-ease), color var(--koala-dur-fast) var(--koala-ease) !important;
+}
+
+html:is(.dark, :not(.dark)) :is([data-slot="dropdown-menu-item"],
+    [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"],
+    [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted],
+html:is(.dark, :not(.dark)) [data-slot="dropdown-menu-sub-trigger"][data-state="open"],
+html:is(.dark, :not(.dark)) [data-slot="command-item"][data-selected="true"] {
+    background-color: var(--accent) !important;
+    color: var(--accent-foreground) !important;
+}
+
+/* Опасный пункт меню ("Удалить") - красный фон при наведении */
+html:is(.dark, :not(.dark)) [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted] {
+    background-color: color-mix(in oklab, var(--destructive) 14%, transparent) !important;
+    color: var(--destructive) !important;
+}
+
+/* Галочка у выбранного пункта списка - цвет акцента */
+html:is(.dark, :not(.dark)) [data-slot="select-item-indicator"] svg {
+    color: var(--primary) !important;
+}
+
+/* Тосты (уведомления sonner внизу справа). Цвета успеха/ошибки задаёт клиент */
+html:is(.dark, :not(.dark)) [data-sonner-toast] {
+    border-radius: calc(var(--radius) - 2px) !important;
+    box-shadow: var(--koala-pop-shadow) !important;
+}
+
+
+/* =====================================================================
+   13. ПОДСКАЗКИ (tooltip)
+   components/ui/tooltip.tsx, data-slot="tooltip-content".
+   Фон и текст задаются парой, чтобы текст всегда был контрастным.
+   ===================================================================== */
+
+html:is(.dark, :not(.dark)) [data-slot="tooltip-content"] {
+    background-color: var(--koala-tooltip-bg) !important;
+    background-image: none !important;
+    border-color: var(--koala-tooltip-bg) !important;
+    color: var(--koala-tooltip-fg) !important;
+    border-radius: calc(var(--radius) - 8px) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22) !important;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="tooltip-content"] * {
+    color: inherit !important;
+}
+
+/* Стрелка подсказки (svg с классом fill-foreground) */
+html:is(.dark, :not(.dark)) [data-slot="tooltip-content"] svg[class*="fill-"] {
+    fill: var(--koala-tooltip-bg) !important;
+    background-color: var(--koala-tooltip-bg) !important;
+}
+
+
+/* =====================================================================
+   14. ОБУЧАЮЩИЙ ТУР (driver.js, при первом запуске)
+   Окно тура уже покрашено как карточка (раздел 5). Здесь - кнопки.
+   ===================================================================== */
+
+html:is(.dark, :not(.dark)) .driver-popover-next-btn {
+    background: var(--primary) !important;
+    border-color: transparent !important;
+    color: var(--primary-foreground) !important;
+}
+
+html:is(.dark, :not(.dark)) .driver-popover-next-btn:is(:hover, :focus-visible) {
+    background: var(--koala-primary-hover) !important;
+    box-shadow: 0 0 0 3px var(--koala-primary-halo) !important;
+    filter: none;
+}
+
+html:is(.dark, :not(.dark)) .driver-popover-navigation-btns .driver-popover-prev-btn,
+html:is(.dark, :not(.dark)) .driver-popover-skip-btn {
+    background-color: var(--secondary) !important;
+    border-color: var(--input) !important;
+}
+
+html:is(.dark, :not(.dark)) .driver-popover-navigation-btns .driver-popover-prev-btn:is(:hover, :focus-visible),
+html:is(.dark, :not(.dark)) .driver-popover-skip-btn:is(:hover, :focus-visible) {
+    background-color: var(--accent) !important;
+    border-color: var(--stroke) !important;
+    box-shadow: none !important;
+}
+
+html:is(.dark, :not(.dark)) .driver-popover a {
+    text-decoration-color: var(--primary) !important;
+}
+
+
+/* =====================================================================
+   15. МЕЛОЧИ
+   ===================================================================== */
+
+/* Таблица подключений: подсветка строки при наведении */
+html:is(.dark, :not(.dark)) tbody tr {
+    transition: background-color var(--koala-dur-fast) var(--koala-ease);
+}
+
+html:is(.dark, :not(.dark)) tbody tr:hover {
+    background-color: var(--accent) !important;
+}
+
+/* Горизонтальные разделители: линия плавно затухает к краям */
+html:is(.dark, :not(.dark)) [data-slot="separator"][data-orientation="horizontal"] {
+    background: linear-gradient(90deg, transparent, var(--stroke) 20%, var(--stroke) 80%, transparent) !important;
+}
+
+/* Индикатор загрузки (progress) - цвет акцента и плавное заполнение */
+html:is(.dark, :not(.dark)) [data-slot="progress"] {
+    background-color: color-mix(in oklab, var(--primary) 18%, transparent) !important;
+}
+
+html:is(.dark, :not(.dark)) [data-slot="progress-indicator"] {
+    transition: transform var(--koala-dur-slow) var(--koala-ease-out) !important;
+}
+
+
+/* =====================================================================
+   16. КНОПКА ПОДКЛЮЧЕНИЯ: СФЕРА ИЗ ЧАСТИЦ (pages/home.tsx, data-guide="home-power-toggle")
+
+   Разметка кнопки: <button> → <div> (круг 128px) → иконки (спиннер, пауза, питание, ошибка).
+   Тема прячет круг с иконками и рисует вместо них сферу на псевдоэлементе ::before.
+   Чтобы вернуть стандартную иконку, удалите правило "Прячем стандартный круг" ниже.
+
+   Как работает: 150 точек - это 150 теней box-shadow одного псевдоэлемента. Координаты
+   каждой точки CSS считает через sin/cos от угла --koala-a, поэтому сфера крутится без JS.
+   Нужен Chromium 111+ (в клиенте Electron 37 - подходит).
+
+   Состояния (определяются по классам самой кнопки):
+     выключено   - сфера стоит, приглушённые цвета power-off
+     подключено  - вращается, цвета power-on, свечение ярче
+     подключение - "дышит" (раздувается и сжимается), пока виден спиннер
+     ошибка ядра - окрашивается в цвет ошибки
+     наведение   - сфера пружинисто наклоняется, как планета на орбите, и раздувается
+
+   Настройки размера - в первом правиле:
+     --r    радиус сферы. Если сфера налезает на текст - уменьшайте
+     --dot  размер точки
+     --tilt угол наклона при наведении
+   ===================================================================== */
+
+@property --koala-a {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+}
+
+@property --koala-k {
+    syntax: "<number>";
+    inherits: false;
+    initial-value: 0;
+}
+
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"] {
+    position: relative;
+    overflow: visible;
+    border-radius: 50%;
+    --r: 60px;
+    --dot: 1.5px;
+    --tilt: -24deg;
+    --koala-c1: var(--gradient-start-power-off);
+    --koala-c2: var(--gradient-end-power-off);
+}
+
+/* Подключено: клиент вешает на круг класс border-stroke-power-on */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"]) {
+    --koala-c1: var(--gradient-start-power-on);
+    --koala-c2: var(--gradient-end-power-on);
+}
+
+/* Ошибка ядра: видна 4-я иконка (Alert) */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) {
+    --koala-c1: color-mix(in oklab, var(--destructive) 55%, white);
+    --koala-c2: var(--destructive);
+}
+
+/* Прячем стандартный круг с иконками */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"] > * {
+    opacity: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    filter: none !important;
+}
+
+/* Фокус с клавиатуры: кольцо вокруг сферы */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--ring) 60%, transparent) !important;
+    outline-offset: 10px;
+}
+
+/* Сама сфера */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2px;
+    height: 2px;
+    margin: -1px 0 0 -1px;
+    border-radius: 50%;
+    background: transparent;
+    pointer-events: none;
+    opacity: 0.8;
+    transform: rotate(0deg);
+    /* пружина: небольшой перелёт при раздувании и при наклоне */
+    transition:
+        --koala-k 1.2s var(--koala-spring),
+        opacity 0.4s ease,
+        transform 1.4s var(--koala-spring);
+    /* раздувание сферы при наведении (0.2 = +20%) */
+    --f: calc(1 + var(--koala-k)*0.2);
+    box-shadow:
+        calc(var(--r)*var(--f)*0.12*sin(0deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.93 - 0.04*cos(0deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.34 + 0.11*cos(0deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 0%, var(--koala-c2)) calc(55% + 40%*(0.34 + 0.11*cos(0deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.20*sin(138deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.92 - 0.07*cos(138deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.34 + 0.19*cos(138deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 1%, var(--koala-c2)) calc(55% + 40%*(0.34 + 0.19*cos(138deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.26*sin(275deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.91 - 0.09*cos(275deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.33 + 0.24*cos(275deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 2%, var(--koala-c2)) calc(55% + 40%*(0.33 + 0.24*cos(275deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.30*sin(53deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.90 - 0.10*cos(53deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.33 + 0.28*cos(53deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 3%, var(--koala-c2)) calc(55% + 40%*(0.33 + 0.28*cos(53deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.34*sin(190deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.88 - 0.12*cos(190deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.32 + 0.32*cos(190deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 3%, var(--koala-c2)) calc(55% + 40%*(0.32 + 0.32*cos(190deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.38*sin(328deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.87 - 0.13*cos(328deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.32 + 0.35*cos(328deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 4%, var(--koala-c2)) calc(55% + 40%*(0.32 + 0.35*cos(328deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.41*sin(105deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.86 - 0.14*cos(105deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.31 + 0.38*cos(105deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 5%, var(--koala-c2)) calc(55% + 40%*(0.31 + 0.38*cos(105deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.44*sin(243deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.85 - 0.15*cos(243deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.31 + 0.41*cos(243deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 5%, var(--koala-c2)) calc(55% + 40%*(0.31 + 0.41*cos(243deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.46*sin(20deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.83 - 0.16*cos(20deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.30 + 0.43*cos(20deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 6%, var(--koala-c2)) calc(55% + 40%*(0.30 + 0.43*cos(20deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.49*sin(158deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.82 - 0.17*cos(158deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.30 + 0.46*cos(158deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 7%, var(--koala-c2)) calc(55% + 40%*(0.30 + 0.46*cos(158deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.51*sin(295deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.81 - 0.17*cos(295deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.29 + 0.48*cos(295deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 7%, var(--koala-c2)) calc(55% + 40%*(0.29 + 0.48*cos(295deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.53*sin(73deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.80 - 0.18*cos(73deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.29 + 0.50*cos(73deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 8%, var(--koala-c2)) calc(55% + 40%*(0.29 + 0.50*cos(73deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.55*sin(210deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.78 - 0.19*cos(210deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.29 + 0.52*cos(210deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 9%, var(--koala-c2)) calc(55% + 40%*(0.29 + 0.52*cos(210deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.57*sin(348deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.77 - 0.20*cos(348deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.28 + 0.54*cos(348deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 9%, var(--koala-c2)) calc(55% + 40%*(0.28 + 0.54*cos(348deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.59*sin(125deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.76 - 0.20*cos(125deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.28 + 0.56*cos(125deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 10%, var(--koala-c2)) calc(55% + 40%*(0.28 + 0.56*cos(125deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.61*sin(263deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.75 - 0.21*cos(263deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.27 + 0.57*cos(263deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 11%, var(--koala-c2)) calc(55% + 40%*(0.27 + 0.57*cos(263deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.63*sin(40deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.73 - 0.21*cos(40deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.27 + 0.59*cos(40deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 11%, var(--koala-c2)) calc(55% + 40%*(0.27 + 0.59*cos(40deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.64*sin(178deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.72 - 0.22*cos(178deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.26 + 0.60*cos(178deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 12%, var(--koala-c2)) calc(55% + 40%*(0.26 + 0.60*cos(178deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.66*sin(315deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.71 - 0.22*cos(315deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.26 + 0.62*cos(315deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 13%, var(--koala-c2)) calc(55% + 40%*(0.26 + 0.62*cos(315deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.67*sin(93deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.70 - 0.23*cos(93deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.25 + 0.63*cos(93deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 13%, var(--koala-c2)) calc(55% + 40%*(0.25 + 0.63*cos(93deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.69*sin(230deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.68 - 0.23*cos(230deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.25 + 0.65*cos(230deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 14%, var(--koala-c2)) calc(55% + 40%*(0.25 + 0.65*cos(230deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.70*sin(8deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.67 - 0.24*cos(8deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.24 + 0.66*cos(8deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 15%, var(--koala-c2)) calc(55% + 40%*(0.24 + 0.66*cos(8deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.71*sin(145deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.66 - 0.24*cos(145deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.24 + 0.67*cos(145deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 15%, var(--koala-c2)) calc(55% + 40%*(0.24 + 0.67*cos(145deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.73*sin(283deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.65 - 0.25*cos(283deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.23 + 0.68*cos(283deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 16%, var(--koala-c2)) calc(55% + 40%*(0.23 + 0.68*cos(283deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.74*sin(60deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.63 - 0.25*cos(60deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.23 + 0.69*cos(60deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 17%, var(--koala-c2)) calc(55% + 40%*(0.23 + 0.69*cos(60deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.75*sin(198deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.62 - 0.26*cos(198deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.23 + 0.71*cos(198deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 17%, var(--koala-c2)) calc(55% + 40%*(0.23 + 0.71*cos(198deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.76*sin(335deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.61 - 0.26*cos(335deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.22 + 0.72*cos(335deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 18%, var(--koala-c2)) calc(55% + 40%*(0.22 + 0.72*cos(335deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.77*sin(113deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.60 - 0.26*cos(113deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.22 + 0.73*cos(113deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 19%, var(--koala-c2)) calc(55% + 40%*(0.22 + 0.73*cos(113deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.78*sin(250deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.58 - 0.27*cos(250deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.21 + 0.74*cos(250deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 19%, var(--koala-c2)) calc(55% + 40%*(0.21 + 0.74*cos(250deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.79*sin(28deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.57 - 0.27*cos(28deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.21 + 0.75*cos(28deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 20%, var(--koala-c2)) calc(55% + 40%*(0.21 + 0.75*cos(28deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.80*sin(165deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.56 - 0.28*cos(165deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.20 + 0.76*cos(165deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 21%, var(--koala-c2)) calc(55% + 40%*(0.20 + 0.76*cos(165deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.81*sin(303deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.55 - 0.28*cos(303deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.20 + 0.77*cos(303deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 21%, var(--koala-c2)) calc(55% + 40%*(0.20 + 0.77*cos(303deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.82*sin(80deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.53 - 0.28*cos(80deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.19 + 0.77*cos(80deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 22%, var(--koala-c2)) calc(55% + 40%*(0.19 + 0.77*cos(80deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.83*sin(218deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.52 - 0.28*cos(218deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.19 + 0.78*cos(218deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 23%, var(--koala-c2)) calc(55% + 40%*(0.19 + 0.78*cos(218deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.84*sin(355deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.51 - 0.29*cos(355deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.18 + 0.79*cos(355deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 23%, var(--koala-c2)) calc(55% + 40%*(0.18 + 0.79*cos(355deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.85*sin(133deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.49 - 0.29*cos(133deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.18 + 0.80*cos(133deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 24%, var(--koala-c2)) calc(55% + 40%*(0.18 + 0.80*cos(133deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.86*sin(270deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.48 - 0.29*cos(270deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.18 + 0.81*cos(270deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 25%, var(--koala-c2)) calc(55% + 40%*(0.18 + 0.81*cos(270deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.87*sin(48deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.47 - 0.30*cos(48deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.17 + 0.81*cos(48deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 25%, var(--koala-c2)) calc(55% + 40%*(0.17 + 0.81*cos(48deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.87*sin(185deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.46 - 0.30*cos(185deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.17 + 0.82*cos(185deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 26%, var(--koala-c2)) calc(55% + 40%*(0.17 + 0.82*cos(185deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.88*sin(323deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.44 - 0.30*cos(323deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.16 + 0.83*cos(323deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 27%, var(--koala-c2)) calc(55% + 40%*(0.16 + 0.83*cos(323deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.89*sin(100deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.43 - 0.30*cos(100deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.16 + 0.83*cos(100deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 27%, var(--koala-c2)) calc(55% + 40%*(0.16 + 0.83*cos(100deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.89*sin(238deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.42 - 0.31*cos(238deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.15 + 0.84*cos(238deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 28%, var(--koala-c2)) calc(55% + 40%*(0.15 + 0.84*cos(238deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.90*sin(15deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.41 - 0.31*cos(15deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.15 + 0.85*cos(15deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 29%, var(--koala-c2)) calc(55% + 40%*(0.15 + 0.85*cos(15deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.91*sin(153deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.39 - 0.31*cos(153deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.14 + 0.85*cos(153deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 29%, var(--koala-c2)) calc(55% + 40%*(0.14 + 0.85*cos(153deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.91*sin(290deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.38 - 0.31*cos(290deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.14 + 0.86*cos(290deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 30%, var(--koala-c2)) calc(55% + 40%*(0.14 + 0.86*cos(290deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.92*sin(68deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.37 - 0.31*cos(68deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.13 + 0.86*cos(68deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 31%, var(--koala-c2)) calc(55% + 40%*(0.13 + 0.86*cos(68deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.92*sin(205deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.36 - 0.32*cos(205deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.13 + 0.87*cos(205deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 31%, var(--koala-c2)) calc(55% + 40%*(0.13 + 0.87*cos(205deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.93*sin(343deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.34 - 0.32*cos(343deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.13 + 0.87*cos(343deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 32%, var(--koala-c2)) calc(55% + 40%*(0.13 + 0.87*cos(343deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.94*sin(120deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.33 - 0.32*cos(120deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.12 + 0.88*cos(120deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 33%, var(--koala-c2)) calc(55% + 40%*(0.12 + 0.88*cos(120deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.94*sin(258deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.32 - 0.32*cos(258deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.12 + 0.88*cos(258deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 33%, var(--koala-c2)) calc(55% + 40%*(0.12 + 0.88*cos(258deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.95*sin(35deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.31 - 0.32*cos(35deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.11 + 0.89*cos(35deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 34%, var(--koala-c2)) calc(55% + 40%*(0.11 + 0.89*cos(35deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.95*sin(173deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.29 - 0.32*cos(173deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.11 + 0.89*cos(173deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 35%, var(--koala-c2)) calc(55% + 40%*(0.11 + 0.89*cos(173deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.95*sin(310deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.28 - 0.33*cos(310deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.10 + 0.90*cos(310deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 35%, var(--koala-c2)) calc(55% + 40%*(0.10 + 0.90*cos(310deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.96*sin(88deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.27 - 0.33*cos(88deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.10 + 0.90*cos(88deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 36%, var(--koala-c2)) calc(55% + 40%*(0.10 + 0.90*cos(88deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.96*sin(225deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.26 - 0.33*cos(225deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.09 + 0.90*cos(225deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 37%, var(--koala-c2)) calc(55% + 40%*(0.09 + 0.90*cos(225deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.97*sin(3deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.24 - 0.33*cos(3deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.09 + 0.91*cos(3deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 37%, var(--koala-c2)) calc(55% + 40%*(0.09 + 0.91*cos(3deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.97*sin(140deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.23 - 0.33*cos(140deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.08 + 0.91*cos(140deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 38%, var(--koala-c2)) calc(55% + 40%*(0.08 + 0.91*cos(140deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.97*sin(278deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.22 - 0.33*cos(278deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.08 + 0.91*cos(278deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 39%, var(--koala-c2)) calc(55% + 40%*(0.08 + 0.91*cos(278deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.98*sin(55deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.21 - 0.33*cos(55deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.08 + 0.92*cos(55deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 39%, var(--koala-c2)) calc(55% + 40%*(0.08 + 0.92*cos(55deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.98*sin(193deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.19 - 0.33*cos(193deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.07 + 0.92*cos(193deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 40%, var(--koala-c2)) calc(55% + 40%*(0.07 + 0.92*cos(193deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.98*sin(330deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.18 - 0.34*cos(330deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.07 + 0.92*cos(330deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 41%, var(--koala-c2)) calc(55% + 40%*(0.07 + 0.92*cos(330deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.98*sin(108deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.17 - 0.34*cos(108deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.06 + 0.92*cos(108deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 41%, var(--koala-c2)) calc(55% + 40%*(0.06 + 0.92*cos(108deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(245deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.16 - 0.34*cos(245deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.06 + 0.93*cos(245deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 42%, var(--koala-c2)) calc(55% + 40%*(0.06 + 0.93*cos(245deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(23deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.14 - 0.34*cos(23deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.05 + 0.93*cos(23deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 43%, var(--koala-c2)) calc(55% + 40%*(0.05 + 0.93*cos(23deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(160deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.13 - 0.34*cos(160deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.05 + 0.93*cos(160deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 43%, var(--koala-c2)) calc(55% + 40%*(0.05 + 0.93*cos(160deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(298deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.12 - 0.34*cos(298deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.04 + 0.93*cos(298deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 44%, var(--koala-c2)) calc(55% + 40%*(0.04 + 0.93*cos(298deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(76deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.11 - 0.34*cos(76deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.04 + 0.93*cos(76deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 45%, var(--koala-c2)) calc(55% + 40%*(0.04 + 0.93*cos(76deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(213deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.09 - 0.34*cos(213deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.03 + 0.93*cos(213deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 45%, var(--koala-c2)) calc(55% + 40%*(0.03 + 0.93*cos(213deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(351deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.08 - 0.34*cos(351deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.03 + 0.94*cos(351deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 46%, var(--koala-c2)) calc(55% + 40%*(0.03 + 0.94*cos(351deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(128deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.07 - 0.34*cos(128deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.03 + 0.94*cos(128deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 47%, var(--koala-c2)) calc(55% + 40%*(0.03 + 0.94*cos(128deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(266deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.06 - 0.34*cos(266deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.02 + 0.94*cos(266deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 47%, var(--koala-c2)) calc(55% + 40%*(0.02 + 0.94*cos(266deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(43deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.04 - 0.34*cos(43deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.02 + 0.94*cos(43deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 48%, var(--koala-c2)) calc(55% + 40%*(0.02 + 0.94*cos(43deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(181deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.03 - 0.34*cos(181deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.01 + 0.94*cos(181deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 49%, var(--koala-c2)) calc(55% + 40%*(0.01 + 0.94*cos(181deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(318deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.02 - 0.34*cos(318deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.01 + 0.94*cos(318deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 49%, var(--koala-c2)) calc(55% + 40%*(0.01 + 0.94*cos(318deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(96deg + var(--koala-a))) calc(var(--r)*var(--f)*(0.01 - 0.34*cos(96deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(0.00 + 0.94*cos(96deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 50%, var(--koala-c2)) calc(55% + 40%*(0.00 + 0.94*cos(96deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(233deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.01 - 0.34*cos(233deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.00 + 0.94*cos(233deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 51%, var(--koala-c2)) calc(55% + 40%*(-0.00 + 0.94*cos(233deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(11deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.02 - 0.34*cos(11deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.01 + 0.94*cos(11deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 52%, var(--koala-c2)) calc(55% + 40%*(-0.01 + 0.94*cos(11deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(148deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.03 - 0.34*cos(148deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.01 + 0.94*cos(148deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 52%, var(--koala-c2)) calc(55% + 40%*(-0.01 + 0.94*cos(148deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(286deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.04 - 0.34*cos(286deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.02 + 0.94*cos(286deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 53%, var(--koala-c2)) calc(55% + 40%*(-0.02 + 0.94*cos(286deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(63deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.06 - 0.34*cos(63deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.02 + 0.94*cos(63deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 54%, var(--koala-c2)) calc(55% + 40%*(-0.02 + 0.94*cos(63deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(201deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.07 - 0.34*cos(201deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.03 + 0.94*cos(201deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 54%, var(--koala-c2)) calc(55% + 40%*(-0.03 + 0.94*cos(201deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*1.00*sin(338deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.08 - 0.34*cos(338deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.03 + 0.94*cos(338deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 55%, var(--koala-c2)) calc(55% + 40%*(-0.03 + 0.94*cos(338deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(116deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.09 - 0.34*cos(116deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.03 + 0.93*cos(116deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 56%, var(--koala-c2)) calc(55% + 40%*(-0.03 + 0.93*cos(116deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(253deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.11 - 0.34*cos(253deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.04 + 0.93*cos(253deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 56%, var(--koala-c2)) calc(55% + 40%*(-0.04 + 0.93*cos(253deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(31deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.12 - 0.34*cos(31deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.04 + 0.93*cos(31deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 57%, var(--koala-c2)) calc(55% + 40%*(-0.04 + 0.93*cos(31deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(168deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.13 - 0.34*cos(168deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.05 + 0.93*cos(168deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 58%, var(--koala-c2)) calc(55% + 40%*(-0.05 + 0.93*cos(168deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(306deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.14 - 0.34*cos(306deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.05 + 0.93*cos(306deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 58%, var(--koala-c2)) calc(55% + 40%*(-0.05 + 0.93*cos(306deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.99*sin(83deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.16 - 0.34*cos(83deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.06 + 0.93*cos(83deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 59%, var(--koala-c2)) calc(55% + 40%*(-0.06 + 0.93*cos(83deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.98*sin(221deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.17 - 0.34*cos(221deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.06 + 0.92*cos(221deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 60%, var(--koala-c2)) calc(55% + 40%*(-0.06 + 0.92*cos(221deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.98*sin(358deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.18 - 0.34*cos(358deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.07 + 0.92*cos(358deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 60%, var(--koala-c2)) calc(55% + 40%*(-0.07 + 0.92*cos(358deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.98*sin(136deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.19 - 0.33*cos(136deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.07 + 0.92*cos(136deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 61%, var(--koala-c2)) calc(55% + 40%*(-0.07 + 0.92*cos(136deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.98*sin(273deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.21 - 0.33*cos(273deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.08 + 0.92*cos(273deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 62%, var(--koala-c2)) calc(55% + 40%*(-0.08 + 0.92*cos(273deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.97*sin(51deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.22 - 0.33*cos(51deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.08 + 0.91*cos(51deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 62%, var(--koala-c2)) calc(55% + 40%*(-0.08 + 0.91*cos(51deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.97*sin(188deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.23 - 0.33*cos(188deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.08 + 0.91*cos(188deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 63%, var(--koala-c2)) calc(55% + 40%*(-0.08 + 0.91*cos(188deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.97*sin(326deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.24 - 0.33*cos(326deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.09 + 0.91*cos(326deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 64%, var(--koala-c2)) calc(55% + 40%*(-0.09 + 0.91*cos(326deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.96*sin(103deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.26 - 0.33*cos(103deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.09 + 0.90*cos(103deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 64%, var(--koala-c2)) calc(55% + 40%*(-0.09 + 0.90*cos(103deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.96*sin(241deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.27 - 0.33*cos(241deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.10 + 0.90*cos(241deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 65%, var(--koala-c2)) calc(55% + 40%*(-0.10 + 0.90*cos(241deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.95*sin(18deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.28 - 0.33*cos(18deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.10 + 0.90*cos(18deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 66%, var(--koala-c2)) calc(55% + 40%*(-0.10 + 0.90*cos(18deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.95*sin(156deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.29 - 0.32*cos(156deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.11 + 0.89*cos(156deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 66%, var(--koala-c2)) calc(55% + 40%*(-0.11 + 0.89*cos(156deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.95*sin(293deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.31 - 0.32*cos(293deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.11 + 0.89*cos(293deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 67%, var(--koala-c2)) calc(55% + 40%*(-0.11 + 0.89*cos(293deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.94*sin(71deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.32 - 0.32*cos(71deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.12 + 0.88*cos(71deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 68%, var(--koala-c2)) calc(55% + 40%*(-0.12 + 0.88*cos(71deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.94*sin(208deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.33 - 0.32*cos(208deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.12 + 0.88*cos(208deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 68%, var(--koala-c2)) calc(55% + 40%*(-0.12 + 0.88*cos(208deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.93*sin(346deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.34 - 0.32*cos(346deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.13 + 0.87*cos(346deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 69%, var(--koala-c2)) calc(55% + 40%*(-0.13 + 0.87*cos(346deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.92*sin(123deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.36 - 0.32*cos(123deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.13 + 0.87*cos(123deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 70%, var(--koala-c2)) calc(55% + 40%*(-0.13 + 0.87*cos(123deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.92*sin(261deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.37 - 0.31*cos(261deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.13 + 0.86*cos(261deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 70%, var(--koala-c2)) calc(55% + 40%*(-0.13 + 0.86*cos(261deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.91*sin(38deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.38 - 0.31*cos(38deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.14 + 0.86*cos(38deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 71%, var(--koala-c2)) calc(55% + 40%*(-0.14 + 0.86*cos(38deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.91*sin(176deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.39 - 0.31*cos(176deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.14 + 0.85*cos(176deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 72%, var(--koala-c2)) calc(55% + 40%*(-0.14 + 0.85*cos(176deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.90*sin(313deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.41 - 0.31*cos(313deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.15 + 0.85*cos(313deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 72%, var(--koala-c2)) calc(55% + 40%*(-0.15 + 0.85*cos(313deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.89*sin(91deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.42 - 0.31*cos(91deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.15 + 0.84*cos(91deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 73%, var(--koala-c2)) calc(55% + 40%*(-0.15 + 0.84*cos(91deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.89*sin(228deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.43 - 0.30*cos(228deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.16 + 0.83*cos(228deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 74%, var(--koala-c2)) calc(55% + 40%*(-0.16 + 0.83*cos(228deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.88*sin(6deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.44 - 0.30*cos(6deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.16 + 0.83*cos(6deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 74%, var(--koala-c2)) calc(55% + 40%*(-0.16 + 0.83*cos(6deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.87*sin(143deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.46 - 0.30*cos(143deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.17 + 0.82*cos(143deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 75%, var(--koala-c2)) calc(55% + 40%*(-0.17 + 0.82*cos(143deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.87*sin(281deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.47 - 0.30*cos(281deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.17 + 0.81*cos(281deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 76%, var(--koala-c2)) calc(55% + 40%*(-0.17 + 0.81*cos(281deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.86*sin(58deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.48 - 0.29*cos(58deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.18 + 0.81*cos(58deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 76%, var(--koala-c2)) calc(55% + 40%*(-0.18 + 0.81*cos(58deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.85*sin(196deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.49 - 0.29*cos(196deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.18 + 0.80*cos(196deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 77%, var(--koala-c2)) calc(55% + 40%*(-0.18 + 0.80*cos(196deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.84*sin(333deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.51 - 0.29*cos(333deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.18 + 0.79*cos(333deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 78%, var(--koala-c2)) calc(55% + 40%*(-0.18 + 0.79*cos(333deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.83*sin(111deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.52 - 0.28*cos(111deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.19 + 0.78*cos(111deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 78%, var(--koala-c2)) calc(55% + 40%*(-0.19 + 0.78*cos(111deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.82*sin(248deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.53 - 0.28*cos(248deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.19 + 0.77*cos(248deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 79%, var(--koala-c2)) calc(55% + 40%*(-0.19 + 0.77*cos(248deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.81*sin(26deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.55 - 0.28*cos(26deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.20 + 0.77*cos(26deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 80%, var(--koala-c2)) calc(55% + 40%*(-0.20 + 0.77*cos(26deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.80*sin(163deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.56 - 0.28*cos(163deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.20 + 0.76*cos(163deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 80%, var(--koala-c2)) calc(55% + 40%*(-0.20 + 0.76*cos(163deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.79*sin(301deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.57 - 0.27*cos(301deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.21 + 0.75*cos(301deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 81%, var(--koala-c2)) calc(55% + 40%*(-0.21 + 0.75*cos(301deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.78*sin(78deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.58 - 0.27*cos(78deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.21 + 0.74*cos(78deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 82%, var(--koala-c2)) calc(55% + 40%*(-0.21 + 0.74*cos(78deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.77*sin(216deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.60 - 0.26*cos(216deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.22 + 0.73*cos(216deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 82%, var(--koala-c2)) calc(55% + 40%*(-0.22 + 0.73*cos(216deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.76*sin(353deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.61 - 0.26*cos(353deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.22 + 0.72*cos(353deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 83%, var(--koala-c2)) calc(55% + 40%*(-0.22 + 0.72*cos(353deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.75*sin(131deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.62 - 0.26*cos(131deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.23 + 0.71*cos(131deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 84%, var(--koala-c2)) calc(55% + 40%*(-0.23 + 0.71*cos(131deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.74*sin(268deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.63 - 0.25*cos(268deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.23 + 0.69*cos(268deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 84%, var(--koala-c2)) calc(55% + 40%*(-0.23 + 0.69*cos(268deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.73*sin(46deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.65 - 0.25*cos(46deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.23 + 0.68*cos(46deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 85%, var(--koala-c2)) calc(55% + 40%*(-0.23 + 0.68*cos(46deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.71*sin(183deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.66 - 0.24*cos(183deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.24 + 0.67*cos(183deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 86%, var(--koala-c2)) calc(55% + 40%*(-0.24 + 0.67*cos(183deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.70*sin(321deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.67 - 0.24*cos(321deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.24 + 0.66*cos(321deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 86%, var(--koala-c2)) calc(55% + 40%*(-0.24 + 0.66*cos(321deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.69*sin(99deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.68 - 0.23*cos(99deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.25 + 0.65*cos(99deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 87%, var(--koala-c2)) calc(55% + 40%*(-0.25 + 0.65*cos(99deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.67*sin(236deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.70 - 0.23*cos(236deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.25 + 0.63*cos(236deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 88%, var(--koala-c2)) calc(55% + 40%*(-0.25 + 0.63*cos(236deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.66*sin(14deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.71 - 0.22*cos(14deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.26 + 0.62*cos(14deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 88%, var(--koala-c2)) calc(55% + 40%*(-0.26 + 0.62*cos(14deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.64*sin(151deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.72 - 0.22*cos(151deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.26 + 0.60*cos(151deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 89%, var(--koala-c2)) calc(55% + 40%*(-0.26 + 0.60*cos(151deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.63*sin(289deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.73 - 0.21*cos(289deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.27 + 0.59*cos(289deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 90%, var(--koala-c2)) calc(55% + 40%*(-0.27 + 0.59*cos(289deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.61*sin(66deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.75 - 0.21*cos(66deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.27 + 0.57*cos(66deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 90%, var(--koala-c2)) calc(55% + 40%*(-0.27 + 0.57*cos(66deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.59*sin(204deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.76 - 0.20*cos(204deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.28 + 0.56*cos(204deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 91%, var(--koala-c2)) calc(55% + 40%*(-0.28 + 0.56*cos(204deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.57*sin(341deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.77 - 0.20*cos(341deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.28 + 0.54*cos(341deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 92%, var(--koala-c2)) calc(55% + 40%*(-0.28 + 0.54*cos(341deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.55*sin(119deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.78 - 0.19*cos(119deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.29 + 0.52*cos(119deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 92%, var(--koala-c2)) calc(55% + 40%*(-0.29 + 0.52*cos(119deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.53*sin(256deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.80 - 0.18*cos(256deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.29 + 0.50*cos(256deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 93%, var(--koala-c2)) calc(55% + 40%*(-0.29 + 0.50*cos(256deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.51*sin(34deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.81 - 0.17*cos(34deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.29 + 0.48*cos(34deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 94%, var(--koala-c2)) calc(55% + 40%*(-0.29 + 0.48*cos(34deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.49*sin(171deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.82 - 0.17*cos(171deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.30 + 0.46*cos(171deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 94%, var(--koala-c2)) calc(55% + 40%*(-0.30 + 0.46*cos(171deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.46*sin(309deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.83 - 0.16*cos(309deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.30 + 0.43*cos(309deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 95%, var(--koala-c2)) calc(55% + 40%*(-0.30 + 0.43*cos(309deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.44*sin(86deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.85 - 0.15*cos(86deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.31 + 0.41*cos(86deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 96%, var(--koala-c2)) calc(55% + 40%*(-0.31 + 0.41*cos(86deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.41*sin(224deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.86 - 0.14*cos(224deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.31 + 0.38*cos(224deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 96%, var(--koala-c2)) calc(55% + 40%*(-0.31 + 0.38*cos(224deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.38*sin(1deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.87 - 0.13*cos(1deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.32 + 0.35*cos(1deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 97%, var(--koala-c2)) calc(55% + 40%*(-0.32 + 0.35*cos(1deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.34*sin(139deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.88 - 0.12*cos(139deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.32 + 0.32*cos(139deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 98%, var(--koala-c2)) calc(55% + 40%*(-0.32 + 0.32*cos(139deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.30*sin(276deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.90 - 0.10*cos(276deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.33 + 0.28*cos(276deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 98%, var(--koala-c2)) calc(55% + 40%*(-0.33 + 0.28*cos(276deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.26*sin(54deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.91 - 0.09*cos(54deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.33 + 0.24*cos(54deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 99%, var(--koala-c2)) calc(55% + 40%*(-0.33 + 0.24*cos(54deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.20*sin(191deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.92 - 0.07*cos(191deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.34 + 0.19*cos(191deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 100%, var(--koala-c2)) calc(55% + 40%*(-0.34 + 0.19*cos(191deg + var(--koala-a)))), transparent),
+        calc(var(--r)*var(--f)*0.12*sin(329deg + var(--koala-a))) calc(var(--r)*var(--f)*(-0.93 - 0.04*cos(329deg + var(--koala-a)))) 0 calc(var(--dot)*(1 + 0.35*var(--koala-k))*(0.55 + 0.45*(-0.34 + 0.11*cos(329deg + var(--koala-a))))) color-mix(in srgb, color-mix(in srgb, var(--koala-c1) 100%, var(--koala-c2)) calc(55% + 40%*(-0.34 + 0.11*cos(329deg + var(--koala-a)))), transparent);
+}
+
+/* Подключено: вращение ступенями (600 ступеней за 30 с = 20 кадров/с, экономит CPU) */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"])::before {
+    opacity: 1;
+    animation: koala-sphere-rot 30s steps(600) infinite;
+}
+
+/* Подключение: сфера вращается и "дышит", пока клиент показывает спиннер */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]:has(svg[role="status"].opacity-100)::before {
+    opacity: 1;
+    animation:
+        koala-sphere-rot 30s steps(600) infinite,
+        koala-sphere-breathe 1.1s ease-in-out infinite alternate;
+}
+
+/* Наведение: наклон + раздувание */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]:hover:not(:disabled)::before {
+    --koala-k: 1;
+    opacity: 1;
+    transform: rotate(var(--tilt));
+}
+
+/* Кнопка недоступна (нет профиля или идёт переключение) */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]:disabled::before {
+    opacity: 0.45;
+}
+
+/* Свечение под сферой */
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]::after {
+    content: "";
+    position: absolute;
+    inset: -35%;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(circle, color-mix(in oklab, var(--koala-c2) 22%, transparent) 0%, transparent 62%);
+    transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease;
+}
+
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"])::after {
+    background: radial-gradient(circle, color-mix(in oklab, var(--koala-c2) 32%, transparent) 0%, transparent 62%);
+}
+
+html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]:hover:not(:disabled)::after {
+    transform: scale(1.18);
+}
+
+@keyframes koala-sphere-rot {
+    to {
+        --koala-a: 360deg;
+    }
+}
+
+@keyframes koala-sphere-breathe {
+    from {
+        --koala-k: 0;
+    }
+
+    to {
+        --koala-k: 0.6;
+    }
+}
+
+
+/* =====================================================================
+   17. ФЛАГИ СЕРВЕРОВ
+   Windows не умеет рисовать эмодзи-флаги системным шрифтом. Клиент подключает
+   шрифт twemoji для класса .flag-emoji (assets/main.css) - тема использует его же.
+   ===================================================================== */
+
+/* Тексты в карточках без класса flag-emoji (например, описание сервера) */
+html:is(.dark, :not(.dark)) [data-slot="card"] :is(p, span, div):not(:has(*)) {
+    font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        Roboto,
+        Oxygen,
+        Ubuntu,
+        Cantarell,
+        'Open Sans',
+        'Helvetica Neue',
+        sans-serif,
+        'Apple Color Emoji',
+        'twemoji' !important;
+}
+
+/* Флаг в начале названия сервера переносится в правый угол карточки - крупно и наискось.
+   Название сервера - <span class="flag-emoji" title="..."> (proxy-item.tsx).
+   Правило срабатывает, только если название начинается с флага
+   (символы-буквы регионов U+1F1E6...U+1F1FF) */
+html:is(.dark, :not(.dark)) [data-slot="card"]:has(span.flag-emoji[title]) {
+    position: relative;
+    isolation: isolate;   /* флаг лежит под текстом, но над фоном карточки */
+}
+
+/* Сдвиг названия: флаг с пробелом уходят за левый край и обрезаются */
+html:is(.dark, :not(.dark)) [data-slot="card"] span.flag-emoji:is([title^="\1F1E6"], [title^="\1F1E7"], [title^="\1F1E8"], [title^="\1F1E9"], [title^="\1F1EA"],
+    [title^="\1F1EB"], [title^="\1F1EC"], [title^="\1F1ED"], [title^="\1F1EE"], [title^="\1F1EF"],
+    [title^="\1F1F0"], [title^="\1F1F1"], [title^="\1F1F2"], [title^="\1F1F3"], [title^="\1F1F4"],
+    [title^="\1F1F5"], [title^="\1F1F6"], [title^="\1F1F7"], [title^="\1F1F8"], [title^="\1F1F9"],
+    [title^="\1F1FA"], [title^="\1F1FB"], [title^="\1F1FC"], [title^="\1F1FD"], [title^="\1F1FE"],
+    [title^="\1F1FF"]) {
+    text-indent: -1.2em;   /* остался кусочек флага - увеличьте, режет первую букву - уменьшите */
+}
+
+/* Большой флаг */
+html:is(.dark, :not(.dark)) [data-slot="card"] span.flag-emoji:is([title^="\1F1E6"], [title^="\1F1E7"], [title^="\1F1E8"], [title^="\1F1E9"], [title^="\1F1EA"],
+    [title^="\1F1EB"], [title^="\1F1EC"], [title^="\1F1ED"], [title^="\1F1EE"], [title^="\1F1EF"],
+    [title^="\1F1F0"], [title^="\1F1F1"], [title^="\1F1F2"], [title^="\1F1F3"], [title^="\1F1F4"],
+    [title^="\1F1F5"], [title^="\1F1F6"], [title^="\1F1F7"], [title^="\1F1F8"], [title^="\1F1F9"],
+    [title^="\1F1FA"], [title^="\1F1FB"], [title^="\1F1FC"], [title^="\1F1FD"], [title^="\1F1FE"],
+    [title^="\1F1FF"])::after {
+    content: attr(title);
+    text-indent: 0;
+    position: absolute;
+    right: -50px;
+    top: 15%;
+    z-index: -1;
+    display: block;
+    width: 1.4em;          /* видна только первая "буква" - флаг */
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 114px;      /* размер флага */
+    line-height: 1;
+    transform: translateY(-45%) rotate(-50deg);   /* минус = наклон влево */
+    opacity: 0.45;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(to left, #000 40%, transparent);
+    mask-image: linear-gradient(to left, #000 40%, transparent);
+    transition: opacity var(--koala-dur) var(--koala-ease);
+}
+
+/* У выбранного сервера флаг чуть ярче */
+html:is(.dark, :not(.dark)) [data-slot="card"][class*="border-primary/"] span.flag-emoji[title]::after {
+    opacity: 0.6;
+}
+
+
+/* =====================================================================
+   18. УМЕНЬШЕНИЕ АНИМАЦИИ
+   Если в Windows включено "Эффекты анимации: выкл." (или аналог в macOS/Linux),
+   все переходы становятся мгновенными, а сфера перестаёт вращаться.
+   Состояния (выбор, наведение) при этом остаются видны.
+   ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    html:is(.dark, :not(.dark)) *,
+    html:is(.dark, :not(.dark)) *::before,
+    html:is(.dark, :not(.dark)) *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    html:is(.dark, :not(.dark)) [data-guide="home-power-toggle"]::before {
+        animation: none !important;
+    }
+}

@@ -1,0 +1,1058 @@
+/* Koala Dark Glass Aurora */
+/*
+  Тема для Koala Clash 1.5.0: матовое стекло, полярная ночь и северное сияние.
+
+  ИДЕЯ
+  Глубокая ночь, над горизонтом медленно колышутся занавеси сияния - зелёный,
+  бирюзовый, фиолетовый. Интерфейс - матовое "морозное" стекло: сильно размытое,
+  приглушённое, с едва заметным инеем (зерном) и без бликов. Свет живёт только там,
+  где что-то происходит:
+    - кнопка питания - ядро, внутри которого вращается сияние, а вокруг дышит ореол;
+    - у выбранного сервера по рамке бежит переливающаяся полоса сияния;
+    - основные кнопки залиты градиентом сияния и светятся при наведении.
+  Элементы появляются плавно: плитки главной выезжают каскадом, карточки
+  проявляются из лёгкого размытия, окна и меню всплывают из глубины.
+
+  Тема тёмная в обоих режимах программы ("Тёмная" и "Светлая" выглядят одинаково).
+
+  КАК ПОДКЛЮЧАЕТСЯ
+  Тема вставляется через webContents.insertCSS() и в каскаде идёт раньше CSS клиента,
+  поэтому все правила начинаются с :root, а палитра - с html:root (так она перебивает
+  и светлые, и тёмные переменные клиента).
+
+  СОДЕРЖАНИЕ
+    0. Палитра и материал
+    1. Небо и сияние
+    2. Появление элементов
+    3. Матовое стекло
+    4. Главная
+    5. Ядро сияния (кнопка питания)
+    6. Прокси, профили, подключения
+    7. Боковая панель
+    8. Кнопки
+    9. Поля, переключатели, вкладки
+   10. Меню, окна, подсказки, тосты
+   11. Мелочи
+   12. Уменьшение анимации
+*/
+
+
+/* =====================================================================
+   0. ПАЛИТРА И МАТЕРИАЛ
+   ===================================================================== */
+
+/* Угол вращения сияния - зарегистрирован, чтобы его можно было анимировать */
+@property --dg-angle {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+}
+
+html:root {
+    /* Сияние */
+    --dg-green: #2df5b0;
+    --dg-cyan: #18c4e0;
+    --dg-violet: #7d5cff;
+    --dg-magenta: #ff4fc4;
+    --dg-aurora: linear-gradient(115deg, var(--dg-green) 0%, var(--dg-cyan) 48%, var(--dg-violet) 100%);
+    --dg-aurora-ring: conic-gradient(from var(--dg-angle), var(--dg-green), var(--dg-cyan), var(--dg-violet), var(--dg-magenta), var(--dg-green));
+
+    /* Ночь */
+    --dg-void: #04050b;
+    --dg-night: #0a1120;
+
+    /* Матовое стекло */
+    --dg-glass: rgba(17, 20, 33, 0.56);
+    --dg-glass-hover: rgba(28, 33, 52, 0.62);
+    --dg-glass-strong: rgba(13, 15, 26, 0.84);
+    --dg-glass-well: rgba(4, 6, 14, 0.45);
+    --dg-edge: rgba(255, 255, 255, 0.08);
+    --dg-edge-hover: rgba(255, 255, 255, 0.16);
+    --dg-blur: blur(28px) saturate(140%);
+    --dg-frost: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    --dg-inner: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    --dg-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.75);
+    --dg-glow: 0 0 28px -6px color-mix(in oklab, var(--dg-green) 45%, transparent);
+
+    /* Движение */
+    --dg-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --dg-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --dg-font: "Segoe UI Variable Text", "Segoe UI", -apple-system, system-ui, sans-serif;
+    --dg-font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, system-ui, sans-serif;
+
+    /* Переменные клиента */
+    --radius: 1rem !important;
+    --background: #04050b !important;
+    --foreground: #e6eaf3 !important;
+    --card: #11141f !important;
+    --card-foreground: #e6eaf3 !important;
+    --popover: #0d0f1a !important;
+    --popover-foreground: #e6eaf3 !important;
+    --primary: #6ee7cf !important;
+    --primary-foreground: #03110c !important;
+    --secondary: rgba(255, 255, 255, 0.05) !important;
+    --secondary-foreground: #e6eaf3 !important;
+    --muted: rgba(255, 255, 255, 0.05) !important;
+    --muted-foreground: #98a1b6 !important;
+    --accent: rgba(255, 255, 255, 0.07) !important;
+    --accent-foreground: #e6eaf3 !important;
+    --border: rgba(255, 255, 255, 0.08) !important;
+    --input: rgba(255, 255, 255, 0.12) !important;
+    --ring: #6ee7cf !important;
+    --stroke: rgba(255, 255, 255, 0.1) !important;
+    --destructive: #ff5c8a !important;
+    --success: #2df5b0 !important;
+    --warning: #ffc861 !important;
+
+    --stroke-power-on: #2df5b0 !important;
+    --gradient-start-power-on: #2df5b0 !important;
+    --gradient-end-power-on: #7d5cff !important;
+    --stroke-power-off: rgba(255, 255, 255, 0.14) !important;
+    --gradient-start-power-off: #1b2033 !important;
+    --gradient-end-power-off: #0e1120 !important;
+
+    --profile-active: rgba(45, 245, 176, 0.08) !important;
+    --stroke-profile-active: rgba(45, 245, 176, 0.4) !important;
+    --profile-inactive: rgba(17, 20, 33, 0.56) !important;
+    --stroke-profile-inactive: rgba(255, 255, 255, 0.08) !important;
+
+    --chart-1: #2df5b0 !important;
+    --chart-2: #18c4e0 !important;
+    --chart-3: #7d5cff !important;
+    --chart-4: #ff4fc4 !important;
+    --chart-5: #ffc861 !important;
+
+    --sidebar: rgba(13, 15, 26, 0.6) !important;
+    --sidebar-foreground: #e6eaf3 !important;
+    --sidebar-primary: #6ee7cf !important;
+    --sidebar-primary-foreground: #03110c !important;
+    --sidebar-accent: rgba(255, 255, 255, 0.07) !important;
+    --sidebar-accent-foreground: #e6eaf3 !important;
+    --sidebar-border: rgba(255, 255, 255, 0.08) !important;
+    --sidebar-ring: #6ee7cf !important;
+
+    color-scheme: dark;
+}
+
+/* Кольцо сияния объявлено на самих вращающихся элементах: переменная с var(--dg-angle)
+   вычисляется там, где объявлена, и только так видит анимированный угол */
+:root [data-guide="home-power-toggle"],
+:root [data-guide="home-power-toggle"] > div,
+:root [data-slot="card"].cursor-pointer.overflow-hidden::before {
+    --dg-aurora-ring: conic-gradient(from var(--dg-angle), var(--dg-green), var(--dg-cyan), var(--dg-violet), var(--dg-magenta), var(--dg-green));
+}
+
+:root body {
+    font-family: var(--dg-font);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+}
+
+:root ::selection {
+    background: color-mix(in oklab, var(--dg-green) 30%, transparent);
+    color: #ffffff;
+}
+
+:root :focus-visible {
+    --tw-ring-color: color-mix(in oklab, var(--dg-cyan) 70%, transparent) !important;
+}
+
+
+/* =====================================================================
+   1. НЕБО И СИЯНИЕ
+   Корневой контейнер окна (SidebarProvider в App.tsx): ночь со звёздами.
+   ::before и ::after - две занавеси сияния, качаются в разном ритме,
+   поэтому рисунок не повторяется.
+   ===================================================================== */
+
+:root [data-slot="sidebar-wrapper"] {
+    background:
+        radial-gradient(1px 1px at 12% 22%, rgba(255, 255, 255, 0.7), transparent),
+        radial-gradient(1px 1px at 68% 12%, rgba(255, 255, 255, 0.55), transparent),
+        radial-gradient(1.5px 1.5px at 84% 38%, rgba(255, 255, 255, 0.6), transparent),
+        radial-gradient(1px 1px at 32% 58%, rgba(255, 255, 255, 0.4), transparent),
+        radial-gradient(1px 1px at 52% 34%, rgba(255, 255, 255, 0.45), transparent),
+        radial-gradient(1px 1px at 22% 82%, rgba(255, 255, 255, 0.35), transparent),
+        radial-gradient(1px 1px at 92% 72%, rgba(255, 255, 255, 0.4), transparent),
+        radial-gradient(130% 90% at 50% 125%, #0f2232 0%, var(--dg-night) 35%, var(--dg-void) 75%) !important;
+    box-shadow: none !important;
+    isolation: isolate;
+}
+
+:root [data-slot="sidebar-wrapper"] > img.pointer-events-none {
+    display: none !important;
+}
+
+:root [data-slot="sidebar-wrapper"]::before,
+:root [data-slot="sidebar-wrapper"]::after {
+    content: "";
+    position: absolute;
+    left: -25%;
+    right: -25%;
+    z-index: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    will-change: transform;
+}
+
+/* Верхняя занавесь: зелёный и бирюзовый */
+:root [data-slot="sidebar-wrapper"]::before {
+    top: -12%;
+    height: 70%;
+    background:
+        radial-gradient(28% 70% at 18% 42%, color-mix(in oklab, var(--dg-green) 60%, transparent), transparent 70%),
+        radial-gradient(22% 60% at 42% 30%, color-mix(in oklab, var(--dg-cyan) 50%, transparent), transparent 70%),
+        radial-gradient(26% 66% at 66% 48%, color-mix(in oklab, var(--dg-green) 45%, transparent), transparent 70%),
+        radial-gradient(24% 58% at 88% 34%, color-mix(in oklab, var(--dg-violet) 55%, transparent), transparent 70%);
+    filter: blur(42px);
+    opacity: 0.8;
+    transform-origin: 50% 0;
+    animation: dg-curtain-a 26s var(--dg-ease) infinite alternate;
+}
+
+/* Нижняя занавесь: фиолетовый и розовый, слабее и медленнее */
+:root [data-slot="sidebar-wrapper"]::after {
+    top: 22%;
+    height: 60%;
+    background:
+        radial-gradient(26% 60% at 26% 50%, color-mix(in oklab, var(--dg-violet) 45%, transparent), transparent 70%),
+        radial-gradient(20% 50% at 58% 40%, color-mix(in oklab, var(--dg-magenta) 30%, transparent), transparent 70%),
+        radial-gradient(28% 64% at 82% 56%, color-mix(in oklab, var(--dg-cyan) 40%, transparent), transparent 70%);
+    filter: blur(56px);
+    opacity: 0.5;
+    animation: dg-curtain-b 37s var(--dg-ease) infinite alternate;
+}
+
+@keyframes dg-curtain-a {
+    0% { transform: translateX(-4%) skewX(-10deg) scaleY(1); }
+    50% { transform: translateX(3%) skewX(6deg) scaleY(1.18); }
+    100% { transform: translateX(6%) skewX(-4deg) scaleY(0.92); }
+}
+
+@keyframes dg-curtain-b {
+    0% { transform: translateX(5%) skewX(8deg) scaleY(1.1); }
+    100% { transform: translateX(-6%) skewX(-8deg) scaleY(0.9); }
+}
+
+/* Заголовок страницы */
+:root .title {
+    font-family: var(--dg-font-display);
+    font-size: 21px !important;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+}
+
+
+/* =====================================================================
+   2. ПОЯВЛЕНИЕ ЭЛЕМЕНТОВ
+   Элемент поднимается на 10px и проявляется из размытия. На главной плитки
+   идут каскадом (по 70 мс), карточки серверов - волной (по 25 мс).
+   Анимация срабатывает, когда React вставляет элемент: при переходе на страницу,
+   раскрытии группы, прокрутке длинного списка. Режим заполнения - backwards:
+   после появления на элементе не остаётся ни filter, ни transform (иначе они
+   ломали бы размытие стекла у вложенных элементов и держали лишний слой отрисовки).
+   ===================================================================== */
+
+@keyframes dg-rise {
+    from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+    to { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes dg-fade {
+    from { opacity: 0; filter: blur(4px); }
+    to { opacity: 1; filter: none; }
+}
+
+/* Плитки главной (контейнер страницы, где есть кнопка питания) */
+:root .flex.flex-col.h-full:has([data-guide="home-power-toggle"]) > * {
+    animation: dg-rise 0.8s var(--dg-ease-out) backwards;
+}
+
+:root .flex.flex-col.h-full:has([data-guide="home-power-toggle"]) > :nth-child(2) { animation-delay: 70ms; }
+:root .flex.flex-col.h-full:has([data-guide="home-power-toggle"]) > :nth-child(3) { animation-delay: 140ms; }
+:root .flex.flex-col.h-full:has([data-guide="home-power-toggle"]) > :nth-child(4) { animation-delay: 210ms; }
+:root .flex.flex-col.h-full:has([data-guide="home-power-toggle"]) > :nth-child(5) { animation-delay: 280ms; }
+
+/* Карточки: настройки, группы прокси, профили, подключения */
+:root .content [data-slot="card"]:not(.overflow-hidden),
+:root .content [data-slot="accordion"],
+:root div.rounded-2xl[aria-busy],
+:root div.rounded-xl.cursor-pointer:is([class*="bg-card/40"], [class*="to-card/40"]) {
+    animation: dg-rise 0.6s var(--dg-ease-out) backwards;
+}
+
+/* Карточки серверов внутри раскрытой группы - волной */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate) {
+    animation: dg-fade 0.5s var(--dg-ease-out) backwards;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):nth-child(2) { animation-delay: 25ms; }
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):nth-child(3) { animation-delay: 50ms; }
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):nth-child(4) { animation-delay: 75ms; }
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):nth-child(5) { animation-delay: 100ms; }
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):nth-child(6) { animation-delay: 125ms; }
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):nth-child(7) { animation-delay: 150ms; }
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):nth-child(n+8) { animation-delay: 175ms; }
+
+/* Пункты боковой панели проявляются один за другим при запуске программы */
+:root [data-slot="sidebar-menu-item"] {
+    animation: dg-fade 0.6s var(--dg-ease-out) backwards;
+}
+
+:root [data-slot="sidebar-menu-item"]:nth-child(2) { animation-delay: 50ms; }
+:root [data-slot="sidebar-menu-item"]:nth-child(3) { animation-delay: 100ms; }
+:root [data-slot="sidebar-menu-item"]:nth-child(4) { animation-delay: 150ms; }
+:root [data-slot="sidebar-menu-item"]:nth-child(5) { animation-delay: 200ms; }
+:root [data-slot="sidebar-menu-item"]:nth-child(6) { animation-delay: 250ms; }
+:root [data-slot="sidebar-menu-item"]:nth-child(n+7) { animation-delay: 300ms; }
+
+
+/* =====================================================================
+   3. МАТОВОЕ СТЕКЛО
+   Сильное размытие, приглушённая насыщенность, иней (мелкое зерно) и тонкая
+   кромка. Бликов нет - стекло матовое.
+   ===================================================================== */
+
+:root [data-slot="card"],
+:root div.rounded-2xl[class*="bg-card/"]:not([data-slot]),
+:root [data-slot="accordion"].rounded-xl.border,
+:root .driver-popover {
+    background-color: var(--dg-glass) !important;
+    background-image: var(--dg-frost) !important;
+    background-size: 180px 180px !important;
+    border: 1px solid var(--dg-edge) !important;
+    border-radius: 18px !important;
+    box-shadow: var(--dg-inner), var(--dg-shadow) !important;
+    -webkit-backdrop-filter: var(--dg-blur) !important;
+    backdrop-filter: var(--dg-blur) !important;
+}
+
+:root [data-slot="card"] [data-slot="card"] {
+    box-shadow: var(--dg-inner) !important;
+}
+
+:root div.rounded-2xl[class*="bg-card/"] > .w-px.bg-stroke {
+    background: linear-gradient(180deg, transparent, var(--dg-edge-hover), transparent) !important;
+}
+
+:root [data-slot="sidebar-inner"] {
+    background-color: var(--dg-glass) !important;
+    background-image: var(--dg-frost) !important;
+    background-size: 180px 180px !important;
+    border: 1px solid var(--dg-edge) !important;
+    border-radius: 20px !important;
+    box-shadow: var(--dg-inner), var(--dg-shadow) !important;
+    -webkit-backdrop-filter: var(--dg-blur) !important;
+    backdrop-filter: var(--dg-blur) !important;
+}
+
+
+/* =====================================================================
+   4. ГЛАВНАЯ (pages/home.tsx)
+   ===================================================================== */
+
+:root [data-guide="home-profile-header"] .font-medium {
+    font-family: var(--dg-font-display);
+    font-weight: 600;
+    font-size: 17px;
+}
+
+:root div.rounded-2xl[class*="bg-card/"] .font-bold {
+    font-family: var(--dg-font-display);
+    font-weight: 600 !important;
+    font-size: 17px !important;
+}
+
+:root div.rounded-2xl[class*="bg-card/"] .text-sm.text-foreground {
+    color: var(--muted-foreground) !important;
+    font-size: 12.5px !important;
+}
+
+/* Статус над кнопкой - без капса. Подключено - светится зелёным */
+:root .mb-3:has(+ [data-guide="home-power-toggle"]) > div {
+    text-transform: none !important;
+    font-family: var(--dg-font-display);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--muted-foreground) !important;
+    transition: color 0.6s var(--dg-ease), text-shadow 0.6s var(--dg-ease);
+}
+
+:root .mb-3:has(+ [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"]) > div {
+    color: var(--dg-green) !important;
+    text-shadow: 0 0 18px color-mix(in oklab, var(--dg-green) 60%, transparent);
+}
+
+:root [data-guide="home-power-toggle"] + div > div {
+    font-family: var(--dg-font-display);
+    font-size: 26px !important;
+    font-weight: 300 !important;
+    letter-spacing: 0.04em;
+}
+
+:root [data-guide="home-power-toggle"] ~ div svg.text-stroke-power-on {
+    color: var(--dg-cyan) !important;
+}
+
+/* Выбор группы - стеклянная капсула, при наведении подсвечивается кромка */
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]) {
+    border-radius: 999px !important;
+    transition: border-color 0.3s var(--dg-ease), background-color 0.3s var(--dg-ease), box-shadow 0.4s var(--dg-ease) !important;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]):hover {
+    background-color: var(--dg-glass-hover) !important;
+    border-color: color-mix(in oklab, var(--dg-cyan) 40%, transparent) !important;
+    box-shadow: var(--dg-inner), 0 0 24px -8px color-mix(in oklab, var(--dg-cyan) 60%, transparent) !important;
+}
+
+/* "Добавить профиль" и "Оплатить" - кнопки сияния */
+:root [class*="bg-gradient-start-power-on/50"] {
+    background: var(--dg-aurora) !important;
+    color: #03110c !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    font-weight: 600;
+    box-shadow: 0 8px 24px -10px color-mix(in oklab, var(--dg-green) 70%, transparent) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: box-shadow 0.3s var(--dg-ease), filter 0.3s var(--dg-ease) !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"]:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 10px 34px -8px color-mix(in oklab, var(--dg-cyan) 80%, transparent) !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"] svg {
+    color: inherit !important;
+}
+
+
+/* =====================================================================
+   5. ЯДРО СИЯНИЯ (кнопка питания, data-guide="home-power-toggle")
+   Разметка: <button> → <div> (круг 128px) → иконки клиента (они остаются видны).
+     <div>     → ядро: матовое стекло, внутри вращается кольцо сияния;
+     ::before  → ореол: то же сияние, сильно размытое, дышит вокруг кнопки.
+   Выключено - сияние едва тлеет и стоит. Подключено - горит и медленно вращается.
+   Подключение - вращается быстро. Ошибка - становится розово-красным.
+   ===================================================================== */
+
+:root [data-guide="home-power-toggle"] {
+    border-radius: 50%;
+    isolation: isolate;
+    transition: scale 0.5s var(--dg-ease-out) !important;
+}
+
+:root [data-guide="home-power-toggle"]:hover:not(:disabled) {
+    scale: 1.04;
+}
+
+:root [data-guide="home-power-toggle"] > div {
+    position: relative;
+    z-index: 1;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    background:
+        radial-gradient(circle, rgba(8, 10, 20, 0.92) 0 46%, rgba(8, 10, 20, 0.55) 60%, rgba(8, 10, 20, 0.2) 74%, transparent 76%),
+        conic-gradient(from var(--dg-angle),
+            rgba(45, 245, 176, 0.22), rgba(24, 196, 224, 0.16), rgba(125, 92, 255, 0.22), rgba(255, 79, 196, 0.12), rgba(45, 245, 176, 0.22)) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 30px rgba(0, 0, 0, 0.55), 0 20px 50px -20px rgba(0, 0, 0, 0.9) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    backdrop-filter: blur(20px) !important;
+    transition: box-shadow 0.8s var(--dg-ease) !important;
+}
+
+/* Ореол */
+:root [data-guide="home-power-toggle"]::before {
+    content: "";
+    position: absolute;
+    inset: -22px;
+    z-index: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    background: var(--dg-aurora-ring);
+    filter: blur(26px);
+    opacity: 0.12;
+    transition: opacity 0.8s var(--dg-ease);
+}
+
+/* Подключено */
+:root [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"] {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    background:
+        radial-gradient(circle, rgba(6, 9, 18, 0.88) 0 44%, rgba(6, 9, 18, 0.35) 58%, transparent 70%),
+        var(--dg-aurora-ring) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 24px rgba(0, 0, 0, 0.4), 0 0 40px -6px color-mix(in oklab, var(--dg-green) 55%, transparent) !important;
+    animation: dg-spin 9s linear infinite;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"])::before {
+    opacity: 0.6;
+    animation: dg-spin 9s linear infinite, dg-breathe 4s var(--dg-ease) infinite alternate;
+}
+
+@keyframes dg-spin {
+    to { --dg-angle: 360deg; }
+}
+
+@keyframes dg-breathe {
+    from { opacity: 0.4; scale: 0.92; }
+    to { opacity: 0.7; scale: 1.06; }
+}
+
+/* Подключение: кольцо разгорается и крутится быстро */
+:root [data-guide="home-power-toggle"]:has(svg[role="status"].opacity-100) > div {
+    background:
+        radial-gradient(circle, rgba(6, 9, 18, 0.9) 0 46%, rgba(6, 9, 18, 0.45) 60%, transparent 72%),
+        var(--dg-aurora-ring) !important;
+    animation: dg-spin 1.6s linear infinite;
+}
+
+:root [data-guide="home-power-toggle"]:has(svg[role="status"].opacity-100)::before {
+    opacity: 0.35;
+    animation: dg-spin 1.6s linear infinite;
+}
+
+/* Ошибка ядра */
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) > div {
+    background:
+        radial-gradient(circle, rgba(18, 6, 12, 0.9) 0 46%, rgba(18, 6, 12, 0.45) 60%, transparent 72%),
+        conic-gradient(from 0deg, var(--destructive), #ff9a5c, var(--destructive)) !important;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100)::before {
+    background: var(--destructive);
+    opacity: 0.3;
+}
+
+:root [data-guide="home-power-toggle"] > div img {
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.25));
+}
+
+
+/* =====================================================================
+   6. ПРОКСИ, ПРОФИЛИ, ПОДКЛЮЧЕНИЯ
+   ===================================================================== */
+
+/* Карточка сервера (proxy-item.tsx: Card с cursor-pointer и overflow-hidden) */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate) {
+    border-radius: 14px !important;
+    box-shadow: var(--dg-inner) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(140%) !important;
+    backdrop-filter: blur(18px) saturate(140%) !important;
+    transition: background-color 0.3s var(--dg-ease), border-color 0.3s var(--dg-ease), box-shadow 0.4s var(--dg-ease), translate 0.4s var(--dg-ease-out) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):not(:has(button:hover)):hover {
+    background-color: var(--dg-glass-hover) !important;
+    border-color: var(--dg-edge-hover) !important;
+    translate: 0 -2px;
+}
+
+/* Выбранный сервер: по рамке бежит полоса сияния, карточка мягко светится */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"] {
+    background-color: rgba(20, 40, 44, 0.6) !important;
+    border-color: transparent !important;
+    box-shadow: var(--dg-inner), var(--dg-glow) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: var(--dg-aurora-ring);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    animation: dg-spin 6s linear infinite;
+}
+
+:root [data-slot="card"][class*="border-primary/"] .flag-emoji {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+/* Закреплённый сервер - тёплое янтарное свечение */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="bg-amber-500"] {
+    background-color: rgba(44, 34, 16, 0.55) !important;
+    border-color: rgba(255, 200, 97, 0.35) !important;
+    box-shadow: var(--dg-inner), 0 0 24px -8px rgba(255, 200, 97, 0.5) !important;
+}
+
+:root [data-slot="card"] [data-slot="button"][data-variant="ghost"] {
+    border-radius: 999px !important;
+}
+
+/* Заголовок группы */
+:root [data-slot="card"].cursor-pointer.isolate {
+    transition: background-color 0.3s var(--dg-ease), border-color 0.3s var(--dg-ease) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.isolate:not(:has(button:hover)):hover {
+    background-color: var(--dg-glass-hover) !important;
+    border-color: var(--dg-edge-hover) !important;
+}
+
+:root [data-slot="card"].isolate .size-9.rounded-md {
+    border-radius: 12px !important;
+}
+
+:root div.mx-2[class*="bg-card/30"] {
+    background: rgba(10, 12, 22, 0.35) !important;
+    border-color: var(--dg-edge) !important;
+}
+
+:root div.mx-2[class*="bg-card/30"].rounded-b-xl {
+    border-radius: 0 0 18px 18px !important;
+}
+
+:root [data-slot="badge"] {
+    border-radius: 999px !important;
+}
+
+/* Карточка профиля (profile-item.tsx, всегда с aria-busy) */
+:root div.rounded-2xl[aria-busy] {
+    background-color: var(--dg-glass) !important;
+    background-image: var(--dg-frost) !important;
+    border: 1px solid var(--dg-edge) !important;
+    border-radius: 18px !important;
+    box-shadow: var(--dg-inner), var(--dg-shadow) !important;
+    -webkit-backdrop-filter: var(--dg-blur) !important;
+    backdrop-filter: var(--dg-blur) !important;
+    transition: background-color 0.3s var(--dg-ease), border-color 0.3s var(--dg-ease), box-shadow 0.4s var(--dg-ease), opacity 0.3s, scale 0.3s !important;
+}
+
+:root div.rounded-2xl[aria-busy]:not(:has(button:hover)):hover {
+    background-color: var(--dg-glass-hover) !important;
+    border-color: var(--dg-edge-hover) !important;
+}
+
+:root div.rounded-2xl[aria-busy].border-stroke-profile-active {
+    border-color: color-mix(in oklab, var(--dg-green) 40%, transparent) !important;
+    box-shadow: var(--dg-inner), var(--dg-glow), var(--dg-shadow) !important;
+}
+
+:root div.rounded-2xl[aria-busy] .border-foreground\/10 {
+    border-color: var(--dg-edge) !important;
+}
+
+/* Строки подключений */
+:root div.rounded-xl.cursor-pointer:is([class*="bg-card/40"], [class*="to-card/40"]) {
+    background: var(--dg-frost), var(--dg-glass) !important;
+    border: 1px solid var(--dg-edge) !important;
+    border-radius: 14px !important;
+    box-shadow: var(--dg-inner) !important;
+    -webkit-backdrop-filter: var(--dg-blur) !important;
+    backdrop-filter: var(--dg-blur) !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="bg-card/40"]:hover {
+    background: var(--dg-frost), var(--dg-glass-hover) !important;
+    border-color: var(--dg-edge-hover) !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="to-card/40"] {
+    border-color: color-mix(in oklab, var(--dg-green) 35%, transparent) !important;
+    box-shadow: var(--dg-inner), var(--dg-glow) !important;
+}
+
+:root div.rounded-xl.cursor-pointer .size-12.rounded-lg {
+    border-radius: 12px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+
+/* =====================================================================
+   7. БОКОВАЯ ПАНЕЛЬ
+   ===================================================================== */
+
+:root [data-slot="sidebar-menu-button"] {
+    border-radius: 11px !important;
+    transition: width 200ms linear, height 200ms linear, padding 200ms linear,
+        background-color 0.25s var(--dg-ease), color 0.25s var(--dg-ease), box-shadow 0.3s var(--dg-ease) !important;
+}
+
+:root [data-slot="sidebar-menu-button"]:hover:not([data-active="true"]) {
+    background: rgba(255, 255, 255, 0.06) !important;
+    box-shadow: none !important;
+}
+
+/* Активный пункт - мягкое свечение сияния вокруг иконки */
+:root [data-slot="sidebar-menu-button"][data-active="true"] {
+    background: linear-gradient(135deg, rgba(45, 245, 176, 0.16), rgba(125, 92, 255, 0.14)) !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 20px -6px color-mix(in oklab, var(--dg-green) 55%, transparent) !important;
+}
+
+:root [data-slot="sidebar-menu-button"][data-active="true"] svg {
+    color: var(--dg-green);
+    filter: drop-shadow(0 0 6px color-mix(in oklab, var(--dg-green) 70%, transparent));
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] {
+    background: var(--dg-glass-well) !important;
+    border: 1px solid var(--dg-edge) !important;
+    border-radius: 13px !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button {
+    border-radius: 10px !important;
+    border-color: transparent !important;
+    transition: background-color 0.3s var(--dg-ease), color 0.3s var(--dg-ease), box-shadow 0.3s var(--dg-ease) !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button[class*="border-stroke-power-on/50"] {
+    background: linear-gradient(135deg, rgba(45, 245, 176, 0.2), rgba(125, 92, 255, 0.18)) !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+}
+
+
+/* =====================================================================
+   8. КНОПКИ
+   ===================================================================== */
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]) {
+    border-radius: 999px !important;
+    transition: background-color 0.25s var(--dg-ease), border-color 0.25s var(--dg-ease), box-shadow 0.35s var(--dg-ease), filter 0.25s var(--dg-ease), color 0.25s var(--dg-ease), scale 0.25s var(--dg-ease-out) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]):active:not(:disabled) {
+    scale: 0.96;
+}
+
+/* Основная - залита сиянием и светится при наведении */
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"] {
+    background: var(--dg-aurora) !important;
+    color: #03110c !important;
+    font-weight: 600;
+    box-shadow: 0 6px 20px -10px color-mix(in oklab, var(--dg-green) 70%, transparent) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"]:hover:not(:disabled) {
+    filter: brightness(1.08);
+    box-shadow: 0 8px 30px -8px color-mix(in oklab, var(--dg-cyan) 80%, transparent) !important;
+}
+
+:root [data-slot="button"][data-variant="destructive"] {
+    background: linear-gradient(115deg, var(--destructive), #ff8a5c) !important;
+    color: #1a0308 !important;
+    font-weight: 600;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]) {
+    background: var(--dg-glass) !important;
+    border: 1px solid var(--dg-edge) !important;
+    box-shadow: var(--dg-inner) !important;
+    -webkit-backdrop-filter: var(--dg-blur) !important;
+    backdrop-filter: var(--dg-blur) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]):hover:not(:disabled) {
+    background: var(--dg-glass-hover) !important;
+    border-color: var(--dg-edge-hover) !important;
+}
+
+:root [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.07) !important;
+}
+
+:root .wc-win .wc-btn {
+    border-radius: 999px !important;
+    transition: background-color 0.25s var(--dg-ease), color 0.25s var(--dg-ease) !important;
+}
+
+:root .wc-win .wc-btn:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root .wc-win .wc-close:hover {
+    background: var(--destructive) !important;
+    color: #ffffff !important;
+}
+
+
+/* =====================================================================
+   9. ПОЛЯ, ПЕРЕКЛЮЧАТЕЛИ, ВКЛАДКИ
+   ===================================================================== */
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="input-group"], [data-slot="select-trigger"], button[role="combobox"]) {
+    background: var(--dg-glass-well) !important;
+    border: 1px solid var(--dg-edge) !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: border-color 0.25s var(--dg-ease), box-shadow 0.3s var(--dg-ease) !important;
+}
+
+:root [data-slot="input-group"] :is(input, textarea) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="select-trigger"], button[role="combobox"]):hover {
+    border-color: var(--dg-edge-hover) !important;
+}
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"]):focus,
+:root [data-slot="input-group"]:focus-within,
+:root :is([data-slot="select-trigger"], button[role="combobox"])[data-state="open"] {
+    border-color: color-mix(in oklab, var(--dg-cyan) 60%, transparent) !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 3px color-mix(in oklab, var(--dg-cyan) 18%, transparent), 0 0 24px -6px color-mix(in oklab, var(--dg-cyan) 60%, transparent) !important;
+    outline: none !important;
+}
+
+/* Переключатель: включён - залит сиянием и светится */
+:root [data-slot="switch"] {
+    border: 1px solid var(--dg-edge) !important;
+    background: var(--dg-glass-well) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: background-color 0.35s var(--dg-ease), box-shadow 0.35s var(--dg-ease), border-color 0.35s var(--dg-ease) !important;
+}
+
+:root [data-slot="switch"][data-state="checked"] {
+    background: var(--dg-aurora) !important;
+    border-color: transparent !important;
+    box-shadow: 0 0 16px -4px color-mix(in oklab, var(--dg-green) 70%, transparent) !important;
+}
+
+:root [data-slot="switch-thumb"] {
+    transition: translate 0.4s var(--dg-ease-out), transform 0.4s var(--dg-ease-out), background-color 0.3s !important;
+}
+
+:root [data-slot="switch"][data-state="unchecked"] [data-slot="switch-thumb"] {
+    background: #5b6378 !important;
+}
+
+/* Вкладки */
+:root [data-slot="tabs-list"][data-variant="default"] {
+    background: var(--dg-glass-well) !important;
+    border: 1px solid var(--dg-edge) !important;
+    border-radius: 999px !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"] {
+    border-radius: 999px !important;
+    border-color: transparent !important;
+    transition: background-color 0.3s var(--dg-ease), color 0.3s var(--dg-ease), box-shadow 0.3s var(--dg-ease) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"][data-state="active"] {
+    background: linear-gradient(135deg, rgba(45, 245, 176, 0.2), rgba(125, 92, 255, 0.2)) !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 0 14px -4px color-mix(in oklab, var(--dg-green) 50%, transparent) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"]::after {
+    background: var(--dg-aurora) !important;
+}
+
+:root [data-slot="checkbox"] {
+    border-radius: 6px !important;
+}
+
+
+/* =====================================================================
+   10. МЕНЮ, ОКНА, ПОДСКАЗКИ, ТОСТЫ
+   Плотное матовое стекло. Окна и меню всплывают из глубины: проявляются
+   из размытия с лёгким увеличением.
+   ===================================================================== */
+
+:root :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+    [data-slot="select-content"], [data-slot="popover-content"],
+    [data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"]) {
+    background-color: var(--dg-glass-strong) !important;
+    background-image: var(--dg-frost) !important;
+    border: 1px solid var(--dg-edge-hover) !important;
+    box-shadow: var(--dg-inner), 0 30px 80px -20px rgba(0, 0, 0, 0.85), 0 0 60px -30px color-mix(in oklab, var(--dg-violet) 70%, transparent) !important;
+    -webkit-backdrop-filter: blur(36px) saturate(150%) !important;
+    backdrop-filter: blur(36px) saturate(150%) !important;
+}
+
+:root :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"], [data-slot="popover-content"]) {
+    border-radius: 16px !important;
+}
+
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"]) {
+    border-radius: 24px !important;
+}
+
+:root :is([data-slot="dropdown-menu-content"], [data-slot="select-content"], [data-slot="popover-content"])[data-state="open"] {
+    animation: dg-surface 0.35s var(--dg-ease-out) both !important;
+}
+
+/* Диалог центрируется свойством translate, поэтому в анимации - только scale и filter */
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])[data-state="open"] {
+    animation: dg-surface 0.5s var(--dg-ease-out) both !important;
+}
+
+@keyframes dg-surface {
+    from { opacity: 0; scale: 0.96; filter: blur(10px); }
+    to { opacity: 1; scale: 1; filter: none; }
+}
+
+:root :is([data-slot="dialog-title"], [data-slot="alert-dialog-title"]) {
+    font-family: var(--dg-font-display);
+    font-weight: 600 !important;
+}
+
+:root [data-slot="alert-dialog-media"] {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid var(--dg-edge) !important;
+    border-radius: 18px !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"], [data-slot="command-item"]) {
+    border-radius: 10px !important;
+    transition: background-color 0.2s var(--dg-ease), color 0.2s var(--dg-ease) !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted],
+:root [data-slot="dropdown-menu-sub-trigger"][data-state="open"],
+:root [data-slot="command-item"][data-selected="true"] {
+    background: linear-gradient(135deg, rgba(45, 245, 176, 0.14), rgba(125, 92, 255, 0.12)) !important;
+    color: #ffffff !important;
+}
+
+:root [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted] {
+    background: color-mix(in oklab, var(--destructive) 16%, transparent) !important;
+    color: var(--destructive) !important;
+}
+
+:root :is([data-slot="dropdown-menu-separator"], [data-slot="select-separator"]) {
+    background: linear-gradient(90deg, transparent, var(--dg-edge-hover), transparent) !important;
+}
+
+:root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background: rgba(2, 3, 8, 0.55) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    backdrop-filter: blur(8px) !important;
+}
+
+:root [data-slot="tooltip-content"] {
+    background: var(--dg-glass-strong) !important;
+    color: var(--foreground) !important;
+    border: 1px solid var(--dg-edge-hover) !important;
+    border-radius: 10px !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    backdrop-filter: blur(24px) !important;
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.7) !important;
+}
+
+:root [data-slot="tooltip-content"] svg[class*="fill-"] {
+    display: none !important;
+}
+
+:root [data-sonner-toast] {
+    background-color: var(--dg-glass-strong) !important;
+    background-image: var(--dg-frost) !important;
+    border: 1px solid var(--dg-edge-hover) !important;
+    border-radius: 16px !important;
+    box-shadow: var(--dg-inner), 0 20px 50px -16px rgba(0, 0, 0, 0.8) !important;
+    -webkit-backdrop-filter: blur(30px) !important;
+    backdrop-filter: blur(30px) !important;
+}
+
+:root .driver-popover {
+    background-color: var(--dg-glass-strong) !important;
+}
+
+:root .driver-popover-navigation-btns button {
+    border-radius: 999px !important;
+    background: var(--dg-glass) !important;
+    border-color: var(--dg-edge-hover) !important;
+}
+
+:root .driver-popover-navigation-btns .driver-popover-next-btn {
+    background: var(--dg-aurora) !important;
+    color: #03110c !important;
+    border-color: transparent !important;
+}
+
+
+/* =====================================================================
+   11. МЕЛОЧИ
+   ===================================================================== */
+
+:root [data-slot="separator"] {
+    background: linear-gradient(90deg, transparent, var(--dg-edge-hover) 20%, var(--dg-edge-hover) 80%, transparent) !important;
+}
+
+:root [data-slot="progress"] {
+    background: var(--dg-glass-well) !important;
+    border-radius: 999px !important;
+}
+
+:root [data-slot="progress-indicator"] {
+    background: var(--dg-aurora) !important;
+    box-shadow: 0 0 12px color-mix(in oklab, var(--dg-green) 60%, transparent);
+}
+
+:root tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Полоса прокрутки - тонкая, с отливом сияния */
+:root *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+:root *::-webkit-scrollbar-track,
+:root *::-webkit-scrollbar-corner {
+    background: transparent !important;
+}
+
+:root *::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(45, 245, 176, 0.35), rgba(125, 92, 255, 0.35)) padding-box !important;
+    border: 3px solid transparent !important;
+    border-radius: 999px !important;
+}
+
+:root *::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(45, 245, 176, 0.75), rgba(125, 92, 255, 0.75)) padding-box !important;
+    border-width: 2px !important;
+}
+
+/* Плавающее окно */
+:root .floating-bg {
+    background: var(--dg-glass-strong) !important;
+    border-color: var(--dg-edge-hover) !important;
+}
+
+
+/* =====================================================================
+   12. УМЕНЬШЕНИЕ АНИМАЦИИ
+   Сияние замирает, элементы появляются сразу, ядро не вращается.
+   ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    :root *,
+    :root *::before,
+    :root *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        animation-delay: 0ms !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    :root [data-slot="sidebar-wrapper"]::before,
+    :root [data-slot="sidebar-wrapper"]::after {
+        animation: none !important;
+    }
+}

@@ -1,0 +1,1177 @@
+/* Koala Лоция */
+/*
+  Тема для Koala Clash 1.5.0 - навигационная морская карта.
+
+  ИДЕЯ
+  Программа прокладывает маршрут для трафика так же, как штурман - курс судна.
+  Поэтому интерфейс нарисован языком морской карты:
+    - фон - вода с изобатами (линиями равных глубин), мельче - темнее;
+    - окно обведено рамкой с градусной шкалой, как лист карты;
+    - боковая панель - остров: охристая суша, береговая линия и полоса мелководья;
+    - пурпурный - цвет проложенного курса на картах; здесь им отмечено только
+      выбранное и активное: сервер, пункт меню, путевая точка, курс на розе ветров;
+    - заголовки - курсивная антиква: так на картах подписывают моря и заливы;
+      данные - Bahnschrift (почти DIN, шрифт навигационных табличек и приборов).
+  Главный элемент - роза ветров вместо кнопки питания: при подключении картушка
+  с затуханием разворачивается на курс, а градусное кольцо начинает медленно идти.
+
+  Светлая тема - дневная карта. Тёмная - ночной режим штурманского дисплея (ECDIS):
+  тёмная вода, приглушённые линии, тот же пурпурный курс.
+
+  КАК ПОДКЛЮЧАЕТСЯ
+  Тема вставляется через webContents.insertCSS() и в каскаде идёт раньше CSS клиента,
+  поэтому все правила начинаются с :root - этого хватает, чтобы перебить клиента.
+  Графика (роза ветров, символы) - встроенные SVG (data:), их разрешает CSP приложения.
+  Внешние шрифты CSP запрещает, поэтому только системные: Sitka и Bahnschrift есть
+  в Windows 10/11, на других системах подставятся Georgia и Segoe UI.
+
+  СОДЕРЖАНИЕ
+    0. Инструменты            - шрифты, кривые, символы
+    1. Дневная карта (светлая)
+    2. Ночная карта (тёмная)
+    3. Вода, изобаты, рамка листа
+    4. Поверхности             - карточки-картуши
+    5. Главная
+    6. Роза ветров (кнопка питания)
+    7. Прокси, профили, подключения
+    8. Остров (боковая панель)
+    9. Кнопки
+   10. Поля, переключатели, вкладки
+   11. Меню, окна, подсказки, тосты
+   12. Мелочи и плавающее окно
+   13. Уменьшение анимации
+*/
+
+
+/* =====================================================================
+   0. ИНСТРУМЕНТЫ
+   ===================================================================== */
+
+:root {
+    --radius: 0.25rem !important;
+
+    --lx-serif: "Sitka Display", "Sitka Heading", "Sitka Text", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --lx-sans: "Bahnschrift", "DIN Alternate", "DIN Next", "Segoe UI", system-ui, sans-serif;
+
+    --lx-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --lx-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    /* Затухающие колебания картушки компаса: перелёт, возврат, успокоение */
+    --lx-swing: linear(0, 0.62 9%, 1.14 18%, 1.2 23%, 1.06 32%, 0.92 41%, 0.96 50%, 1.03 60%, 1.01 70%, 0.995 82%, 1);
+
+    /* Символы карты (встроенные SVG). Цвет им задаёт background - они работают как маски */
+    --lx-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cpolygon points='100.00,100.00 93.53,97.32 116.84,59.35' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 116.84,59.35 106.47,102.68' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 92.22,92.22 146.67,53.33' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 146.67,53.33 107.78,107.78' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 97.32,93.53 140.65,83.16' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 140.65,83.16 102.68,106.47' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 102.68,93.53 140.65,116.84' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 140.65,116.84 97.32,106.47' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 107.78,92.22 146.67,146.67' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 146.67,146.67 92.22,107.78' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 106.47,97.32 116.84,140.65' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 116.84,140.65 93.53,102.68' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 106.47,102.68 83.16,140.65' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 83.16,140.65 93.53,97.32' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 107.78,107.78 53.33,146.67' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 53.33,146.67 92.22,92.22' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 102.68,106.47 59.35,116.84' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 59.35,116.84 97.32,93.53' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 97.32,106.47 59.35,83.16' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 59.35,83.16 102.68,93.53' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 92.22,107.78 53.33,53.33' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 53.33,53.33 107.78,92.22' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 93.53,102.68 83.16,59.35' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 83.16,59.35 106.47,97.32' fill='%23000' fill-opacity='0.38'/%3E%3Cpolygon points='100.00,100.00 86.00,100.00 100.00,3.00' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 100.00,3.00 114.00,100.00' fill='%23000' fill-opacity='0.32'/%3E%3Cpolygon points='100.00,100.00 100.00,86.00 197.00,100.00' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 197.00,100.00 100.00,114.00' fill='%23000' fill-opacity='0.32'/%3E%3Cpolygon points='100.00,100.00 114.00,100.00 100.00,197.00' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 100.00,197.00 86.00,100.00' fill='%23000' fill-opacity='0.32'/%3E%3Cpolygon points='100.00,100.00 100.00,114.00 3.00,100.00' fill='%23000' fill-opacity='1'/%3E%3Cpolygon points='100.00,100.00 3.00,100.00 100.00,86.00' fill='%23000' fill-opacity='0.32'/%3E%3Ccircle cx='100' cy='100' r='9' fill='%23000'/%3E%3Ccircle cx='100' cy='100' r='4' fill='%23000' fill-opacity='.0'/%3E%3Ccircle cx='100' cy='100' r='22' fill='none' stroke='%23000' stroke-width='1.2' stroke-opacity='.55'/%3E%3C/svg%3E");
+    --lx-ring: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='98.5' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3Ccircle cx='100' cy='100' r='84' fill='none' stroke='%23000' stroke-width='.9'/%3E%3Cline x1='100.00' y1='16.00' x2='100.00' y2='7.00' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='102.93' y1='16.05' x2='103.04' y2='13.05' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='105.86' y1='16.20' x2='106.07' y2='13.21' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='108.78' y1='16.46' x2='109.09' y2='13.48' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='111.69' y1='16.82' x2='112.11' y2='13.85' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='114.59' y1='17.28' x2='116.15' y2='8.41' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='117.46' y1='17.84' x2='118.09' y2='14.90' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='120.32' y1='18.50' x2='121.05' y2='15.58' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='123.15' y1='19.25' x2='123.98' y2='16.37' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='125.96' y1='20.11' x2='126.88' y2='17.26' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='128.73' y1='21.07' x2='131.81' y2='12.61' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='131.47' y1='22.12' x2='132.59' y2='19.34' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='134.17' y1='23.26' x2='135.39' y2='20.52' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='136.82' y1='24.50' x2='138.14' y2='21.80' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='139.44' y1='25.83' x2='140.84' y2='23.18' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='142.00' y1='27.25' x2='146.50' y2='19.46' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='144.51' y1='28.76' x2='146.10' y2='26.22' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='146.97' y1='30.36' x2='148.65' y2='27.87' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='149.37' y1='32.04' x2='151.14' y2='29.62' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='151.72' y1='33.81' x2='153.56' y2='31.44' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='153.99' y1='35.65' x2='159.78' y2='28.76' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='156.21' y1='37.58' x2='158.21' y2='35.35' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='158.35' y1='39.58' x2='160.44' y2='37.42' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='160.42' y1='41.65' x2='162.58' y2='39.56' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='162.42' y1='43.79' x2='164.65' y2='41.79' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='164.35' y1='46.01' x2='171.24' y2='40.22' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='166.19' y1='48.28' x2='168.56' y2='46.44' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='167.96' y1='50.63' x2='170.38' y2='48.86' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='169.64' y1='53.03' x2='172.13' y2='51.35' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='171.24' y1='55.49' x2='173.78' y2='53.90' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='172.75' y1='58.00' x2='180.54' y2='53.50' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='174.17' y1='60.56' x2='176.82' y2='59.16' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='175.50' y1='63.18' x2='178.20' y2='61.86' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='176.74' y1='65.83' x2='179.48' y2='64.61' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='177.88' y1='68.53' x2='180.66' y2='67.41' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='178.93' y1='71.27' x2='187.39' y2='68.19' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='179.89' y1='74.04' x2='182.74' y2='73.12' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='180.75' y1='76.85' x2='183.63' y2='76.02' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='181.50' y1='79.68' x2='184.42' y2='78.95' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='182.16' y1='82.54' x2='185.10' y2='81.91' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='182.72' y1='85.41' x2='191.59' y2='83.85' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='183.18' y1='88.31' x2='186.15' y2='87.89' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='183.54' y1='91.22' x2='186.52' y2='90.91' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='183.80' y1='94.14' x2='186.79' y2='93.93' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='183.95' y1='97.07' x2='186.95' y2='96.96' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='184.00' y1='100.00' x2='193.00' y2='100.00' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='183.95' y1='102.93' x2='186.95' y2='103.04' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='183.80' y1='105.86' x2='186.79' y2='106.07' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='183.54' y1='108.78' x2='186.52' y2='109.09' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='183.18' y1='111.69' x2='186.15' y2='112.11' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='182.72' y1='114.59' x2='191.59' y2='116.15' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='182.16' y1='117.46' x2='185.10' y2='118.09' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='181.50' y1='120.32' x2='184.42' y2='121.05' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='180.75' y1='123.15' x2='183.63' y2='123.98' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='179.89' y1='125.96' x2='182.74' y2='126.88' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='178.93' y1='128.73' x2='187.39' y2='131.81' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='177.88' y1='131.47' x2='180.66' y2='132.59' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='176.74' y1='134.17' x2='179.48' y2='135.39' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='175.50' y1='136.82' x2='178.20' y2='138.14' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='174.17' y1='139.44' x2='176.82' y2='140.84' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='172.75' y1='142.00' x2='180.54' y2='146.50' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='171.24' y1='144.51' x2='173.78' y2='146.10' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='169.64' y1='146.97' x2='172.13' y2='148.65' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='167.96' y1='149.37' x2='170.38' y2='151.14' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='166.19' y1='151.72' x2='168.56' y2='153.56' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='164.35' y1='153.99' x2='171.24' y2='159.78' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='162.42' y1='156.21' x2='164.65' y2='158.21' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='160.42' y1='158.35' x2='162.58' y2='160.44' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='158.35' y1='160.42' x2='160.44' y2='162.58' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='156.21' y1='162.42' x2='158.21' y2='164.65' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='153.99' y1='164.35' x2='159.78' y2='171.24' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='151.72' y1='166.19' x2='153.56' y2='168.56' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='149.37' y1='167.96' x2='151.14' y2='170.38' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='146.97' y1='169.64' x2='148.65' y2='172.13' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='144.51' y1='171.24' x2='146.10' y2='173.78' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='142.00' y1='172.75' x2='146.50' y2='180.54' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='139.44' y1='174.17' x2='140.84' y2='176.82' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='136.82' y1='175.50' x2='138.14' y2='178.20' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='134.17' y1='176.74' x2='135.39' y2='179.48' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='131.47' y1='177.88' x2='132.59' y2='180.66' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='128.73' y1='178.93' x2='131.81' y2='187.39' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='125.96' y1='179.89' x2='126.88' y2='182.74' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='123.15' y1='180.75' x2='123.98' y2='183.63' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='120.32' y1='181.50' x2='121.05' y2='184.42' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='117.46' y1='182.16' x2='118.09' y2='185.10' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='114.59' y1='182.72' x2='116.15' y2='191.59' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='111.69' y1='183.18' x2='112.11' y2='186.15' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='108.78' y1='183.54' x2='109.09' y2='186.52' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='105.86' y1='183.80' x2='106.07' y2='186.79' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='102.93' y1='183.95' x2='103.04' y2='186.95' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='100.00' y1='184.00' x2='100.00' y2='193.00' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='97.07' y1='183.95' x2='96.96' y2='186.95' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='94.14' y1='183.80' x2='93.93' y2='186.79' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='91.22' y1='183.54' x2='90.91' y2='186.52' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='88.31' y1='183.18' x2='87.89' y2='186.15' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='85.41' y1='182.72' x2='83.85' y2='191.59' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='82.54' y1='182.16' x2='81.91' y2='185.10' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='79.68' y1='181.50' x2='78.95' y2='184.42' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='76.85' y1='180.75' x2='76.02' y2='183.63' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='74.04' y1='179.89' x2='73.12' y2='182.74' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='71.27' y1='178.93' x2='68.19' y2='187.39' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='68.53' y1='177.88' x2='67.41' y2='180.66' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='65.83' y1='176.74' x2='64.61' y2='179.48' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='63.18' y1='175.50' x2='61.86' y2='178.20' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='60.56' y1='174.17' x2='59.16' y2='176.82' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='58.00' y1='172.75' x2='53.50' y2='180.54' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='55.49' y1='171.24' x2='53.90' y2='173.78' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='53.03' y1='169.64' x2='51.35' y2='172.13' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='50.63' y1='167.96' x2='48.86' y2='170.38' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='48.28' y1='166.19' x2='46.44' y2='168.56' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='46.01' y1='164.35' x2='40.22' y2='171.24' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='43.79' y1='162.42' x2='41.79' y2='164.65' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='41.65' y1='160.42' x2='39.56' y2='162.58' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='39.58' y1='158.35' x2='37.42' y2='160.44' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='37.58' y1='156.21' x2='35.35' y2='158.21' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='35.65' y1='153.99' x2='28.76' y2='159.78' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='33.81' y1='151.72' x2='31.44' y2='153.56' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='32.04' y1='149.37' x2='29.62' y2='151.14' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='30.36' y1='146.97' x2='27.87' y2='148.65' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='28.76' y1='144.51' x2='26.22' y2='146.10' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='27.25' y1='142.00' x2='19.46' y2='146.50' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='25.83' y1='139.44' x2='23.18' y2='140.84' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='24.50' y1='136.82' x2='21.80' y2='138.14' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='23.26' y1='134.17' x2='20.52' y2='135.39' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='22.12' y1='131.47' x2='19.34' y2='132.59' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='21.07' y1='128.73' x2='12.61' y2='131.81' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='20.11' y1='125.96' x2='17.26' y2='126.88' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='19.25' y1='123.15' x2='16.37' y2='123.98' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='18.50' y1='120.32' x2='15.58' y2='121.05' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='17.84' y1='117.46' x2='14.90' y2='118.09' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='17.28' y1='114.59' x2='8.41' y2='116.15' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='16.82' y1='111.69' x2='13.85' y2='112.11' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='16.46' y1='108.78' x2='13.48' y2='109.09' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='16.20' y1='105.86' x2='13.21' y2='106.07' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='16.05' y1='102.93' x2='13.05' y2='103.04' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='16.00' y1='100.00' x2='7.00' y2='100.00' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='16.05' y1='97.07' x2='13.05' y2='96.96' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='16.20' y1='94.14' x2='13.21' y2='93.93' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='16.46' y1='91.22' x2='13.48' y2='90.91' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='16.82' y1='88.31' x2='13.85' y2='87.89' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='17.28' y1='85.41' x2='8.41' y2='83.85' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='17.84' y1='82.54' x2='14.90' y2='81.91' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='18.50' y1='79.68' x2='15.58' y2='78.95' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='19.25' y1='76.85' x2='16.37' y2='76.02' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='20.11' y1='74.04' x2='17.26' y2='73.12' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='21.07' y1='71.27' x2='12.61' y2='68.19' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='22.12' y1='68.53' x2='19.34' y2='67.41' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='23.26' y1='65.83' x2='20.52' y2='64.61' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='24.50' y1='63.18' x2='21.80' y2='61.86' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='25.83' y1='60.56' x2='23.18' y2='59.16' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='27.25' y1='58.00' x2='19.46' y2='53.50' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='28.76' y1='55.49' x2='26.22' y2='53.90' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='30.36' y1='53.03' x2='27.87' y2='51.35' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='32.04' y1='50.63' x2='29.62' y2='48.86' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='33.81' y1='48.28' x2='31.44' y2='46.44' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='35.65' y1='46.01' x2='28.76' y2='40.22' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='37.58' y1='43.79' x2='35.35' y2='41.79' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='39.58' y1='41.65' x2='37.42' y2='39.56' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='41.65' y1='39.58' x2='39.56' y2='37.42' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='43.79' y1='37.58' x2='41.79' y2='35.35' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='46.01' y1='35.65' x2='40.22' y2='28.76' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='48.28' y1='33.81' x2='46.44' y2='31.44' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='50.63' y1='32.04' x2='48.86' y2='29.62' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='53.03' y1='30.36' x2='51.35' y2='27.87' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='55.49' y1='28.76' x2='53.90' y2='26.22' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='58.00' y1='27.25' x2='53.50' y2='19.46' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='60.56' y1='25.83' x2='59.16' y2='23.18' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='63.18' y1='24.50' x2='61.86' y2='21.80' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='65.83' y1='23.26' x2='64.61' y2='20.52' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='68.53' y1='22.12' x2='67.41' y2='19.34' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='71.27' y1='21.07' x2='68.19' y2='12.61' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='74.04' y1='20.11' x2='73.12' y2='17.26' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='76.85' y1='19.25' x2='76.02' y2='16.37' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='79.68' y1='18.50' x2='78.95' y2='15.58' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='82.54' y1='17.84' x2='81.91' y2='14.90' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='85.41' y1='17.28' x2='83.85' y2='8.41' stroke='%23000' stroke-width='0.9'/%3E%3Cline x1='88.31' y1='16.82' x2='87.89' y2='13.85' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='91.22' y1='16.46' x2='90.91' y2='13.48' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='94.14' y1='16.20' x2='93.93' y2='13.21' stroke='%23000' stroke-width='0.6'/%3E%3Cline x1='97.07' y1='16.05' x2='96.96' y2='13.05' stroke='%23000' stroke-width='0.6'/%3E%3Ctext x='100.00' y='23.00' transform='rotate(0 100.00 23.00)' font-family='Bahnschrift, Arial, sans-serif' font-size='9' font-weight='700' text-anchor='middle' dominant-baseline='central' fill='%23000'%3EN%3C/text%3E%3Ctext x='177.00' y='100.00' transform='rotate(90 177.00 100.00)' font-family='Bahnschrift, Arial, sans-serif' font-size='9' font-weight='700' text-anchor='middle' dominant-baseline='central' fill='%23000'%3EE%3C/text%3E%3Ctext x='100.00' y='177.00' transform='rotate(180 100.00 177.00)' font-family='Bahnschrift, Arial, sans-serif' font-size='9' font-weight='700' text-anchor='middle' dominant-baseline='central' fill='%23000'%3ES%3C/text%3E%3Ctext x='23.00' y='100.00' transform='rotate(270 23.00 100.00)' font-family='Bahnschrift, Arial, sans-serif' font-size='9' font-weight='700' text-anchor='middle' dominant-baseline='central' fill='%23000'%3EW%3C/text%3E%3Ctext x='138.50' y='33.32' transform='rotate(30 138.50 33.32)' font-family='Bahnschrift, Arial, sans-serif' font-size='6' font-weight='500' text-anchor='middle' dominant-baseline='central' fill='%23000'%3E030%3C/text%3E%3Ctext x='166.68' y='61.50' transform='rotate(60 166.68 61.50)' font-family='Bahnschrift, Arial, sans-serif' font-size='6' font-weight='500' text-anchor='middle' dominant-baseline='central' fill='%23000'%3E060%3C/text%3E%3Ctext x='166.68' y='138.50' transform='rotate(120 166.68 138.50)' font-family='Bahnschrift, Arial, sans-serif' font-size='6' font-weight='500' text-anchor='middle' dominant-baseline='central' fill='%23000'%3E120%3C/text%3E%3Ctext x='138.50' y='166.68' transform='rotate(150 138.50 166.68)' font-family='Bahnschrift, Arial, sans-serif' font-size='6' font-weight='500' text-anchor='middle' dominant-baseline='central' fill='%23000'%3E150%3C/text%3E%3Ctext x='61.50' y='166.68' transform='rotate(210 61.50 166.68)' font-family='Bahnschrift, Arial, sans-serif' font-size='6' font-weight='500' text-anchor='middle' dominant-baseline='central' fill='%23000'%3E210%3C/text%3E%3Ctext x='33.32' y='138.50' transform='rotate(240 33.32 138.50)' font-family='Bahnschrift, Arial, sans-serif' font-size='6' font-weight='500' text-anchor='middle' dominant-baseline='central' fill='%23000'%3E240%3C/text%3E%3Ctext x='33.32' y='61.50' transform='rotate(300 33.32 61.50)' font-family='Bahnschrift, Arial, sans-serif' font-size='6' font-weight='500' text-anchor='middle' dominant-baseline='central' fill='%23000'%3E300%3C/text%3E%3Ctext x='61.50' y='33.32' transform='rotate(330 61.50 33.32)' font-family='Bahnschrift, Arial, sans-serif' font-size='6' font-weight='500' text-anchor='middle' dominant-baseline='central' fill='%23000'%3E330%3C/text%3E%3C/svg%3E");
+    --lx-lubber: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10'%3E%3Cpolygon points='0,0 12,0 6,10' fill='%23000'/%3E%3C/svg%3E");
+    --lx-waypoint: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.2' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3Ccircle cx='8' cy='8' r='2' fill='%23000'/%3E%3C/svg%3E");
+    --lx-anchor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round'%3E%3Ccircle cx='8' cy='3' r='1.6'/%3E%3Cpath d='M8 4.6V14M5 7h6M2.5 10.5c.6 2.2 2.8 3.5 5.5 3.5s4.9-1.3 5.5-3.5'/%3E%3C/svg%3E");
+}
+
+
+/* =====================================================================
+   1. ДНЕВНАЯ КАРТА (светлая тема)
+   ===================================================================== */
+
+html:not(.dark) {
+    --lx-ink: #14284a;            /* тушь карты: текст, линии, суша */
+    --lx-ink-2: #4b5f7c;          /* второстепенные подписи */
+    --lx-deep: #f7fbfb;           /* глубокая вода - поверхности */
+    --lx-mid: #e4f1f4;            /* средние глубины */
+    --lx-shallow: #cbe4ed;        /* мелководье */
+    --lx-very-shallow: #b5d8e5;
+    --lx-contour: rgba(30, 100, 135, 0.3);
+    --lx-grid: rgba(20, 40, 74, 0.06);
+    --lx-land: #ead9a0;           /* суша */
+    --lx-magenta: #a8146f;        /* проложенный курс */
+    --lx-magenta-tint: rgba(168, 20, 111, 0.08);
+    --lx-amber: #b77a12;          /* огни маяков - закреплённый сервер */
+    --lx-plate: 0 2px 0 rgba(20, 40, 74, 0.1);
+
+    --background: #f7fbfb !important;
+    --foreground: #14284a !important;
+    --card: #f7fbfb !important;
+    --card-foreground: #14284a !important;
+    --popover: #fbfdfd !important;
+    --popover-foreground: #14284a !important;
+    --primary: #14284a !important;
+    --primary-foreground: #f7fbfb !important;
+    --secondary: #e4f1f4 !important;
+    --secondary-foreground: #14284a !important;
+    --muted: #e4f1f4 !important;
+    --muted-foreground: #4b5f7c !important;
+    --accent: #e4f1f4 !important;
+    --accent-foreground: #14284a !important;
+    --border: rgba(20, 40, 74, 0.18) !important;
+    --input: rgba(20, 40, 74, 0.35) !important;
+    --ring: #a8146f !important;
+    --stroke: rgba(20, 40, 74, 0.55) !important;
+    --destructive: #c8102e !important;
+    --success: #0b7a4b !important;
+    --warning: #b77a12 !important;
+
+    --stroke-power-on: #a8146f !important;
+    --gradient-start-power-on: #a8146f !important;
+    --gradient-end-power-on: #14284a !important;
+    --stroke-power-off: #4b5f7c !important;
+    --gradient-start-power-off: #e4f1f4 !important;
+    --gradient-end-power-off: #cbe4ed !important;
+
+    --profile-active: rgba(168, 20, 111, 0.06) !important;
+    --stroke-profile-active: #a8146f !important;
+    --profile-inactive: #f7fbfb !important;
+    --stroke-profile-inactive: rgba(20, 40, 74, 0.35) !important;
+
+    --chart-1: #14284a !important;
+    --chart-2: #a8146f !important;
+    --chart-3: #2a7fa3 !important;
+    --chart-4: #b77a12 !important;
+    --chart-5: #0b7a4b !important;
+
+    --sidebar: #ead9a0 !important;
+    --sidebar-foreground: #14284a !important;
+    --sidebar-primary: #a8146f !important;
+    --sidebar-primary-foreground: #f7fbfb !important;
+    --sidebar-accent: rgba(20, 40, 74, 0.08) !important;
+    --sidebar-accent-foreground: #14284a !important;
+    --sidebar-border: #14284a !important;
+    --sidebar-ring: #a8146f !important;
+}
+
+
+/* =====================================================================
+   2. НОЧНАЯ КАРТА (тёмная тема) - ночной режим штурманского дисплея
+   ===================================================================== */
+
+html.dark {
+    --lx-ink: #c4d3e0;
+    --lx-ink-2: #8599ad;
+    --lx-deep: #0c1a28;
+    --lx-mid: #0a1622;
+    --lx-shallow: #0e2232;
+    --lx-very-shallow: #12293b;
+    --lx-contour: rgba(110, 180, 210, 0.16);
+    --lx-grid: rgba(196, 211, 224, 0.04);
+    --lx-land: #2a2616;
+    --lx-magenta: #e45bb4;
+    --lx-magenta-tint: rgba(228, 91, 180, 0.12);
+    --lx-amber: #e0a33a;
+    --lx-plate: 0 2px 0 rgba(0, 0, 0, 0.35);
+
+    --background: #07121c !important;
+    --foreground: #c4d3e0 !important;
+    --card: #0c1a28 !important;
+    --card-foreground: #c4d3e0 !important;
+    --popover: #0e1e2e !important;
+    --popover-foreground: #c4d3e0 !important;
+    --primary: #c4d3e0 !important;
+    --primary-foreground: #07121c !important;
+    --secondary: #0e2232 !important;
+    --secondary-foreground: #c4d3e0 !important;
+    --muted: #0e2232 !important;
+    --muted-foreground: #8599ad !important;
+    --accent: #12293b !important;
+    --accent-foreground: #c4d3e0 !important;
+    --border: rgba(196, 211, 224, 0.14) !important;
+    --input: rgba(196, 211, 224, 0.3) !important;
+    --ring: #e45bb4 !important;
+    --stroke: rgba(196, 211, 224, 0.4) !important;
+    --destructive: #ff5a5a !important;
+    --success: #3fbf7f !important;
+    --warning: #e0a33a !important;
+
+    --stroke-power-on: #e45bb4 !important;
+    --gradient-start-power-on: #e45bb4 !important;
+    --gradient-end-power-on: #c4d3e0 !important;
+    --stroke-power-off: #8599ad !important;
+    --gradient-start-power-off: #0e2232 !important;
+    --gradient-end-power-off: #12293b !important;
+
+    --profile-active: rgba(228, 91, 180, 0.08) !important;
+    --stroke-profile-active: #e45bb4 !important;
+    --profile-inactive: #0c1a28 !important;
+    --stroke-profile-inactive: rgba(196, 211, 224, 0.3) !important;
+
+    --chart-1: #c4d3e0 !important;
+    --chart-2: #e45bb4 !important;
+    --chart-3: #5fb4d6 !important;
+    --chart-4: #e0a33a !important;
+    --chart-5: #3fbf7f !important;
+
+    --sidebar: #2a2616 !important;
+    --sidebar-foreground: #c4d3e0 !important;
+    --sidebar-primary: #e45bb4 !important;
+    --sidebar-primary-foreground: #07121c !important;
+    --sidebar-accent: rgba(196, 211, 224, 0.08) !important;
+    --sidebar-accent-foreground: #c4d3e0 !important;
+    --sidebar-border: #c4d3e0 !important;
+    --sidebar-ring: #e45bb4 !important;
+}
+
+
+/* =====================================================================
+   3. ВОДА, ИЗОБАТЫ, РАМКА ЛИСТА
+   ===================================================================== */
+
+:root body {
+    font-family: var(--lx-sans);
+    font-variant-numeric: tabular-nums;
+}
+
+:root ::selection {
+    background: color-mix(in oklab, var(--lx-magenta) 24%, transparent);
+}
+
+:root :focus-visible {
+    --tw-ring-color: var(--lx-magenta) !important;
+}
+
+/* Вода. Изобаты расходятся от двух мелей: у правого нижнего угла и у левого верхнего.
+   Под линиями - ступени глубин (мельче - насыщеннее), поверх - координатная сетка */
+:root [data-slot="sidebar-wrapper"] {
+    background:
+        linear-gradient(var(--lx-grid) 1px, transparent 1px) 0 0 / 100% 160px,
+        linear-gradient(90deg, var(--lx-grid) 1px, transparent 1px) 0 0 / 160px 100%,
+        repeating-radial-gradient(circle at 82% 118%, transparent 0 52px, var(--lx-contour) 52px 53px),
+        repeating-radial-gradient(circle at -6% -14%, transparent 0 44px, var(--lx-contour) 44px 45px),
+        radial-gradient(circle at 82% 118%, var(--lx-very-shallow) 0 18%, var(--lx-shallow) 18% 34%, transparent 34%),
+        radial-gradient(circle at -6% -14%, var(--lx-shallow) 0 22%, var(--lx-mid) 22% 38%, transparent 38%),
+        var(--lx-mid) !important;
+    box-shadow: none !important;
+}
+
+/* Рамка листа: градусная шкала по краям (чередующиеся отрезки) и внутренняя линия */
+:root [data-slot="sidebar-wrapper"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 45;
+    pointer-events: none;
+    background:
+        repeating-linear-gradient(90deg, var(--lx-ink) 0 32px, transparent 32px 64px) top / 100% 3px no-repeat,
+        repeating-linear-gradient(90deg, transparent 0 32px, var(--lx-ink) 32px 64px) bottom / 100% 3px no-repeat,
+        repeating-linear-gradient(180deg, var(--lx-ink) 0 32px, transparent 32px 64px) left / 3px 100% no-repeat,
+        repeating-linear-gradient(180deg, transparent 0 32px, var(--lx-ink) 32px 64px) right / 3px 100% no-repeat;
+    box-shadow: inset 0 0 0 4px transparent, inset 0 0 0 5px color-mix(in oklab, var(--lx-ink) 70%, transparent);
+    opacity: 0.85;
+}
+
+/* Карта мира клиента скрыта: вместо неё - вода с изобатами */
+:root [data-slot="sidebar-wrapper"] > img.pointer-events-none {
+    display: none !important;
+}
+
+/* Заголовок страницы - курсивная антиква, как название моря на карте */
+:root .title {
+    font-family: var(--lx-serif);
+    font-style: italic;
+    font-size: 23px !important;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    padding-left: 4px;
+}
+
+/* Полоса прокрутки - узкая шкала глубин с делениями */
+:root *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+:root *::-webkit-scrollbar-track,
+:root *::-webkit-scrollbar-corner {
+    background: transparent !important;
+}
+
+:root *::-webkit-scrollbar-thumb {
+    background:
+        repeating-linear-gradient(180deg, var(--lx-ink) 0 1px, transparent 1px 6px) center / 4px 100% no-repeat,
+        linear-gradient(var(--lx-ink), var(--lx-ink)) center / 1px 100% no-repeat !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    opacity: 0.6;
+    min-height: 40px;
+}
+
+:root *::-webkit-scrollbar-thumb:hover {
+    background:
+        repeating-linear-gradient(180deg, var(--lx-magenta) 0 1px, transparent 1px 6px) center / 6px 100% no-repeat,
+        linear-gradient(var(--lx-magenta), var(--lx-magenta)) center / 1px 100% no-repeat !important;
+}
+
+
+/* =====================================================================
+   4. ПОВЕРХНОСТИ - "КАРТУШИ"
+   Картуш - рамка с заголовком на карте. Крупные панели обведены двойной линией
+   (наружная - тушью, внутренняя - тонкая, на отступе 3px), мелкие - одинарной.
+   Тени нет: карта плоская, вместо тени - сплошной сдвиг на 2px.
+   ===================================================================== */
+
+:root [data-slot="card"],
+:root div.rounded-2xl[class*="bg-card/"]:not([data-slot]),
+:root [data-slot="accordion"].rounded-xl.border,
+:root .driver-popover {
+    background: var(--lx-deep) !important;
+    border: 1px solid var(--lx-ink) !important;
+    border-radius: 3px !important;
+    box-shadow:
+        inset 0 0 0 3px var(--lx-deep),
+        inset 0 0 0 4px color-mix(in oklab, var(--lx-ink) 30%, transparent),
+        var(--lx-plate) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    color: var(--lx-ink);
+}
+
+:root [data-slot="card"] [data-slot="card"] {
+    box-shadow: none !important;
+}
+
+/* Разделители в плитке трафика - тонкие линии туши */
+:root div.rounded-2xl[class*="bg-card/"] > .w-px.bg-stroke {
+    background: color-mix(in oklab, var(--lx-ink) 35%, transparent) !important;
+}
+
+
+/* =====================================================================
+   5. ГЛАВНАЯ (pages/home.tsx)
+   ===================================================================== */
+
+/* Название профиля - курсивом, как название порта */
+:root [data-guide="home-profile-header"] .font-medium {
+    font-family: var(--lx-serif);
+    font-style: italic;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+:root [data-guide="home-profile-announce"] {
+    color: var(--lx-ink-2);
+    font-weight: 400 !important;
+}
+
+/* Плитка подписки - как таблица приливов: подписи мелко, значения - узким цифровым */
+:root div.rounded-2xl[class*="bg-card/"] .font-bold,
+:root div.rounded-2xl[class*="bg-card/"] .text-base.font-bold {
+    font-family: var(--lx-sans);
+    font-stretch: 87.5%;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em;
+}
+
+:root div.rounded-2xl[class*="bg-card/"] .text-sm.text-foreground {
+    color: var(--lx-ink-2) !important;
+    font-size: 12px !important;
+}
+
+/* Статус над розой - курсивом. Подключено - пурпурным, курс проложен */
+:root .mb-3:has(+ [data-guide="home-power-toggle"]) > div {
+    text-transform: none !important;
+    font-family: var(--lx-serif);
+    font-style: italic;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--lx-ink-2) !important;
+    transition: color 0.4s var(--lx-ease);
+}
+
+:root .mb-3:has(+ [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"]) > div {
+    color: var(--lx-magenta) !important;
+}
+
+/* Таймер - хронометр: узкие цифры с разрядкой */
+:root [data-guide="home-power-toggle"] + div > div {
+    font-family: var(--lx-sans);
+    font-stretch: 87.5%;
+    font-size: 24px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.08em;
+}
+
+:root [data-guide="home-power-toggle"] ~ div svg.text-stroke-power-on {
+    color: var(--lx-magenta) !important;
+}
+
+/* Выбор группы под розой - табличка с названием */
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]) {
+    border-radius: 2px !important;
+    box-shadow: var(--lx-plate) !important;
+    outline: 1px dashed transparent;
+    outline-offset: 4px;
+    transition: outline-color 0.25s var(--lx-ease), outline-offset 0.35s var(--lx-ease-out) !important;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]):hover {
+    outline-color: var(--lx-magenta);
+    outline-offset: 2px;
+}
+
+/* Ссылка на поддержку - как подпись на карте */
+:root [data-guide="home-support-link"] {
+    font-family: var(--lx-serif);
+    font-style: italic;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--lx-ink) 35%, transparent);
+    text-underline-offset: 3px;
+}
+
+/* "Добавить профиль" и "Оплатить" - основные кнопки тушью */
+:root [class*="bg-gradient-start-power-on/50"] {
+    background: var(--lx-ink) !important;
+    color: var(--lx-deep) !important;
+    border: 0 !important;
+    border-radius: 3px !important;
+    box-shadow: var(--lx-plate) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"]:hover {
+    background: color-mix(in oklab, var(--lx-ink) 82%, var(--lx-magenta)) !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"] svg {
+    color: inherit !important;
+}
+
+
+/* =====================================================================
+   6. РОЗА ВЕТРОВ (кнопка питания, data-guide="home-power-toggle")
+   Разметка клиента: <button> → <div> (круг 128px) → иконки.
+     <div>      → картушка (звезда розы), окраска - конический градиент:
+                  северный луч пурпурный, остальное тушью;
+     ::before   → градусное кольцо 184px с цифрами;
+     ::after    → курсовая черта (пурпурный треугольник над кольцом).
+   Состояния:
+     выключено   - роза приглушена, без пурпурного, кольцо стоит;
+     подключено  - картушка с затуханием ложится на курс, кольцо медленно идёт;
+     подключение - картушка крутится, "ищет" курс;
+     ошибка ядра - роза краснеет и вздрагивает;
+     наведение   - картушка качается, как от толчка.
+   Курс задаётся переменной --lx-heading.
+   ===================================================================== */
+
+:root [data-guide="home-power-toggle"] {
+    --lx-heading: 0deg;
+    margin: 46px 0 30px;          /* место под кольцо и курсовую черту */
+    border-radius: 50%;
+}
+
+:root [data-guide="home-power-toggle"] > div {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: var(--lx-ink-2) !important;
+    -webkit-mask: var(--lx-star) center / 100% 100% no-repeat;
+    mask: var(--lx-star) center / 100% 100% no-repeat;
+    opacity: 0.7;
+    rotate: var(--lx-heading);
+    transition: rotate 1.8s var(--lx-swing), opacity 0.5s var(--lx-ease) !important;
+}
+
+/* Иконки клиента внутри розы не нужны */
+:root [data-guide="home-power-toggle"] > div > div {
+    visibility: hidden;
+}
+
+:root [data-guide="home-power-toggle"]::before {
+    content: "";
+    position: absolute;
+    inset: -28px;
+    pointer-events: none;
+    background: var(--lx-ink);
+    -webkit-mask: var(--lx-ring) center / 100% 100% no-repeat;
+    mask: var(--lx-ring) center / 100% 100% no-repeat;
+    opacity: 0.55;
+    transition: opacity 0.5s var(--lx-ease);
+}
+
+:root [data-guide="home-power-toggle"]::after {
+    content: "";
+    position: absolute;
+    top: -42px;
+    left: 50%;
+    width: 12px;
+    height: 10px;
+    margin-left: -6px;
+    pointer-events: none;
+    background: var(--lx-ink-2);
+    -webkit-mask: var(--lx-lubber) center / contain no-repeat;
+    mask: var(--lx-lubber) center / contain no-repeat;
+    transition: background-color 0.5s var(--lx-ease);
+}
+
+/* Подключено: курс проложен */
+:root [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"]) {
+    --lx-heading: -34deg;
+}
+
+:root [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"] {
+    background: conic-gradient(from -11.25deg, var(--lx-magenta) 0 22.5deg, var(--lx-ink) 22.5deg 360deg) !important;
+    opacity: 1;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"])::before {
+    opacity: 0.9;
+    animation: lx-ring 120s linear infinite;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"])::after {
+    background: var(--lx-magenta);
+}
+
+@keyframes lx-ring {
+    to { transform: rotate(1turn); }
+}
+
+/* Наведение: картушка качается на 9° и возвращается с затуханием */
+:root [data-guide="home-power-toggle"]:hover:not(:disabled) > div {
+    rotate: calc(var(--lx-heading) + 9deg);
+    opacity: 1;
+}
+
+/* Подключение: картушка крутится в поиске курса */
+:root [data-guide="home-power-toggle"]:has(svg[role="status"].opacity-100) > div {
+    opacity: 1;
+    animation: lx-search 2.4s var(--lx-ease) infinite;
+}
+
+@keyframes lx-search {
+    0% { transform: rotate(0deg); }
+    70% { transform: rotate(380deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Ошибка ядра: роза краснеет и вздрагивает */
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) > div {
+    background: var(--destructive) !important;
+    opacity: 1;
+    animation: lx-shudder 0.9s var(--lx-ease) 2;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100)::after {
+    background: var(--destructive);
+}
+
+@keyframes lx-shudder {
+    0%, 100% { transform: rotate(0deg); }
+    20% { transform: rotate(-7deg); }
+    45% { transform: rotate(5deg); }
+    70% { transform: rotate(-2deg); }
+}
+
+:root [data-guide="home-power-toggle"]:disabled > div {
+    opacity: 0.4;
+}
+
+:root [data-guide="home-power-toggle"]:focus-visible {
+    outline: 1.5px dashed var(--lx-magenta) !important;
+    outline-offset: 34px;
+}
+
+
+/* =====================================================================
+   7. ПРОКСИ, ПРОФИЛИ, ПОДКЛЮЧЕНИЯ
+   ===================================================================== */
+
+/* Карточка сервера (proxy-item.tsx: Card с cursor-pointer и overflow-hidden) - одинарная линия */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate) {
+    border-color: color-mix(in oklab, var(--lx-ink) 35%, transparent) !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+    outline: 1px dashed transparent;
+    outline-offset: 5px;
+    transition: border-color 0.2s var(--lx-ease), outline-color 0.2s var(--lx-ease), outline-offset 0.35s var(--lx-ease-out), background-color 0.2s var(--lx-ease) !important;
+}
+
+/* Наведение - пунктирный контур, как при прокладке курса карандашом */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):not(:has(button:hover)):hover {
+    border-color: var(--lx-ink) !important;
+    outline-color: color-mix(in oklab, var(--lx-magenta) 70%, transparent);
+    outline-offset: 2px;
+}
+
+/* Выбранный сервер - путевая точка: пурпурный символ слева, рамка и линия курса снизу */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"] {
+    background: linear-gradient(90deg, var(--lx-magenta-tint), transparent 70%), var(--lx-deep) !important;
+    border-color: var(--lx-magenta) !important;
+    box-shadow: inset 0 0 0 0.5px var(--lx-magenta) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"]::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    width: 11px;
+    height: 11px;
+    margin-top: -5.5px;
+    background: var(--lx-magenta);
+    -webkit-mask: var(--lx-waypoint) center / contain no-repeat;
+    mask: var(--lx-waypoint) center / contain no-repeat;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"]::after {
+    content: "";
+    position: absolute;
+    left: 16px;
+    right: 12px;
+    bottom: 4px;
+    border-top: 1.5px dashed var(--lx-magenta);
+    transform-origin: left;
+    animation: lx-plot 0.7s var(--lx-ease-out) both;
+}
+
+/* Линия курса прочерчивается слева направо при выборе сервера */
+@keyframes lx-plot {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
+:root [data-slot="card"][class*="border-primary/"] .flag-emoji {
+    color: var(--lx-magenta);
+    font-weight: 600;
+}
+
+/* Закреплённый сервер - на якоре: символ якоря и охристая рамка цвета маячного огня */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="bg-amber-500"] {
+    background: linear-gradient(90deg, color-mix(in oklab, var(--lx-amber) 12%, transparent), transparent 70%), var(--lx-deep) !important;
+    border-color: var(--lx-amber) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="bg-amber-500"]::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    width: 11px;
+    height: 11px;
+    margin-top: -5.5px;
+    background: var(--lx-amber);
+    -webkit-mask: var(--lx-anchor) center / contain no-repeat;
+    mask: var(--lx-anchor) center / contain no-repeat;
+}
+
+/* Пинг - узкими цифрами, как глубины на карте */
+:root [data-slot="card"] [data-slot="button"][data-variant="ghost"] {
+    font-family: var(--lx-sans);
+    font-stretch: 87.5%;
+    border-radius: 2px !important;
+}
+
+/* Тип протокола под названием сервера - курсивом */
+:root [data-slot="card"].cursor-pointer.overflow-hidden .text-\[11px\] {
+    font-family: var(--lx-serif);
+    font-style: italic;
+    font-size: 12px !important;
+}
+
+/* Заголовок группы - картуш с названием курсивом */
+:root [data-slot="card"].cursor-pointer.isolate .font-semibold.flag-emoji {
+    font-family: var(--lx-serif);
+    font-style: italic;
+    font-size: 16px !important;
+}
+
+:root [data-slot="card"].cursor-pointer.isolate {
+    transition: box-shadow 0.25s var(--lx-ease) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.isolate:not(:has(button:hover)):hover {
+    box-shadow:
+        inset 0 0 0 3px var(--lx-deep),
+        inset 0 0 0 4px var(--lx-magenta),
+        var(--lx-plate) !important;
+}
+
+/* Иконка типа группы - круглый навигационный знак */
+:root [data-slot="card"].isolate .size-9.rounded-md {
+    border-radius: 50% !important;
+    background: transparent !important;
+    border: 1px solid currentColor;
+}
+
+/* Бейдж типа группы - узкая подпись в рамке */
+:root [data-slot="badge"] {
+    font-family: var(--lx-sans) !important;
+    font-stretch: 87.5%;
+    border-radius: 1px !important;
+    background: transparent !important;
+    color: var(--lx-ink-2) !important;
+    border: 1px solid color-mix(in oklab, var(--lx-ink) 40%, transparent) !important;
+}
+
+/* Подложка раскрытой группы - тоже вода, без рамки картуша */
+:root div.mx-2[class*="bg-card/30"] {
+    background: color-mix(in oklab, var(--lx-deep) 82%, transparent) !important;
+    border-color: color-mix(in oklab, var(--lx-ink) 35%, transparent) !important;
+}
+
+:root div.mx-2[class*="bg-card/30"].rounded-b-xl {
+    border-radius: 0 0 3px 3px !important;
+}
+
+/* Карточка профиля (profile-item.tsx, всегда с aria-busy) */
+:root div.rounded-2xl[aria-busy] {
+    background: var(--lx-deep) !important;
+    border: 1px solid color-mix(in oklab, var(--lx-ink) 40%, transparent) !important;
+    border-radius: 3px !important;
+    box-shadow: var(--lx-plate) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    outline: 1px dashed transparent;
+    outline-offset: 5px;
+    transition: border-color 0.2s var(--lx-ease), outline-color 0.2s var(--lx-ease), outline-offset 0.35s var(--lx-ease-out), opacity 0.2s, scale 0.2s !important;
+}
+
+:root div.rounded-2xl[aria-busy]:not(:has(button:hover)):hover {
+    outline-color: color-mix(in oklab, var(--lx-magenta) 70%, transparent);
+    outline-offset: 2px;
+}
+
+:root div.rounded-2xl[aria-busy].border-stroke-profile-active {
+    border-color: var(--lx-magenta) !important;
+    box-shadow:
+        inset 0 0 0 3px var(--lx-deep),
+        inset 0 0 0 4px color-mix(in oklab, var(--lx-magenta) 45%, transparent),
+        var(--lx-plate) !important;
+}
+
+:root div.rounded-2xl[aria-busy] h3 {
+    font-family: var(--lx-serif);
+    font-style: italic;
+    font-size: 16px !important;
+}
+
+:root div.rounded-2xl[aria-busy] .border-foreground\/10 {
+    border-color: color-mix(in oklab, var(--lx-ink) 25%, transparent) !important;
+    border-style: dashed !important;
+}
+
+/* Строки подключений: активные - с линией курса слева */
+:root div.rounded-xl.cursor-pointer:is([class*="bg-card/40"], [class*="to-card/40"]) {
+    background: var(--lx-deep) !important;
+    border: 1px solid color-mix(in oklab, var(--lx-ink) 35%, transparent) !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="bg-card/40"]:hover {
+    border-color: var(--lx-ink) !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="to-card/40"] {
+    border-color: var(--lx-magenta) !important;
+    box-shadow: inset 3px 0 0 var(--lx-magenta) !important;
+    background: linear-gradient(90deg, var(--lx-magenta-tint), transparent 60%), var(--lx-deep) !important;
+}
+
+:root div.rounded-xl.cursor-pointer .size-12.rounded-lg {
+    border-radius: 50% !important;
+    background: var(--lx-mid) !important;
+    border: 1px solid color-mix(in oklab, var(--lx-ink) 30%, transparent);
+}
+
+
+/* =====================================================================
+   8. ОСТРОВ (боковая панель)
+   Суша охристого цвета, береговая линия тушью и полоса мелководья вокруг.
+   ===================================================================== */
+
+:root [data-slot="sidebar-inner"] {
+    background: var(--lx-land) !important;
+    border: 1.5px solid var(--lx-ink) !important;
+    border-radius: 14px !important;
+    box-shadow:
+        0 0 0 6px var(--lx-very-shallow),
+        0 0 0 7px var(--lx-contour) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="sidebar-menu-button"] {
+    border-radius: 50% !important;
+    color: var(--lx-ink) !important;
+    transition: width 200ms linear, height 200ms linear, padding 200ms linear,
+        background-color 0.2s var(--lx-ease), box-shadow 0.25s var(--lx-ease), color 0.2s var(--lx-ease) !important;
+}
+
+/* В развёрнутой панели пункты - не круги, а таблички */
+:root [data-slot="sidebar"]:not([data-collapsible="icon"]) [data-slot="sidebar-menu-button"] {
+    border-radius: 3px !important;
+}
+
+:root [data-slot="sidebar-menu-button"]:hover:not([data-active="true"]) {
+    background: color-mix(in oklab, var(--lx-ink) 9%, transparent) !important;
+    box-shadow: none !important;
+}
+
+/* Активный пункт - путевая точка: вода внутри, пурпурное кольцо */
+:root [data-slot="sidebar-menu-button"][data-active="true"] {
+    background: var(--lx-deep) !important;
+    color: var(--lx-magenta) !important;
+    box-shadow: 0 0 0 1.5px var(--lx-magenta), 0 0 0 4px color-mix(in oklab, var(--lx-magenta) 18%, transparent) !important;
+}
+
+/* Переключатель режима - на суше, рамкой тушью */
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] {
+    background: transparent !important;
+    border: 1px solid var(--lx-ink) !important;
+    border-radius: 3px !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button {
+    border-radius: 2px !important;
+    border-color: transparent !important;
+    color: var(--lx-ink) !important;
+}
+
+/* (селектор длиннее общего правила выше - иначе тот перебьёт цвет иконки) */
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button[class*="border-stroke-power-on/50"] {
+    background: var(--lx-ink) !important;
+    color: var(--lx-land) !important;
+    box-shadow: none !important;
+}
+
+
+/* =====================================================================
+   9. КНОПКИ
+   Основные - тушью (пурпурный зарезервирован под курс и выбор).
+   ===================================================================== */
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]) {
+    border-radius: 3px !important;
+    font-family: var(--lx-sans);
+    letter-spacing: 0.01em;
+    transition: background-color 0.18s var(--lx-ease), border-color 0.18s var(--lx-ease), color 0.18s var(--lx-ease), translate 0.12s var(--lx-ease) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]):active:not(:disabled) {
+    translate: 0 1px;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"] {
+    background: var(--lx-ink) !important;
+    color: var(--lx-deep) !important;
+    box-shadow: var(--lx-plate) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"]:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--lx-ink) 82%, var(--lx-magenta)) !important;
+}
+
+:root [data-slot="button"][data-variant="destructive"] {
+    background: var(--destructive) !important;
+    box-shadow: var(--lx-plate) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]) {
+    background: var(--lx-deep) !important;
+    border: 1px solid var(--lx-ink) !important;
+    color: var(--lx-ink) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]):hover:not(:disabled) {
+    background: var(--lx-mid) !important;
+}
+
+:root [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--lx-ink) 9%, transparent) !important;
+}
+
+:root .wc-win .wc-btn {
+    border-radius: 2px !important;
+}
+
+:root .wc-win .wc-btn:hover {
+    background: color-mix(in oklab, var(--lx-ink) 10%, transparent) !important;
+    color: var(--lx-ink) !important;
+}
+
+:root .wc-win .wc-close:hover {
+    background: var(--destructive) !important;
+    color: #ffffff !important;
+}
+
+
+/* =====================================================================
+   10. ПОЛЯ, ПЕРЕКЛЮЧАТЕЛИ, ВКЛАДКИ
+   ===================================================================== */
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="input-group"], [data-slot="select-trigger"], button[role="combobox"]) {
+    background: var(--lx-deep) !important;
+    border: 1px solid color-mix(in oklab, var(--lx-ink) 45%, transparent) !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+    color: var(--lx-ink) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: border-color 0.18s var(--lx-ease), box-shadow 0.2s var(--lx-ease) !important;
+}
+
+:root [data-slot="input-group"] :is(input, textarea) {
+    background: transparent !important;
+    border: 0 !important;
+}
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="select-trigger"], button[role="combobox"]):hover {
+    border-color: var(--lx-ink) !important;
+}
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"]):focus,
+:root [data-slot="input-group"]:focus-within,
+:root :is([data-slot="select-trigger"], button[role="combobox"])[data-state="open"] {
+    border-color: var(--lx-magenta) !important;
+    box-shadow: 0 0 0 3px var(--lx-magenta-tint) !important;
+    outline: none !important;
+}
+
+/* Переключатель - прямоугольный тумблер. Включён - пурпурный */
+:root [data-slot="switch"] {
+    border: 1px solid var(--lx-ink) !important;
+    border-radius: 2px !important;
+    background: var(--lx-deep) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: background-color 0.2s var(--lx-ease), border-color 0.2s var(--lx-ease) !important;
+}
+
+:root [data-slot="switch"][data-state="checked"] {
+    background: var(--lx-magenta) !important;
+    border-color: var(--lx-magenta) !important;
+}
+
+:root [data-slot="switch-thumb"] {
+    border-radius: 1px !important;
+    transition: translate 0.25s var(--lx-ease-out), transform 0.25s var(--lx-ease-out) !important;
+}
+
+:root [data-slot="switch"][data-state="unchecked"] [data-slot="switch-thumb"] {
+    background: var(--lx-ink) !important;
+}
+
+:root [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+    background: var(--lx-deep) !important;
+}
+
+:root [data-slot="checkbox"] {
+    border-radius: 1px !important;
+    border-color: var(--lx-ink) !important;
+}
+
+:root [data-slot="checkbox"][data-state="checked"] {
+    background: var(--lx-magenta) !important;
+    border-color: var(--lx-magenta) !important;
+}
+
+/* Вкладки - легенда карты: активная залита тушью */
+:root [data-slot="tabs-list"][data-variant="default"] {
+    background: var(--lx-deep) !important;
+    border: 1px solid var(--lx-ink) !important;
+    border-radius: 3px !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"] {
+    border-radius: 2px !important;
+    border-color: transparent !important;
+    color: var(--lx-ink-2) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"]:hover:not([data-state="active"]) {
+    color: var(--lx-ink) !important;
+    background: var(--lx-mid) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"][data-state="active"] {
+    background: var(--lx-ink) !important;
+    color: var(--lx-deep) !important;
+    box-shadow: none !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"]::after {
+    background: var(--lx-magenta) !important;
+}
+
+
+/* =====================================================================
+   11. МЕНЮ, ОКНА, ПОДСКАЗКИ, ТОСТЫ
+   ===================================================================== */
+
+:root :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+    [data-slot="select-content"], [data-slot="popover-content"]) {
+    background: var(--lx-deep) !important;
+    border: 1px solid var(--lx-ink) !important;
+    border-radius: 3px !important;
+    box-shadow:
+        inset 0 0 0 3px var(--lx-deep),
+        inset 0 0 0 4px color-mix(in oklab, var(--lx-ink) 25%, transparent),
+        3px 3px 0 color-mix(in oklab, var(--lx-ink) 15%, transparent) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    padding: 6px !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"], [data-slot="command-item"]) {
+    border-radius: 1px !important;
+    transition: background-color 0.12s var(--lx-ease), box-shadow 0.12s var(--lx-ease) !important;
+}
+
+/* Подсвеченный пункт - пурпурная черта слева, как отметка на маршруте */
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted],
+:root [data-slot="dropdown-menu-sub-trigger"][data-state="open"],
+:root [data-slot="command-item"][data-selected="true"] {
+    background: var(--lx-magenta-tint) !important;
+    color: var(--lx-ink) !important;
+    box-shadow: inset 2px 0 0 var(--lx-magenta) !important;
+}
+
+:root [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted] {
+    background: color-mix(in oklab, var(--destructive) 10%, transparent) !important;
+    color: var(--destructive) !important;
+    box-shadow: inset 2px 0 0 var(--destructive) !important;
+}
+
+:root :is([data-slot="dropdown-menu-separator"], [data-slot="select-separator"]) {
+    background: repeating-linear-gradient(90deg, color-mix(in oklab, var(--lx-ink) 45%, transparent) 0 5px, transparent 5px 9px) !important;
+}
+
+/* Диалоги - картуш с двойной рамкой, заголовок курсивом */
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"]) {
+    background: var(--lx-deep) !important;
+    border: 1px solid var(--lx-ink) !important;
+    border-radius: 3px !important;
+    box-shadow:
+        inset 0 0 0 4px var(--lx-deep),
+        inset 0 0 0 5px color-mix(in oklab, var(--lx-ink) 40%, transparent),
+        6px 6px 0 color-mix(in oklab, var(--lx-ink) 14%, transparent) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root :is([data-slot="dialog-title"], [data-slot="alert-dialog-title"], [data-slot="sheet-title"]) {
+    font-family: var(--lx-serif);
+    font-style: italic;
+    font-size: 21px !important;
+    font-weight: 600 !important;
+}
+
+:root [data-slot="alert-dialog-media"] {
+    background: var(--lx-mid) !important;
+    border: 1px solid var(--lx-ink) !important;
+    border-radius: 50% !important;
+}
+
+:root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background: color-mix(in oklab, var(--lx-ink) 22%, transparent) !important;
+    -webkit-backdrop-filter: blur(2px) !important;
+    backdrop-filter: blur(2px) !important;
+}
+
+html.dark :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Подсказки - этикетка тушью */
+:root [data-slot="tooltip-content"] {
+    background: var(--lx-ink) !important;
+    color: var(--lx-deep) !important;
+    border-radius: 2px !important;
+    font-family: var(--lx-sans);
+    letter-spacing: 0.02em;
+}
+
+:root [data-slot="tooltip-content"] svg[class*="fill-"] {
+    background: var(--lx-ink) !important;
+    fill: var(--lx-ink) !important;
+    border-radius: 0 !important;
+}
+
+/* Тосты - "извещение мореплавателям": пурпурная черта слева */
+:root [data-sonner-toast] {
+    background: var(--lx-deep) !important;
+    color: var(--lx-ink) !important;
+    border: 1px solid var(--lx-ink) !important;
+    border-radius: 3px !important;
+    box-shadow: inset 3px 0 0 var(--lx-magenta), 4px 4px 0 color-mix(in oklab, var(--lx-ink) 14%, transparent) !important;
+}
+
+/* Обучающий тур (driver.js) */
+:root .driver-popover-title {
+    font-family: var(--lx-serif) !important;
+    font-style: italic;
+}
+
+:root .driver-popover-navigation-btns button {
+    border-radius: 2px !important;
+    background: var(--lx-deep) !important;
+    border-color: var(--lx-ink) !important;
+}
+
+:root .driver-popover-navigation-btns .driver-popover-next-btn {
+    background: var(--lx-ink) !important;
+    color: var(--lx-deep) !important;
+}
+
+
+/* =====================================================================
+   12. МЕЛОЧИ И ПЛАВАЮЩЕЕ ОКНО
+   ===================================================================== */
+
+/* Разделители - пунктир, как граница района на карте */
+:root [data-slot="separator"] {
+    background: repeating-linear-gradient(90deg, color-mix(in oklab, var(--lx-ink) 40%, transparent) 0 6px, transparent 6px 10px) !important;
+}
+
+:root [data-slot="progress"] {
+    background: var(--lx-mid) !important;
+    border: 1px solid var(--lx-ink);
+    border-radius: 1px !important;
+}
+
+:root [data-slot="progress-indicator"] {
+    background: repeating-linear-gradient(90deg, var(--lx-magenta) 0 8px, color-mix(in oklab, var(--lx-magenta) 60%, transparent) 8px 10px) !important;
+}
+
+:root tbody tr:hover {
+    background: var(--lx-magenta-tint) !important;
+}
+
+:root .floating-bg {
+    background: var(--lx-deep) !important;
+    border: 1px solid var(--lx-ink) !important;
+}
+
+:root .floating-text {
+    font-family: var(--lx-sans);
+    font-stretch: 87.5%;
+}
+
+
+/* =====================================================================
+   13. УМЕНЬШЕНИЕ АНИМАЦИИ
+   Кольцо розы останавливается, картушка не качается - курс просто выставляется.
+   ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    :root *,
+    :root *::before,
+    :root *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    :root [data-guide="home-power-toggle"]::before {
+        animation: none !important;
+    }
+}

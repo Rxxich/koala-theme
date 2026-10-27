@@ -1,0 +1,1375 @@
+/* Koala Arcade */
+/*
+  Тема для Koala Clash 1.5.0 - игровой автомат и карманная консоль.
+
+  ИДЕЯ
+  Программа превращается в 8-битную игру. Подключение - это "старт уровня":
+    - кнопка питания - большая пиксельная аркадная кнопка с подписью под ней:
+      PRESS START (выключено), LOADING... (подключение), GAME OVER (ошибка ядра);
+      при подключении на кнопке мигает READY!, вокруг загораются огни автомата;
+    - выбранный сервер отмечен мигающим курсором ►, как пункт в игровом меню;
+    - окна открываются рывком в 4 кадра и выглядят как диалоги из RPG,
+      с мигающей стрелкой ▼ в углу;
+    - на фоне ночное небо со звёздами, внизу бесконечно бегут пиксельные холмы,
+      поверх всего - строки развёртки ЭЛТ-экрана и пиксельный курсор мыши.
+  Вся анимация шагает кадрами (steps), как в настоящих 8-битных играх.
+
+  Тёмная тема - "ночной автомат" (палитра в духе PICO-8).
+  Светлая тема - экран Game Boy: четыре оттенка зелёного и сетка ЖК-пикселей.
+
+  КАК ПОДКЛЮЧАЕТСЯ
+  Тема вставляется через webContents.insertCSS() и в каскаде идёт раньше CSS клиента,
+  поэтому все правила начинаются с :root - этого хватает, чтобы перебить клиента.
+  Вся графика (кнопка, надписи, звёзды, холмы, курсор) нарисована встроенными SVG,
+  их разрешает политика безопасности приложения. Шрифт - Cascadia Mono / Consolas.
+
+  НАСТРОЙКА
+  Если мерцание экрана или бегущие холмы мешают, уберите в разделе 3 анимации
+  px-flicker и px-scroll (или включите в системе "убрать анимации").
+
+  СОДЕРЖАНИЕ
+    0. Кадры и спрайты        - шрифт, рамки, графика
+    1. Ночной автомат (тёмная)
+    2. Game Boy (светлая)
+    3. Экран: небо, холмы, развёртка, курсор
+    4. Пиксельные панели
+    5. Главная: HUD
+    6. Аркадная кнопка (кнопка питания)
+    7. Прокси, профили, подключения
+    8. Боковая панель
+    9. Кнопки
+   10. Поля, переключатели, вкладки
+   11. Меню и окна в стиле RPG, подсказки, тосты
+   12. Мелочи и плавающее окно
+   13. Уменьшение анимации
+*/
+
+
+/* =====================================================================
+   0. КАДРЫ И СПРАЙТЫ
+   ===================================================================== */
+
+:root {
+    --radius: 0px !important;
+    --px-font: "Cascadia Mono", "Cascadia Code", Consolas, "Lucida Console", monospace;
+
+    /* Спрайты */
+    --px-disc: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' shape-rendering='crispEdges'%3E%3Cpath d='M14 0h1v1h-1zM15 0h1v1h-1zM16 0h1v1h-1zM17 0h1v1h-1zM10 1h1v1h-1zM11 1h1v1h-1zM12 1h1v1h-1zM13 1h1v1h-1zM14 1h1v1h-1zM15 1h1v1h-1zM16 1h1v1h-1zM17 1h1v1h-1zM18 1h1v1h-1zM19 1h1v1h-1zM20 1h1v1h-1zM21 1h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM11 2h1v1h-1zM12 2h1v1h-1zM13 2h1v1h-1zM14 2h1v1h-1zM15 2h1v1h-1zM16 2h1v1h-1zM17 2h1v1h-1zM18 2h1v1h-1zM19 2h1v1h-1zM20 2h1v1h-1zM21 2h1v1h-1zM22 2h1v1h-1zM23 2h1v1h-1zM7 3h1v1h-1zM8 3h1v1h-1zM9 3h1v1h-1zM10 3h1v1h-1zM11 3h1v1h-1zM12 3h1v1h-1zM13 3h1v1h-1zM14 3h1v1h-1zM15 3h1v1h-1zM16 3h1v1h-1zM17 3h1v1h-1zM18 3h1v1h-1zM19 3h1v1h-1zM20 3h1v1h-1zM21 3h1v1h-1zM22 3h1v1h-1zM23 3h1v1h-1zM24 3h1v1h-1zM5 4h1v1h-1zM6 4h1v1h-1zM7 4h1v1h-1zM8 4h1v1h-1zM9 4h1v1h-1zM10 4h1v1h-1zM11 4h1v1h-1zM12 4h1v1h-1zM13 4h1v1h-1zM14 4h1v1h-1zM15 4h1v1h-1zM16 4h1v1h-1zM17 4h1v1h-1zM18 4h1v1h-1zM19 4h1v1h-1zM20 4h1v1h-1zM21 4h1v1h-1zM22 4h1v1h-1zM23 4h1v1h-1zM24 4h1v1h-1zM25 4h1v1h-1zM26 4h1v1h-1zM4 5h1v1h-1zM5 5h1v1h-1zM6 5h1v1h-1zM7 5h1v1h-1zM8 5h1v1h-1zM9 5h1v1h-1zM10 5h1v1h-1zM11 5h1v1h-1zM12 5h1v1h-1zM13 5h1v1h-1zM14 5h1v1h-1zM15 5h1v1h-1zM16 5h1v1h-1zM17 5h1v1h-1zM18 5h1v1h-1zM19 5h1v1h-1zM20 5h1v1h-1zM21 5h1v1h-1zM22 5h1v1h-1zM23 5h1v1h-1zM24 5h1v1h-1zM25 5h1v1h-1zM26 5h1v1h-1zM27 5h1v1h-1zM4 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM7 6h1v1h-1zM8 6h1v1h-1zM9 6h1v1h-1zM10 6h1v1h-1zM11 6h1v1h-1zM12 6h1v1h-1zM13 6h1v1h-1zM14 6h1v1h-1zM15 6h1v1h-1zM16 6h1v1h-1zM17 6h1v1h-1zM18 6h1v1h-1zM19 6h1v1h-1zM20 6h1v1h-1zM21 6h1v1h-1zM22 6h1v1h-1zM23 6h1v1h-1zM24 6h1v1h-1zM25 6h1v1h-1zM26 6h1v1h-1zM27 6h1v1h-1zM3 7h1v1h-1zM4 7h1v1h-1zM5 7h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1zM8 7h1v1h-1zM9 7h1v1h-1zM10 7h1v1h-1zM11 7h1v1h-1zM12 7h1v1h-1zM13 7h1v1h-1zM14 7h1v1h-1zM15 7h1v1h-1zM16 7h1v1h-1zM17 7h1v1h-1zM18 7h1v1h-1zM19 7h1v1h-1zM20 7h1v1h-1zM21 7h1v1h-1zM22 7h1v1h-1zM23 7h1v1h-1zM24 7h1v1h-1zM25 7h1v1h-1zM26 7h1v1h-1zM27 7h1v1h-1zM28 7h1v1h-1zM2 8h1v1h-1zM3 8h1v1h-1zM4 8h1v1h-1zM5 8h1v1h-1zM6 8h1v1h-1zM7 8h1v1h-1zM8 8h1v1h-1zM9 8h1v1h-1zM10 8h1v1h-1zM11 8h1v1h-1zM12 8h1v1h-1zM13 8h1v1h-1zM14 8h1v1h-1zM15 8h1v1h-1zM16 8h1v1h-1zM17 8h1v1h-1zM18 8h1v1h-1zM19 8h1v1h-1zM20 8h1v1h-1zM21 8h1v1h-1zM22 8h1v1h-1zM23 8h1v1h-1zM24 8h1v1h-1zM25 8h1v1h-1zM26 8h1v1h-1zM27 8h1v1h-1zM28 8h1v1h-1zM29 8h1v1h-1zM2 9h1v1h-1zM3 9h1v1h-1zM4 9h1v1h-1zM5 9h1v1h-1zM6 9h1v1h-1zM7 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM10 9h1v1h-1zM11 9h1v1h-1zM12 9h1v1h-1zM13 9h1v1h-1zM14 9h1v1h-1zM15 9h1v1h-1zM16 9h1v1h-1zM17 9h1v1h-1zM18 9h1v1h-1zM19 9h1v1h-1zM20 9h1v1h-1zM21 9h1v1h-1zM22 9h1v1h-1zM23 9h1v1h-1zM24 9h1v1h-1zM25 9h1v1h-1zM26 9h1v1h-1zM27 9h1v1h-1zM28 9h1v1h-1zM29 9h1v1h-1zM1 10h1v1h-1zM2 10h1v1h-1zM3 10h1v1h-1zM4 10h1v1h-1zM5 10h1v1h-1zM6 10h1v1h-1zM7 10h1v1h-1zM8 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM11 10h1v1h-1zM12 10h1v1h-1zM13 10h1v1h-1zM14 10h1v1h-1zM15 10h1v1h-1zM16 10h1v1h-1zM17 10h1v1h-1zM18 10h1v1h-1zM19 10h1v1h-1zM20 10h1v1h-1zM21 10h1v1h-1zM22 10h1v1h-1zM23 10h1v1h-1zM24 10h1v1h-1zM25 10h1v1h-1zM26 10h1v1h-1zM27 10h1v1h-1zM28 10h1v1h-1zM29 10h1v1h-1zM30 10h1v1h-1zM1 11h1v1h-1zM2 11h1v1h-1zM3 11h1v1h-1zM4 11h1v1h-1zM5 11h1v1h-1zM6 11h1v1h-1zM7 11h1v1h-1zM8 11h1v1h-1zM9 11h1v1h-1zM10 11h1v1h-1zM11 11h1v1h-1zM12 11h1v1h-1zM13 11h1v1h-1zM14 11h1v1h-1zM15 11h1v1h-1zM16 11h1v1h-1zM17 11h1v1h-1zM18 11h1v1h-1zM19 11h1v1h-1zM20 11h1v1h-1zM21 11h1v1h-1zM22 11h1v1h-1zM23 11h1v1h-1zM24 11h1v1h-1zM25 11h1v1h-1zM26 11h1v1h-1zM27 11h1v1h-1zM28 11h1v1h-1zM29 11h1v1h-1zM30 11h1v1h-1zM1 12h1v1h-1zM2 12h1v1h-1zM3 12h1v1h-1zM4 12h1v1h-1zM5 12h1v1h-1zM6 12h1v1h-1zM7 12h1v1h-1zM8 12h1v1h-1zM9 12h1v1h-1zM10 12h1v1h-1zM11 12h1v1h-1zM12 12h1v1h-1zM13 12h1v1h-1zM14 12h1v1h-1zM15 12h1v1h-1zM16 12h1v1h-1zM17 12h1v1h-1zM18 12h1v1h-1zM19 12h1v1h-1zM20 12h1v1h-1zM21 12h1v1h-1zM22 12h1v1h-1zM23 12h1v1h-1zM24 12h1v1h-1zM25 12h1v1h-1zM26 12h1v1h-1zM27 12h1v1h-1zM28 12h1v1h-1zM29 12h1v1h-1zM30 12h1v1h-1zM1 13h1v1h-1zM2 13h1v1h-1zM3 13h1v1h-1zM4 13h1v1h-1zM5 13h1v1h-1zM6 13h1v1h-1zM7 13h1v1h-1zM8 13h1v1h-1zM9 13h1v1h-1zM10 13h1v1h-1zM11 13h1v1h-1zM12 13h1v1h-1zM13 13h1v1h-1zM14 13h1v1h-1zM15 13h1v1h-1zM16 13h1v1h-1zM17 13h1v1h-1zM18 13h1v1h-1zM19 13h1v1h-1zM20 13h1v1h-1zM21 13h1v1h-1zM22 13h1v1h-1zM23 13h1v1h-1zM24 13h1v1h-1zM25 13h1v1h-1zM26 13h1v1h-1zM27 13h1v1h-1zM28 13h1v1h-1zM29 13h1v1h-1zM30 13h1v1h-1zM0 14h1v1h-1zM1 14h1v1h-1zM2 14h1v1h-1zM3 14h1v1h-1zM4 14h1v1h-1zM5 14h1v1h-1zM6 14h1v1h-1zM7 14h1v1h-1zM8 14h1v1h-1zM9 14h1v1h-1zM10 14h1v1h-1zM11 14h1v1h-1zM12 14h1v1h-1zM13 14h1v1h-1zM14 14h1v1h-1zM15 14h1v1h-1zM16 14h1v1h-1zM17 14h1v1h-1zM18 14h1v1h-1zM19 14h1v1h-1zM20 14h1v1h-1zM21 14h1v1h-1zM22 14h1v1h-1zM23 14h1v1h-1zM24 14h1v1h-1zM25 14h1v1h-1zM26 14h1v1h-1zM27 14h1v1h-1zM28 14h1v1h-1zM29 14h1v1h-1zM30 14h1v1h-1zM31 14h1v1h-1zM0 15h1v1h-1zM1 15h1v1h-1zM2 15h1v1h-1zM3 15h1v1h-1zM4 15h1v1h-1zM5 15h1v1h-1zM6 15h1v1h-1zM7 15h1v1h-1zM8 15h1v1h-1zM9 15h1v1h-1zM10 15h1v1h-1zM11 15h1v1h-1zM12 15h1v1h-1zM13 15h1v1h-1zM14 15h1v1h-1zM15 15h1v1h-1zM16 15h1v1h-1zM17 15h1v1h-1zM18 15h1v1h-1zM19 15h1v1h-1zM20 15h1v1h-1zM21 15h1v1h-1zM22 15h1v1h-1zM23 15h1v1h-1zM24 15h1v1h-1zM25 15h1v1h-1zM26 15h1v1h-1zM27 15h1v1h-1zM28 15h1v1h-1zM29 15h1v1h-1zM30 15h1v1h-1zM31 15h1v1h-1zM0 16h1v1h-1zM1 16h1v1h-1zM2 16h1v1h-1zM3 16h1v1h-1zM4 16h1v1h-1zM5 16h1v1h-1zM6 16h1v1h-1zM7 16h1v1h-1zM8 16h1v1h-1zM9 16h1v1h-1zM10 16h1v1h-1zM11 16h1v1h-1zM12 16h1v1h-1zM13 16h1v1h-1zM14 16h1v1h-1zM15 16h1v1h-1zM16 16h1v1h-1zM17 16h1v1h-1zM18 16h1v1h-1zM19 16h1v1h-1zM20 16h1v1h-1zM21 16h1v1h-1zM22 16h1v1h-1zM23 16h1v1h-1zM24 16h1v1h-1zM25 16h1v1h-1zM26 16h1v1h-1zM27 16h1v1h-1zM28 16h1v1h-1zM29 16h1v1h-1zM30 16h1v1h-1zM31 16h1v1h-1zM0 17h1v1h-1zM1 17h1v1h-1zM2 17h1v1h-1zM3 17h1v1h-1zM4 17h1v1h-1zM5 17h1v1h-1zM6 17h1v1h-1zM7 17h1v1h-1zM8 17h1v1h-1zM9 17h1v1h-1zM10 17h1v1h-1zM11 17h1v1h-1zM12 17h1v1h-1zM13 17h1v1h-1zM14 17h1v1h-1zM15 17h1v1h-1zM16 17h1v1h-1zM17 17h1v1h-1zM18 17h1v1h-1zM19 17h1v1h-1zM20 17h1v1h-1zM21 17h1v1h-1zM22 17h1v1h-1zM23 17h1v1h-1zM24 17h1v1h-1zM25 17h1v1h-1zM26 17h1v1h-1zM27 17h1v1h-1zM28 17h1v1h-1zM29 17h1v1h-1zM30 17h1v1h-1zM31 17h1v1h-1zM1 18h1v1h-1zM2 18h1v1h-1zM3 18h1v1h-1zM4 18h1v1h-1zM5 18h1v1h-1zM6 18h1v1h-1zM7 18h1v1h-1zM8 18h1v1h-1zM9 18h1v1h-1zM10 18h1v1h-1zM11 18h1v1h-1zM12 18h1v1h-1zM13 18h1v1h-1zM14 18h1v1h-1zM15 18h1v1h-1zM16 18h1v1h-1zM17 18h1v1h-1zM18 18h1v1h-1zM19 18h1v1h-1zM20 18h1v1h-1zM21 18h1v1h-1zM22 18h1v1h-1zM23 18h1v1h-1zM24 18h1v1h-1zM25 18h1v1h-1zM26 18h1v1h-1zM27 18h1v1h-1zM28 18h1v1h-1zM29 18h1v1h-1zM30 18h1v1h-1zM1 19h1v1h-1zM2 19h1v1h-1zM3 19h1v1h-1zM4 19h1v1h-1zM5 19h1v1h-1zM6 19h1v1h-1zM7 19h1v1h-1zM8 19h1v1h-1zM9 19h1v1h-1zM10 19h1v1h-1zM11 19h1v1h-1zM12 19h1v1h-1zM13 19h1v1h-1zM14 19h1v1h-1zM15 19h1v1h-1zM16 19h1v1h-1zM17 19h1v1h-1zM18 19h1v1h-1zM19 19h1v1h-1zM20 19h1v1h-1zM21 19h1v1h-1zM22 19h1v1h-1zM23 19h1v1h-1zM24 19h1v1h-1zM25 19h1v1h-1zM26 19h1v1h-1zM27 19h1v1h-1zM28 19h1v1h-1zM29 19h1v1h-1zM30 19h1v1h-1zM1 20h1v1h-1zM2 20h1v1h-1zM3 20h1v1h-1zM4 20h1v1h-1zM5 20h1v1h-1zM6 20h1v1h-1zM7 20h1v1h-1zM8 20h1v1h-1zM9 20h1v1h-1zM10 20h1v1h-1zM11 20h1v1h-1zM12 20h1v1h-1zM13 20h1v1h-1zM14 20h1v1h-1zM15 20h1v1h-1zM16 20h1v1h-1zM17 20h1v1h-1zM18 20h1v1h-1zM19 20h1v1h-1zM20 20h1v1h-1zM21 20h1v1h-1zM22 20h1v1h-1zM23 20h1v1h-1zM24 20h1v1h-1zM25 20h1v1h-1zM26 20h1v1h-1zM27 20h1v1h-1zM28 20h1v1h-1zM29 20h1v1h-1zM30 20h1v1h-1zM1 21h1v1h-1zM2 21h1v1h-1zM3 21h1v1h-1zM4 21h1v1h-1zM5 21h1v1h-1zM6 21h1v1h-1zM7 21h1v1h-1zM8 21h1v1h-1zM9 21h1v1h-1zM10 21h1v1h-1zM11 21h1v1h-1zM12 21h1v1h-1zM13 21h1v1h-1zM14 21h1v1h-1zM15 21h1v1h-1zM16 21h1v1h-1zM17 21h1v1h-1zM18 21h1v1h-1zM19 21h1v1h-1zM20 21h1v1h-1zM21 21h1v1h-1zM22 21h1v1h-1zM23 21h1v1h-1zM24 21h1v1h-1zM25 21h1v1h-1zM26 21h1v1h-1zM27 21h1v1h-1zM28 21h1v1h-1zM29 21h1v1h-1zM30 21h1v1h-1zM2 22h1v1h-1zM3 22h1v1h-1zM4 22h1v1h-1zM5 22h1v1h-1zM6 22h1v1h-1zM7 22h1v1h-1zM8 22h1v1h-1zM9 22h1v1h-1zM10 22h1v1h-1zM11 22h1v1h-1zM12 22h1v1h-1zM13 22h1v1h-1zM14 22h1v1h-1zM15 22h1v1h-1zM16 22h1v1h-1zM17 22h1v1h-1zM18 22h1v1h-1zM19 22h1v1h-1zM20 22h1v1h-1zM21 22h1v1h-1zM22 22h1v1h-1zM23 22h1v1h-1zM24 22h1v1h-1zM25 22h1v1h-1zM26 22h1v1h-1zM27 22h1v1h-1zM28 22h1v1h-1zM29 22h1v1h-1zM2 23h1v1h-1zM3 23h1v1h-1zM4 23h1v1h-1zM5 23h1v1h-1zM6 23h1v1h-1zM7 23h1v1h-1zM8 23h1v1h-1zM9 23h1v1h-1zM10 23h1v1h-1zM11 23h1v1h-1zM12 23h1v1h-1zM13 23h1v1h-1zM14 23h1v1h-1zM15 23h1v1h-1zM16 23h1v1h-1zM17 23h1v1h-1zM18 23h1v1h-1zM19 23h1v1h-1zM20 23h1v1h-1zM21 23h1v1h-1zM22 23h1v1h-1zM23 23h1v1h-1zM24 23h1v1h-1zM25 23h1v1h-1zM26 23h1v1h-1zM27 23h1v1h-1zM28 23h1v1h-1zM29 23h1v1h-1zM3 24h1v1h-1zM4 24h1v1h-1zM5 24h1v1h-1zM6 24h1v1h-1zM7 24h1v1h-1zM8 24h1v1h-1zM9 24h1v1h-1zM10 24h1v1h-1zM11 24h1v1h-1zM12 24h1v1h-1zM13 24h1v1h-1zM14 24h1v1h-1zM15 24h1v1h-1zM16 24h1v1h-1zM17 24h1v1h-1zM18 24h1v1h-1zM19 24h1v1h-1zM20 24h1v1h-1zM21 24h1v1h-1zM22 24h1v1h-1zM23 24h1v1h-1zM24 24h1v1h-1zM25 24h1v1h-1zM26 24h1v1h-1zM27 24h1v1h-1zM28 24h1v1h-1zM4 25h1v1h-1zM5 25h1v1h-1zM6 25h1v1h-1zM7 25h1v1h-1zM8 25h1v1h-1zM9 25h1v1h-1zM10 25h1v1h-1zM11 25h1v1h-1zM12 25h1v1h-1zM13 25h1v1h-1zM14 25h1v1h-1zM15 25h1v1h-1zM16 25h1v1h-1zM17 25h1v1h-1zM18 25h1v1h-1zM19 25h1v1h-1zM20 25h1v1h-1zM21 25h1v1h-1zM22 25h1v1h-1zM23 25h1v1h-1zM24 25h1v1h-1zM25 25h1v1h-1zM26 25h1v1h-1zM27 25h1v1h-1zM4 26h1v1h-1zM5 26h1v1h-1zM6 26h1v1h-1zM7 26h1v1h-1zM8 26h1v1h-1zM9 26h1v1h-1zM10 26h1v1h-1zM11 26h1v1h-1zM12 26h1v1h-1zM13 26h1v1h-1zM14 26h1v1h-1zM15 26h1v1h-1zM16 26h1v1h-1zM17 26h1v1h-1zM18 26h1v1h-1zM19 26h1v1h-1zM20 26h1v1h-1zM21 26h1v1h-1zM22 26h1v1h-1zM23 26h1v1h-1zM24 26h1v1h-1zM25 26h1v1h-1zM26 26h1v1h-1zM27 26h1v1h-1zM5 27h1v1h-1zM6 27h1v1h-1zM7 27h1v1h-1zM8 27h1v1h-1zM9 27h1v1h-1zM10 27h1v1h-1zM11 27h1v1h-1zM12 27h1v1h-1zM13 27h1v1h-1zM14 27h1v1h-1zM15 27h1v1h-1zM16 27h1v1h-1zM17 27h1v1h-1zM18 27h1v1h-1zM19 27h1v1h-1zM20 27h1v1h-1zM21 27h1v1h-1zM22 27h1v1h-1zM23 27h1v1h-1zM24 27h1v1h-1zM25 27h1v1h-1zM26 27h1v1h-1zM7 28h1v1h-1zM8 28h1v1h-1zM9 28h1v1h-1zM10 28h1v1h-1zM11 28h1v1h-1zM12 28h1v1h-1zM13 28h1v1h-1zM14 28h1v1h-1zM15 28h1v1h-1zM16 28h1v1h-1zM17 28h1v1h-1zM18 28h1v1h-1zM19 28h1v1h-1zM20 28h1v1h-1zM21 28h1v1h-1zM22 28h1v1h-1zM23 28h1v1h-1zM24 28h1v1h-1zM8 29h1v1h-1zM9 29h1v1h-1zM10 29h1v1h-1zM11 29h1v1h-1zM12 29h1v1h-1zM13 29h1v1h-1zM14 29h1v1h-1zM15 29h1v1h-1zM16 29h1v1h-1zM17 29h1v1h-1zM18 29h1v1h-1zM19 29h1v1h-1zM20 29h1v1h-1zM21 29h1v1h-1zM22 29h1v1h-1zM23 29h1v1h-1zM10 30h1v1h-1zM11 30h1v1h-1zM12 30h1v1h-1zM13 30h1v1h-1zM14 30h1v1h-1zM15 30h1v1h-1zM16 30h1v1h-1zM17 30h1v1h-1zM18 30h1v1h-1zM19 30h1v1h-1zM20 30h1v1h-1zM21 30h1v1h-1zM14 31h1v1h-1zM15 31h1v1h-1zM16 31h1v1h-1zM17 31h1v1h-1z' fill='%23000'/%3E%3C/svg%3E");
+    --px-ring: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40' shape-rendering='crispEdges'%3E%3Cpath d='M18 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM21 0h1v1h-1zM14 1h1v1h-1zM15 1h1v1h-1zM16 1h1v1h-1zM17 1h1v1h-1zM18 1h1v1h-1zM19 1h1v1h-1zM20 1h1v1h-1zM21 1h1v1h-1zM22 1h1v1h-1zM23 1h1v1h-1zM24 1h1v1h-1zM25 1h1v1h-1zM11 2h1v1h-1zM12 2h1v1h-1zM13 2h1v1h-1zM14 2h1v1h-1zM15 2h1v1h-1zM16 2h1v1h-1zM17 2h1v1h-1zM18 2h1v1h-1zM19 2h1v1h-1zM20 2h1v1h-1zM21 2h1v1h-1zM22 2h1v1h-1zM23 2h1v1h-1zM24 2h1v1h-1zM25 2h1v1h-1zM26 2h1v1h-1zM27 2h1v1h-1zM28 2h1v1h-1zM9 3h1v1h-1zM10 3h1v1h-1zM11 3h1v1h-1zM12 3h1v1h-1zM13 3h1v1h-1zM14 3h1v1h-1zM25 3h1v1h-1zM26 3h1v1h-1zM27 3h1v1h-1zM28 3h1v1h-1zM29 3h1v1h-1zM30 3h1v1h-1zM8 4h1v1h-1zM9 4h1v1h-1zM10 4h1v1h-1zM11 4h1v1h-1zM12 4h1v1h-1zM27 4h1v1h-1zM28 4h1v1h-1zM29 4h1v1h-1zM30 4h1v1h-1zM31 4h1v1h-1zM7 5h1v1h-1zM8 5h1v1h-1zM9 5h1v1h-1zM10 5h1v1h-1zM29 5h1v1h-1zM30 5h1v1h-1zM31 5h1v1h-1zM32 5h1v1h-1zM6 6h1v1h-1zM7 6h1v1h-1zM8 6h1v1h-1zM31 6h1v1h-1zM32 6h1v1h-1zM33 6h1v1h-1zM5 7h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1zM32 7h1v1h-1zM33 7h1v1h-1zM34 7h1v1h-1zM4 8h1v1h-1zM5 8h1v1h-1zM6 8h1v1h-1zM33 8h1v1h-1zM34 8h1v1h-1zM35 8h1v1h-1zM3 9h1v1h-1zM4 9h1v1h-1zM5 9h1v1h-1zM34 9h1v1h-1zM35 9h1v1h-1zM36 9h1v1h-1zM3 10h1v1h-1zM4 10h1v1h-1zM5 10h1v1h-1zM34 10h1v1h-1zM35 10h1v1h-1zM36 10h1v1h-1zM2 11h1v1h-1zM3 11h1v1h-1zM4 11h1v1h-1zM35 11h1v1h-1zM36 11h1v1h-1zM37 11h1v1h-1zM2 12h1v1h-1zM3 12h1v1h-1zM4 12h1v1h-1zM35 12h1v1h-1zM36 12h1v1h-1zM37 12h1v1h-1zM2 13h1v1h-1zM3 13h1v1h-1zM36 13h1v1h-1zM37 13h1v1h-1zM1 14h1v1h-1zM2 14h1v1h-1zM3 14h1v1h-1zM36 14h1v1h-1zM37 14h1v1h-1zM38 14h1v1h-1zM1 15h1v1h-1zM2 15h1v1h-1zM37 15h1v1h-1zM38 15h1v1h-1zM1 16h1v1h-1zM2 16h1v1h-1zM37 16h1v1h-1zM38 16h1v1h-1zM1 17h1v1h-1zM2 17h1v1h-1zM37 17h1v1h-1zM38 17h1v1h-1zM0 18h1v1h-1zM1 18h1v1h-1zM2 18h1v1h-1zM37 18h1v1h-1zM38 18h1v1h-1zM39 18h1v1h-1zM0 19h1v1h-1zM1 19h1v1h-1zM2 19h1v1h-1zM37 19h1v1h-1zM38 19h1v1h-1zM39 19h1v1h-1zM0 20h1v1h-1zM1 20h1v1h-1zM2 20h1v1h-1zM37 20h1v1h-1zM38 20h1v1h-1zM39 20h1v1h-1zM0 21h1v1h-1zM1 21h1v1h-1zM2 21h1v1h-1zM37 21h1v1h-1zM38 21h1v1h-1zM39 21h1v1h-1zM1 22h1v1h-1zM2 22h1v1h-1zM37 22h1v1h-1zM38 22h1v1h-1zM1 23h1v1h-1zM2 23h1v1h-1zM37 23h1v1h-1zM38 23h1v1h-1zM1 24h1v1h-1zM2 24h1v1h-1zM37 24h1v1h-1zM38 24h1v1h-1zM1 25h1v1h-1zM2 25h1v1h-1zM3 25h1v1h-1zM36 25h1v1h-1zM37 25h1v1h-1zM38 25h1v1h-1zM2 26h1v1h-1zM3 26h1v1h-1zM36 26h1v1h-1zM37 26h1v1h-1zM2 27h1v1h-1zM3 27h1v1h-1zM4 27h1v1h-1zM35 27h1v1h-1zM36 27h1v1h-1zM37 27h1v1h-1zM2 28h1v1h-1zM3 28h1v1h-1zM4 28h1v1h-1zM35 28h1v1h-1zM36 28h1v1h-1zM37 28h1v1h-1zM3 29h1v1h-1zM4 29h1v1h-1zM5 29h1v1h-1zM34 29h1v1h-1zM35 29h1v1h-1zM36 29h1v1h-1zM3 30h1v1h-1zM4 30h1v1h-1zM5 30h1v1h-1zM34 30h1v1h-1zM35 30h1v1h-1zM36 30h1v1h-1zM4 31h1v1h-1zM5 31h1v1h-1zM6 31h1v1h-1zM33 31h1v1h-1zM34 31h1v1h-1zM35 31h1v1h-1zM5 32h1v1h-1zM6 32h1v1h-1zM7 32h1v1h-1zM32 32h1v1h-1zM33 32h1v1h-1zM34 32h1v1h-1zM6 33h1v1h-1zM7 33h1v1h-1zM8 33h1v1h-1zM31 33h1v1h-1zM32 33h1v1h-1zM33 33h1v1h-1zM7 34h1v1h-1zM8 34h1v1h-1zM9 34h1v1h-1zM10 34h1v1h-1zM29 34h1v1h-1zM30 34h1v1h-1zM31 34h1v1h-1zM32 34h1v1h-1zM8 35h1v1h-1zM9 35h1v1h-1zM10 35h1v1h-1zM11 35h1v1h-1zM12 35h1v1h-1zM27 35h1v1h-1zM28 35h1v1h-1zM29 35h1v1h-1zM30 35h1v1h-1zM31 35h1v1h-1zM9 36h1v1h-1zM10 36h1v1h-1zM11 36h1v1h-1zM12 36h1v1h-1zM13 36h1v1h-1zM14 36h1v1h-1zM25 36h1v1h-1zM26 36h1v1h-1zM27 36h1v1h-1zM28 36h1v1h-1zM29 36h1v1h-1zM30 36h1v1h-1zM11 37h1v1h-1zM12 37h1v1h-1zM13 37h1v1h-1zM14 37h1v1h-1zM15 37h1v1h-1zM16 37h1v1h-1zM17 37h1v1h-1zM18 37h1v1h-1zM19 37h1v1h-1zM20 37h1v1h-1zM21 37h1v1h-1zM22 37h1v1h-1zM23 37h1v1h-1zM24 37h1v1h-1zM25 37h1v1h-1zM26 37h1v1h-1zM27 37h1v1h-1zM28 37h1v1h-1zM14 38h1v1h-1zM15 38h1v1h-1zM16 38h1v1h-1zM17 38h1v1h-1zM18 38h1v1h-1zM19 38h1v1h-1zM20 38h1v1h-1zM21 38h1v1h-1zM22 38h1v1h-1zM23 38h1v1h-1zM24 38h1v1h-1zM25 38h1v1h-1zM18 39h1v1h-1zM19 39h1v1h-1zM20 39h1v1h-1zM21 39h1v1h-1z' fill='%23000'/%3E%3C/svg%3E");
+    --px-pointer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 7' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h1v7h-1zM1 1h1v5h-1zM2 2h1v3h-1zM3 3h1v1h-1z' fill='%23000'/%3E%3C/svg%3E");
+    --px-word-press: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 65 7' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h1v1h-1zM1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM0 1h1v1h-1zM4 1h1v1h-1zM0 2h1v1h-1zM4 2h1v1h-1zM0 3h1v1h-1zM1 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM0 4h1v1h-1zM0 5h1v1h-1zM0 6h1v1h-1zM6 0h1v1h-1zM7 0h1v1h-1zM8 0h1v1h-1zM9 0h1v1h-1zM6 1h1v1h-1zM10 1h1v1h-1zM6 2h1v1h-1zM10 2h1v1h-1zM6 3h1v1h-1zM7 3h1v1h-1zM8 3h1v1h-1zM9 3h1v1h-1zM6 4h1v1h-1zM8 4h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM6 6h1v1h-1zM10 6h1v1h-1zM12 0h1v1h-1zM13 0h1v1h-1zM14 0h1v1h-1zM15 0h1v1h-1zM16 0h1v1h-1zM12 1h1v1h-1zM12 2h1v1h-1zM12 3h1v1h-1zM13 3h1v1h-1zM14 3h1v1h-1zM15 3h1v1h-1zM12 4h1v1h-1zM12 5h1v1h-1zM12 6h1v1h-1zM13 6h1v1h-1zM14 6h1v1h-1zM15 6h1v1h-1zM16 6h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM21 0h1v1h-1zM22 0h1v1h-1zM18 1h1v1h-1zM18 2h1v1h-1zM19 3h1v1h-1zM20 3h1v1h-1zM21 3h1v1h-1zM22 4h1v1h-1zM22 5h1v1h-1zM18 6h1v1h-1zM19 6h1v1h-1zM20 6h1v1h-1zM21 6h1v1h-1zM25 0h1v1h-1zM26 0h1v1h-1zM27 0h1v1h-1zM28 0h1v1h-1zM24 1h1v1h-1zM24 2h1v1h-1zM25 3h1v1h-1zM26 3h1v1h-1zM27 3h1v1h-1zM28 4h1v1h-1zM28 5h1v1h-1zM24 6h1v1h-1zM25 6h1v1h-1zM26 6h1v1h-1zM27 6h1v1h-1zM37 0h1v1h-1zM38 0h1v1h-1zM39 0h1v1h-1zM40 0h1v1h-1zM36 1h1v1h-1zM36 2h1v1h-1zM37 3h1v1h-1zM38 3h1v1h-1zM39 3h1v1h-1zM40 4h1v1h-1zM40 5h1v1h-1zM36 6h1v1h-1zM37 6h1v1h-1zM38 6h1v1h-1zM39 6h1v1h-1zM42 0h1v1h-1zM43 0h1v1h-1zM44 0h1v1h-1zM45 0h1v1h-1zM46 0h1v1h-1zM44 1h1v1h-1zM44 2h1v1h-1zM44 3h1v1h-1zM44 4h1v1h-1zM44 5h1v1h-1zM44 6h1v1h-1zM49 0h1v1h-1zM50 0h1v1h-1zM51 0h1v1h-1zM48 1h1v1h-1zM52 1h1v1h-1zM48 2h1v1h-1zM52 2h1v1h-1zM48 3h1v1h-1zM49 3h1v1h-1zM50 3h1v1h-1zM51 3h1v1h-1zM52 3h1v1h-1zM48 4h1v1h-1zM52 4h1v1h-1zM48 5h1v1h-1zM52 5h1v1h-1zM48 6h1v1h-1zM52 6h1v1h-1zM54 0h1v1h-1zM55 0h1v1h-1zM56 0h1v1h-1zM57 0h1v1h-1zM54 1h1v1h-1zM58 1h1v1h-1zM54 2h1v1h-1zM58 2h1v1h-1zM54 3h1v1h-1zM55 3h1v1h-1zM56 3h1v1h-1zM57 3h1v1h-1zM54 4h1v1h-1zM56 4h1v1h-1zM54 5h1v1h-1zM57 5h1v1h-1zM54 6h1v1h-1zM58 6h1v1h-1zM60 0h1v1h-1zM61 0h1v1h-1zM62 0h1v1h-1zM63 0h1v1h-1zM64 0h1v1h-1zM62 1h1v1h-1zM62 2h1v1h-1zM62 3h1v1h-1zM62 4h1v1h-1zM62 5h1v1h-1zM62 6h1v1h-1z' fill='%23000'/%3E%3C/svg%3E");
+    --px-word-loading: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 59 7' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h1v1h-1zM0 1h1v1h-1zM0 2h1v1h-1zM0 3h1v1h-1zM0 4h1v1h-1zM0 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM3 6h1v1h-1zM4 6h1v1h-1zM7 0h1v1h-1zM8 0h1v1h-1zM9 0h1v1h-1zM6 1h1v1h-1zM10 1h1v1h-1zM6 2h1v1h-1zM10 2h1v1h-1zM6 3h1v1h-1zM10 3h1v1h-1zM6 4h1v1h-1zM10 4h1v1h-1zM6 5h1v1h-1zM10 5h1v1h-1zM7 6h1v1h-1zM8 6h1v1h-1zM9 6h1v1h-1zM13 0h1v1h-1zM14 0h1v1h-1zM15 0h1v1h-1zM12 1h1v1h-1zM16 1h1v1h-1zM12 2h1v1h-1zM16 2h1v1h-1zM12 3h1v1h-1zM13 3h1v1h-1zM14 3h1v1h-1zM15 3h1v1h-1zM16 3h1v1h-1zM12 4h1v1h-1zM16 4h1v1h-1zM12 5h1v1h-1zM16 5h1v1h-1zM12 6h1v1h-1zM16 6h1v1h-1zM18 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM21 0h1v1h-1zM18 1h1v1h-1zM22 1h1v1h-1zM18 2h1v1h-1zM22 2h1v1h-1zM18 3h1v1h-1zM22 3h1v1h-1zM18 4h1v1h-1zM22 4h1v1h-1zM18 5h1v1h-1zM22 5h1v1h-1zM18 6h1v1h-1zM19 6h1v1h-1zM20 6h1v1h-1zM21 6h1v1h-1zM25 0h1v1h-1zM26 0h1v1h-1zM27 0h1v1h-1zM26 1h1v1h-1zM26 2h1v1h-1zM26 3h1v1h-1zM26 4h1v1h-1zM26 5h1v1h-1zM25 6h1v1h-1zM26 6h1v1h-1zM27 6h1v1h-1zM30 0h1v1h-1zM34 0h1v1h-1zM30 1h1v1h-1zM31 1h1v1h-1zM34 1h1v1h-1zM30 2h1v1h-1zM32 2h1v1h-1zM34 2h1v1h-1zM30 3h1v1h-1zM33 3h1v1h-1zM34 3h1v1h-1zM30 4h1v1h-1zM34 4h1v1h-1zM30 5h1v1h-1zM34 5h1v1h-1zM30 6h1v1h-1zM34 6h1v1h-1zM37 0h1v1h-1zM38 0h1v1h-1zM39 0h1v1h-1zM36 1h1v1h-1zM40 1h1v1h-1zM36 2h1v1h-1zM36 3h1v1h-1zM38 3h1v1h-1zM39 3h1v1h-1zM40 3h1v1h-1zM36 4h1v1h-1zM40 4h1v1h-1zM36 5h1v1h-1zM40 5h1v1h-1zM37 6h1v1h-1zM38 6h1v1h-1zM39 6h1v1h-1zM40 6h1v1h-1zM44 6h1v1h-1zM50 6h1v1h-1zM56 6h1v1h-1z' fill='%23000'/%3E%3C/svg%3E");
+    --px-word-over: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 53 7' shape-rendering='crispEdges'%3E%3Cpath d='M1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM0 1h1v1h-1zM4 1h1v1h-1zM0 2h1v1h-1zM0 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM0 4h1v1h-1zM4 4h1v1h-1zM0 5h1v1h-1zM4 5h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM3 6h1v1h-1zM4 6h1v1h-1zM7 0h1v1h-1zM8 0h1v1h-1zM9 0h1v1h-1zM6 1h1v1h-1zM10 1h1v1h-1zM6 2h1v1h-1zM10 2h1v1h-1zM6 3h1v1h-1zM7 3h1v1h-1zM8 3h1v1h-1zM9 3h1v1h-1zM10 3h1v1h-1zM6 4h1v1h-1zM10 4h1v1h-1zM6 5h1v1h-1zM10 5h1v1h-1zM6 6h1v1h-1zM10 6h1v1h-1zM12 0h1v1h-1zM16 0h1v1h-1zM12 1h1v1h-1zM13 1h1v1h-1zM15 1h1v1h-1zM16 1h1v1h-1zM12 2h1v1h-1zM14 2h1v1h-1zM16 2h1v1h-1zM12 3h1v1h-1zM14 3h1v1h-1zM16 3h1v1h-1zM12 4h1v1h-1zM16 4h1v1h-1zM12 5h1v1h-1zM16 5h1v1h-1zM12 6h1v1h-1zM16 6h1v1h-1zM18 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM21 0h1v1h-1zM22 0h1v1h-1zM18 1h1v1h-1zM18 2h1v1h-1zM18 3h1v1h-1zM19 3h1v1h-1zM20 3h1v1h-1zM21 3h1v1h-1zM18 4h1v1h-1zM18 5h1v1h-1zM18 6h1v1h-1zM19 6h1v1h-1zM20 6h1v1h-1zM21 6h1v1h-1zM22 6h1v1h-1zM31 0h1v1h-1zM32 0h1v1h-1zM33 0h1v1h-1zM30 1h1v1h-1zM34 1h1v1h-1zM30 2h1v1h-1zM34 2h1v1h-1zM30 3h1v1h-1zM34 3h1v1h-1zM30 4h1v1h-1zM34 4h1v1h-1zM30 5h1v1h-1zM34 5h1v1h-1zM31 6h1v1h-1zM32 6h1v1h-1zM33 6h1v1h-1zM36 0h1v1h-1zM40 0h1v1h-1zM36 1h1v1h-1zM40 1h1v1h-1zM36 2h1v1h-1zM40 2h1v1h-1zM36 3h1v1h-1zM40 3h1v1h-1zM36 4h1v1h-1zM40 4h1v1h-1zM37 5h1v1h-1zM39 5h1v1h-1zM38 6h1v1h-1zM42 0h1v1h-1zM43 0h1v1h-1zM44 0h1v1h-1zM45 0h1v1h-1zM46 0h1v1h-1zM42 1h1v1h-1zM42 2h1v1h-1zM42 3h1v1h-1zM43 3h1v1h-1zM44 3h1v1h-1zM45 3h1v1h-1zM42 4h1v1h-1zM42 5h1v1h-1zM42 6h1v1h-1zM43 6h1v1h-1zM44 6h1v1h-1zM45 6h1v1h-1zM46 6h1v1h-1zM48 0h1v1h-1zM49 0h1v1h-1zM50 0h1v1h-1zM51 0h1v1h-1zM48 1h1v1h-1zM52 1h1v1h-1zM48 2h1v1h-1zM52 2h1v1h-1zM48 3h1v1h-1zM49 3h1v1h-1zM50 3h1v1h-1zM51 3h1v1h-1zM48 4h1v1h-1zM50 4h1v1h-1zM48 5h1v1h-1zM51 5h1v1h-1zM48 6h1v1h-1zM52 6h1v1h-1z' fill='%23000'/%3E%3C/svg%3E");
+    --px-word-ready: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 35 7' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h1v1h-1zM1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM0 1h1v1h-1zM4 1h1v1h-1zM0 2h1v1h-1zM4 2h1v1h-1zM0 3h1v1h-1zM1 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM0 5h1v1h-1zM3 5h1v1h-1zM0 6h1v1h-1zM4 6h1v1h-1zM6 0h1v1h-1zM7 0h1v1h-1zM8 0h1v1h-1zM9 0h1v1h-1zM10 0h1v1h-1zM6 1h1v1h-1zM6 2h1v1h-1zM6 3h1v1h-1zM7 3h1v1h-1zM8 3h1v1h-1zM9 3h1v1h-1zM6 4h1v1h-1zM6 5h1v1h-1zM6 6h1v1h-1zM7 6h1v1h-1zM8 6h1v1h-1zM9 6h1v1h-1zM10 6h1v1h-1zM13 0h1v1h-1zM14 0h1v1h-1zM15 0h1v1h-1zM12 1h1v1h-1zM16 1h1v1h-1zM12 2h1v1h-1zM16 2h1v1h-1zM12 3h1v1h-1zM13 3h1v1h-1zM14 3h1v1h-1zM15 3h1v1h-1zM16 3h1v1h-1zM12 4h1v1h-1zM16 4h1v1h-1zM12 5h1v1h-1zM16 5h1v1h-1zM12 6h1v1h-1zM16 6h1v1h-1zM18 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM21 0h1v1h-1zM18 1h1v1h-1zM22 1h1v1h-1zM18 2h1v1h-1zM22 2h1v1h-1zM18 3h1v1h-1zM22 3h1v1h-1zM18 4h1v1h-1zM22 4h1v1h-1zM18 5h1v1h-1zM22 5h1v1h-1zM18 6h1v1h-1zM19 6h1v1h-1zM20 6h1v1h-1zM21 6h1v1h-1zM24 0h1v1h-1zM28 0h1v1h-1zM24 1h1v1h-1zM28 1h1v1h-1zM25 2h1v1h-1zM27 2h1v1h-1zM26 3h1v1h-1zM26 4h1v1h-1zM26 5h1v1h-1zM26 6h1v1h-1zM32 0h1v1h-1zM32 1h1v1h-1zM32 2h1v1h-1zM32 3h1v1h-1zM32 4h1v1h-1zM32 6h1v1h-1z' fill='%23000'/%3E%3C/svg%3E");
+}
+
+
+/* Пиксельная рамка: четыре полосы вокруг блока без углов - получаются "срезанные"
+   пиксельные углы. И жёсткая тень без размытия, сдвинутая вправо-вниз.
+   Рамка объявлена на самих элементах, а не на :root: тогда цвет рамки можно менять
+   у отдельного элемента через --px-line / --px-line-2 (выбор, наведение) */
+:root :is([data-slot], div.rounded-2xl, div.rounded-xl, div.rounded-lg, .driver-popover, [data-sonner-toast]) {
+    --px-frame: 0 -3px 0 0 var(--px-line), 0 3px 0 0 var(--px-line), -3px 0 0 0 var(--px-line), 3px 0 0 0 var(--px-line);
+    --px-frame-thin: 0 -2px 0 0 var(--px-line-2), 0 2px 0 0 var(--px-line-2), -2px 0 0 0 var(--px-line-2), 2px 0 0 0 var(--px-line-2);
+    --px-drop: 3px 6px 0 0 var(--px-shadow), 6px 3px 0 0 var(--px-shadow);
+}
+
+/* Отступ сверху у прокручиваемой области - иначе она обрезает верхнюю рамку первой панели */
+:root .content.overflow-y-auto {
+    padding-top: 4px;
+}
+
+
+/* =====================================================================
+   1. НОЧНОЙ АВТОМАТ (тёмная тема)
+   ===================================================================== */
+
+html.dark {
+    --px-sky-1: #0b0e24;
+    --px-sky-2: #1d2b53;
+    --px-sky-3: #3a2a5c;
+    --px-sky-4: #7e2553;
+    --px-panel: #1d2b53;          /* панели */
+    --px-panel-2: #0d1128;        /* "колодцы": поля, подложки */
+    --px-line: #fff1e8;           /* рамки */
+    --px-line-2: #5d6b9a;         /* тонкие рамки мелких карточек */
+    --px-shadow: #000000;
+    --px-text: #fff1e8;
+    --px-dim: #c2c3c7;
+    --px-hi: #ffec27;             /* курсор, выбор, основные кнопки */
+    --px-hi-ink: #000000;
+    --px-title-shadow: #7e2553;
+    --px-red: #ff004d;
+    --px-green: #00e436;
+    --px-orange: #ffa300;
+    --px-blue: #29adff;
+    --px-pink: #ff77a8;
+
+    /* Кнопка автомата */
+    --px-bezel-hi: #c2c3c7;
+    --px-bezel: #5f574f;
+    --px-dome-hi: #ff77a8;
+    --px-dome: #ff004d;
+    --px-dome-lo: #a3003a;
+    --px-dome-off-hi: #b04468;
+    --px-dome-off: #7e2553;
+    --px-dome-off-lo: #4a1530;
+    --px-lights: #ffec27;
+
+    --px-hills: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 24' shape-rendering='crispEdges' preserveAspectRatio='none'%3E%3Cpath d='M0 6h1v18h-1zM1 6h1v18h-1zM2 6h1v18h-1zM3 6h1v18h-1zM4 6h1v18h-1zM5 6h1v18h-1zM6 6h1v18h-1zM7 6h1v18h-1zM8 6h1v18h-1zM9 6h1v18h-1zM10 6h1v18h-1zM11 7h1v17h-1zM12 7h1v17h-1zM13 7h1v17h-1zM14 7h1v17h-1zM15 7h1v17h-1zM16 7h1v17h-1zM17 7h1v17h-1zM18 7h1v17h-1zM19 7h1v17h-1zM20 7h1v17h-1zM21 7h1v17h-1zM22 7h1v17h-1zM23 7h1v17h-1zM24 7h1v17h-1zM25 7h1v17h-1zM26 7h1v17h-1zM27 7h1v17h-1zM28 7h1v17h-1zM29 7h1v17h-1zM30 7h1v17h-1zM31 7h1v17h-1zM32 8h1v16h-1zM33 8h1v16h-1zM34 8h1v16h-1zM35 8h1v16h-1zM36 8h1v16h-1zM37 8h1v16h-1zM38 8h1v16h-1zM39 8h1v16h-1zM40 8h1v16h-1zM41 8h1v16h-1zM42 8h1v16h-1zM43 8h1v16h-1zM44 8h1v16h-1zM45 7h1v17h-1zM46 7h1v17h-1zM47 7h1v17h-1zM48 7h1v17h-1zM49 6h1v18h-1zM50 6h1v18h-1zM51 6h1v18h-1zM52 6h1v18h-1zM53 6h1v18h-1zM54 6h1v18h-1zM55 6h1v18h-1zM56 7h1v17h-1zM57 7h1v17h-1zM58 7h1v17h-1zM59 8h1v16h-1zM60 8h1v16h-1zM61 9h1v15h-1zM62 9h1v15h-1zM63 10h1v14h-1zM64 10h1v14h-1zM65 11h1v13h-1zM66 11h1v13h-1zM67 12h1v12h-1zM68 12h1v12h-1zM69 12h1v12h-1zM70 13h1v11h-1zM71 13h1v11h-1zM72 13h1v11h-1zM73 13h1v11h-1zM74 14h1v10h-1zM75 14h1v10h-1zM76 14h1v10h-1zM77 14h1v10h-1zM78 14h1v10h-1zM79 14h1v10h-1zM80 14h1v10h-1zM81 14h1v10h-1zM82 14h1v10h-1zM83 14h1v10h-1zM84 14h1v10h-1zM85 14h1v10h-1zM86 14h1v10h-1zM87 14h1v10h-1zM88 14h1v10h-1zM89 14h1v10h-1zM90 14h1v10h-1zM91 14h1v10h-1zM92 14h1v10h-1zM93 13h1v11h-1zM94 13h1v11h-1zM95 13h1v11h-1zM96 13h1v11h-1zM97 13h1v11h-1zM98 13h1v11h-1zM99 12h1v12h-1zM100 12h1v12h-1zM101 12h1v12h-1zM102 11h1v13h-1zM103 11h1v13h-1zM104 11h1v13h-1zM105 10h1v14h-1zM106 10h1v14h-1zM107 10h1v14h-1zM108 9h1v15h-1zM109 9h1v15h-1zM110 9h1v15h-1zM111 9h1v15h-1zM112 9h1v15h-1zM113 9h1v15h-1zM114 9h1v15h-1zM115 9h1v15h-1zM116 9h1v15h-1zM117 10h1v14h-1zM118 10h1v14h-1zM119 10h1v14h-1zM120 10h1v14h-1zM121 10h1v14h-1zM122 11h1v13h-1zM123 11h1v13h-1zM124 11h1v13h-1zM125 11h1v13h-1zM126 11h1v13h-1zM127 11h1v13h-1zM128 11h1v13h-1zM129 11h1v13h-1zM130 10h1v14h-1zM131 10h1v14h-1zM132 10h1v14h-1zM133 9h1v15h-1zM134 9h1v15h-1zM135 9h1v15h-1zM136 8h1v16h-1zM137 8h1v16h-1zM138 8h1v16h-1zM139 7h1v17h-1zM140 7h1v17h-1zM141 7h1v17h-1zM142 6h1v18h-1zM143 6h1v18h-1zM144 6h1v18h-1zM145 6h1v18h-1zM146 6h1v18h-1zM147 6h1v18h-1zM148 6h1v18h-1zM149 5h1v19h-1zM150 5h1v19h-1zM151 5h1v19h-1zM152 5h1v19h-1zM153 5h1v19h-1zM154 5h1v19h-1zM155 5h1v19h-1zM156 5h1v19h-1zM157 5h1v19h-1zM158 5h1v19h-1zM159 5h1v19h-1zM160 5h1v19h-1zM161 5h1v19h-1zM162 5h1v19h-1zM163 5h1v19h-1zM164 5h1v19h-1zM165 5h1v19h-1zM166 5h1v19h-1zM167 5h1v19h-1zM168 6h1v18h-1zM169 6h1v18h-1zM170 6h1v18h-1zM171 7h1v17h-1zM172 7h1v17h-1zM173 8h1v16h-1zM174 8h1v16h-1zM175 9h1v15h-1zM176 9h1v15h-1zM177 10h1v14h-1zM178 10h1v14h-1zM179 10h1v14h-1zM180 11h1v13h-1zM181 11h1v13h-1zM182 11h1v13h-1zM183 12h1v12h-1zM184 12h1v12h-1zM185 12h1v12h-1zM186 12h1v12h-1zM187 12h1v12h-1zM188 12h1v12h-1zM189 12h1v12h-1zM190 11h1v13h-1zM191 11h1v13h-1zM192 11h1v13h-1zM193 11h1v13h-1zM194 11h1v13h-1zM195 10h1v14h-1zM196 10h1v14h-1zM197 10h1v14h-1zM198 10h1v14h-1zM199 10h1v14h-1zM200 10h1v14h-1zM201 10h1v14h-1zM202 10h1v14h-1zM203 10h1v14h-1zM204 11h1v13h-1zM205 11h1v13h-1zM206 11h1v13h-1zM207 11h1v13h-1zM208 11h1v13h-1zM209 12h1v12h-1zM210 12h1v12h-1zM211 12h1v12h-1zM212 12h1v12h-1zM213 12h1v12h-1zM214 12h1v12h-1zM215 12h1v12h-1zM216 12h1v12h-1zM217 12h1v12h-1zM218 12h1v12h-1zM219 12h1v12h-1zM220 12h1v12h-1zM221 12h1v12h-1zM222 12h1v12h-1zM223 13h1v11h-1zM224 13h1v11h-1zM225 13h1v11h-1zM226 13h1v11h-1zM227 13h1v11h-1zM228 13h1v11h-1zM229 13h1v11h-1zM230 14h1v10h-1zM231 14h1v10h-1zM232 14h1v10h-1zM233 14h1v10h-1zM234 14h1v10h-1zM235 14h1v10h-1zM236 14h1v10h-1zM237 14h1v10h-1zM238 14h1v10h-1zM239 14h1v10h-1zM240 13h1v11h-1zM241 13h1v11h-1zM242 13h1v11h-1zM243 12h1v12h-1zM244 12h1v12h-1zM245 11h1v13h-1zM246 11h1v13h-1zM247 10h1v14h-1zM248 9h1v15h-1zM249 9h1v15h-1zM250 8h1v16h-1zM251 8h1v16h-1zM252 7h1v17h-1zM253 7h1v17h-1zM254 7h1v17h-1zM255 6h1v18h-1zM256 6h1v18h-1zM257 6h1v18h-1zM258 6h1v18h-1zM259 6h1v18h-1zM260 6h1v18h-1zM261 6h1v18h-1zM262 6h1v18h-1zM263 6h1v18h-1zM264 6h1v18h-1zM265 6h1v18h-1zM266 6h1v18h-1zM267 7h1v17h-1zM268 7h1v17h-1zM269 7h1v17h-1zM270 7h1v17h-1zM271 7h1v17h-1zM272 7h1v17h-1zM273 7h1v17h-1zM274 7h1v17h-1zM275 7h1v17h-1zM276 7h1v17h-1zM277 7h1v17h-1zM278 7h1v17h-1zM279 7h1v17h-1zM280 7h1v17h-1zM281 7h1v17h-1zM282 7h1v17h-1zM283 7h1v17h-1zM284 7h1v17h-1zM285 7h1v17h-1zM286 7h1v17h-1zM287 7h1v17h-1zM288 8h1v16h-1zM289 8h1v16h-1zM290 8h1v16h-1zM291 8h1v16h-1zM292 8h1v16h-1zM293 8h1v16h-1zM294 8h1v16h-1zM295 8h1v16h-1zM296 8h1v16h-1zM297 8h1v16h-1zM298 8h1v16h-1zM299 8h1v16h-1zM300 8h1v16h-1zM301 7h1v17h-1zM302 7h1v17h-1zM303 7h1v17h-1zM304 7h1v17h-1zM305 6h1v18h-1zM306 6h1v18h-1zM307 6h1v18h-1zM308 6h1v18h-1zM309 6h1v18h-1zM310 6h1v18h-1zM311 6h1v18h-1zM312 7h1v17h-1zM313 7h1v17h-1zM314 7h1v17h-1zM315 8h1v16h-1zM316 8h1v16h-1zM317 9h1v15h-1zM318 9h1v15h-1zM319 10h1v14h-1zM320 10h1v14h-1zM321 11h1v13h-1zM322 11h1v13h-1zM323 12h1v12h-1zM324 12h1v12h-1zM325 12h1v12h-1zM326 13h1v11h-1zM327 13h1v11h-1zM328 13h1v11h-1zM329 13h1v11h-1zM330 14h1v10h-1zM331 14h1v10h-1zM332 14h1v10h-1zM333 14h1v10h-1zM334 14h1v10h-1zM335 14h1v10h-1zM336 14h1v10h-1zM337 14h1v10h-1zM338 14h1v10h-1zM339 14h1v10h-1zM340 14h1v10h-1zM341 14h1v10h-1zM342 14h1v10h-1zM343 14h1v10h-1zM344 14h1v10h-1zM345 14h1v10h-1zM346 14h1v10h-1zM347 14h1v10h-1zM348 14h1v10h-1zM349 13h1v11h-1zM350 13h1v11h-1zM351 13h1v11h-1zM352 13h1v11h-1zM353 13h1v11h-1zM354 13h1v11h-1zM355 12h1v12h-1zM356 12h1v12h-1zM357 12h1v12h-1zM358 11h1v13h-1zM359 11h1v13h-1zM360 11h1v13h-1zM361 10h1v14h-1zM362 10h1v14h-1zM363 10h1v14h-1zM364 9h1v15h-1zM365 9h1v15h-1zM366 9h1v15h-1zM367 9h1v15h-1zM368 9h1v15h-1zM369 9h1v15h-1zM370 9h1v15h-1zM371 9h1v15h-1zM372 9h1v15h-1zM373 10h1v14h-1zM374 10h1v14h-1zM375 10h1v14h-1zM376 10h1v14h-1zM377 10h1v14h-1zM378 11h1v13h-1zM379 11h1v13h-1zM380 11h1v13h-1zM381 11h1v13h-1zM382 11h1v13h-1zM383 11h1v13h-1zM384 11h1v13h-1zM385 11h1v13h-1zM386 10h1v14h-1zM387 10h1v14h-1zM388 10h1v14h-1zM389 9h1v15h-1zM390 9h1v15h-1zM391 9h1v15h-1zM392 8h1v16h-1zM393 8h1v16h-1zM394 8h1v16h-1zM395 7h1v17h-1zM396 7h1v17h-1zM397 7h1v17h-1zM398 6h1v18h-1zM399 6h1v18h-1zM400 6h1v18h-1zM401 6h1v18h-1zM402 6h1v18h-1zM403 6h1v18h-1zM404 6h1v18h-1zM405 5h1v19h-1zM406 5h1v19h-1zM407 5h1v19h-1zM408 5h1v19h-1zM409 5h1v19h-1zM410 5h1v19h-1zM411 5h1v19h-1zM412 5h1v19h-1zM413 5h1v19h-1zM414 5h1v19h-1zM415 5h1v19h-1zM416 5h1v19h-1zM417 5h1v19h-1zM418 5h1v19h-1zM419 5h1v19h-1zM420 5h1v19h-1zM421 5h1v19h-1zM422 5h1v19h-1zM423 5h1v19h-1zM424 6h1v18h-1zM425 6h1v18h-1zM426 6h1v18h-1zM427 7h1v17h-1zM428 7h1v17h-1zM429 8h1v16h-1zM430 8h1v16h-1zM431 9h1v15h-1zM432 9h1v15h-1zM433 10h1v14h-1zM434 10h1v14h-1zM435 10h1v14h-1zM436 11h1v13h-1zM437 11h1v13h-1zM438 11h1v13h-1zM439 12h1v12h-1zM440 12h1v12h-1zM441 12h1v12h-1zM442 12h1v12h-1zM443 12h1v12h-1zM444 12h1v12h-1zM445 12h1v12h-1zM446 11h1v13h-1zM447 11h1v13h-1zM448 11h1v13h-1zM449 11h1v13h-1zM450 11h1v13h-1zM451 10h1v14h-1zM452 10h1v14h-1zM453 10h1v14h-1zM454 10h1v14h-1zM455 10h1v14h-1zM456 10h1v14h-1zM457 10h1v14h-1zM458 10h1v14h-1zM459 10h1v14h-1zM460 11h1v13h-1zM461 11h1v13h-1zM462 11h1v13h-1zM463 11h1v13h-1zM464 11h1v13h-1zM465 12h1v12h-1zM466 12h1v12h-1zM467 12h1v12h-1zM468 12h1v12h-1zM469 12h1v12h-1zM470 12h1v12h-1zM471 12h1v12h-1zM472 12h1v12h-1zM473 12h1v12h-1zM474 12h1v12h-1zM475 12h1v12h-1zM476 12h1v12h-1zM477 12h1v12h-1zM478 12h1v12h-1zM479 13h1v11h-1zM480 13h1v11h-1zM481 13h1v11h-1zM482 13h1v11h-1zM483 13h1v11h-1zM484 13h1v11h-1zM485 13h1v11h-1zM486 14h1v10h-1zM487 14h1v10h-1zM488 14h1v10h-1zM489 14h1v10h-1zM490 14h1v10h-1zM491 14h1v10h-1zM492 14h1v10h-1zM493 14h1v10h-1zM494 14h1v10h-1zM495 14h1v10h-1zM496 13h1v11h-1zM497 13h1v11h-1zM498 13h1v11h-1zM499 12h1v12h-1zM500 12h1v12h-1zM501 11h1v13h-1zM502 11h1v13h-1zM503 10h1v14h-1zM504 9h1v15h-1zM505 9h1v15h-1zM506 8h1v16h-1zM507 8h1v16h-1zM508 7h1v17h-1zM509 7h1v17h-1zM510 7h1v17h-1zM511 6h1v18h-1z' fill='%2329366f'/%3E%3Cpath d='M0 13h1v11h-1zM1 13h1v11h-1zM2 13h1v11h-1zM3 13h1v11h-1zM4 13h1v11h-1zM5 13h1v11h-1zM6 13h1v11h-1zM7 14h1v10h-1zM8 14h1v10h-1zM9 14h1v10h-1zM10 14h1v10h-1zM11 14h1v10h-1zM12 14h1v10h-1zM13 15h1v9h-1zM14 15h1v9h-1zM15 15h1v9h-1zM16 15h1v9h-1zM17 16h1v8h-1zM18 16h1v8h-1zM19 17h1v7h-1zM20 17h1v7h-1zM21 18h1v6h-1zM22 18h1v6h-1zM23 19h1v5h-1zM24 19h1v5h-1zM25 19h1v5h-1zM26 20h1v4h-1zM27 20h1v4h-1zM28 20h1v4h-1zM29 20h1v4h-1zM30 20h1v4h-1zM31 19h1v5h-1zM32 19h1v5h-1zM33 19h1v5h-1zM34 19h1v5h-1zM35 18h1v6h-1zM36 18h1v6h-1zM37 18h1v6h-1zM38 18h1v6h-1zM39 18h1v6h-1zM40 18h1v6h-1zM41 18h1v6h-1zM42 18h1v6h-1zM43 18h1v6h-1zM44 18h1v6h-1zM45 18h1v6h-1zM46 18h1v6h-1zM47 18h1v6h-1zM48 18h1v6h-1zM49 18h1v6h-1zM50 18h1v6h-1zM51 18h1v6h-1zM52 18h1v6h-1zM53 18h1v6h-1zM54 18h1v6h-1zM55 18h1v6h-1zM56 18h1v6h-1zM57 18h1v6h-1zM58 18h1v6h-1zM59 18h1v6h-1zM60 18h1v6h-1zM61 18h1v6h-1zM62 18h1v6h-1zM63 18h1v6h-1zM64 18h1v6h-1zM65 18h1v6h-1zM66 17h1v7h-1zM67 17h1v7h-1zM68 17h1v7h-1zM69 16h1v8h-1zM70 16h1v8h-1zM71 15h1v9h-1zM72 14h1v10h-1zM73 14h1v10h-1zM74 13h1v11h-1zM75 13h1v11h-1zM76 13h1v11h-1zM77 12h1v12h-1zM78 12h1v12h-1zM79 12h1v12h-1zM80 12h1v12h-1zM81 12h1v12h-1zM82 13h1v11h-1zM83 13h1v11h-1zM84 13h1v11h-1zM85 13h1v11h-1zM86 14h1v10h-1zM87 14h1v10h-1zM88 14h1v10h-1zM89 14h1v10h-1zM90 15h1v9h-1zM91 15h1v9h-1zM92 15h1v9h-1zM93 15h1v9h-1zM94 15h1v9h-1zM95 16h1v8h-1zM96 16h1v8h-1zM97 16h1v8h-1zM98 16h1v8h-1zM99 16h1v8h-1zM100 17h1v7h-1zM101 17h1v7h-1zM102 17h1v7h-1zM103 17h1v7h-1zM104 17h1v7h-1zM105 18h1v6h-1zM106 18h1v6h-1zM107 17h1v7h-1zM108 17h1v7h-1zM109 17h1v7h-1zM110 17h1v7h-1zM111 17h1v7h-1zM112 17h1v7h-1zM113 17h1v7h-1zM114 16h1v8h-1zM115 16h1v8h-1zM116 17h1v7h-1zM117 17h1v7h-1zM118 17h1v7h-1zM119 17h1v7h-1zM120 17h1v7h-1zM121 18h1v6h-1zM122 18h1v6h-1zM123 19h1v5h-1zM124 19h1v5h-1zM125 19h1v5h-1zM126 20h1v4h-1zM127 20h1v4h-1zM128 20h1v4h-1zM129 20h1v4h-1zM130 20h1v4h-1zM131 20h1v4h-1zM132 20h1v4h-1zM133 20h1v4h-1zM134 20h1v4h-1zM135 19h1v5h-1zM136 19h1v5h-1zM137 19h1v5h-1zM138 19h1v5h-1zM139 19h1v5h-1zM140 19h1v5h-1zM141 18h1v6h-1zM142 18h1v6h-1zM143 18h1v6h-1zM144 18h1v6h-1zM145 17h1v7h-1zM146 17h1v7h-1zM147 16h1v8h-1zM148 16h1v8h-1zM149 15h1v9h-1zM150 15h1v9h-1zM151 14h1v10h-1zM152 14h1v10h-1zM153 14h1v10h-1zM154 13h1v11h-1zM155 13h1v11h-1zM156 13h1v11h-1zM157 13h1v11h-1zM158 13h1v11h-1zM159 14h1v10h-1zM160 14h1v10h-1zM161 14h1v10h-1zM162 14h1v10h-1zM163 15h1v9h-1zM164 15h1v9h-1zM165 15h1v9h-1zM166 15h1v9h-1zM167 15h1v9h-1zM168 15h1v9h-1zM169 15h1v9h-1zM170 15h1v9h-1zM171 15h1v9h-1zM172 15h1v9h-1zM173 15h1v9h-1zM174 15h1v9h-1zM175 15h1v9h-1zM176 15h1v9h-1zM177 15h1v9h-1zM178 15h1v9h-1zM179 15h1v9h-1zM180 15h1v9h-1zM181 15h1v9h-1zM182 15h1v9h-1zM183 15h1v9h-1zM184 15h1v9h-1zM185 15h1v9h-1zM186 15h1v9h-1zM187 15h1v9h-1zM188 15h1v9h-1zM189 15h1v9h-1zM190 15h1v9h-1zM191 15h1v9h-1zM192 15h1v9h-1zM193 15h1v9h-1zM194 16h1v8h-1zM195 16h1v8h-1zM196 16h1v8h-1zM197 17h1v7h-1zM198 17h1v7h-1zM199 18h1v6h-1zM200 19h1v5h-1zM201 19h1v5h-1zM202 20h1v4h-1zM203 20h1v4h-1zM204 20h1v4h-1zM205 21h1v3h-1zM206 21h1v3h-1zM207 21h1v3h-1zM208 21h1v3h-1zM209 21h1v3h-1zM210 20h1v4h-1zM211 20h1v4h-1zM212 20h1v4h-1zM213 20h1v4h-1zM214 19h1v5h-1zM215 19h1v5h-1zM216 19h1v5h-1zM217 19h1v5h-1zM218 18h1v6h-1zM219 18h1v6h-1zM220 18h1v6h-1zM221 18h1v6h-1zM222 18h1v6h-1zM223 17h1v7h-1zM224 17h1v7h-1zM225 17h1v7h-1zM226 17h1v7h-1zM227 17h1v7h-1zM228 16h1v8h-1zM229 16h1v8h-1zM230 16h1v8h-1zM231 16h1v8h-1zM232 16h1v8h-1zM233 15h1v9h-1zM234 15h1v9h-1zM235 16h1v8h-1zM236 16h1v8h-1zM237 16h1v8h-1zM238 16h1v8h-1zM239 16h1v8h-1zM240 16h1v8h-1zM241 16h1v8h-1zM242 17h1v7h-1zM243 17h1v7h-1zM244 16h1v8h-1zM245 16h1v8h-1zM246 16h1v8h-1zM247 16h1v8h-1zM248 16h1v8h-1zM249 15h1v9h-1zM250 15h1v9h-1zM251 14h1v10h-1zM252 14h1v10h-1zM253 14h1v10h-1zM254 13h1v11h-1zM255 13h1v11h-1zM256 13h1v11h-1zM257 13h1v11h-1zM258 13h1v11h-1zM259 13h1v11h-1zM260 13h1v11h-1zM261 13h1v11h-1zM262 13h1v11h-1zM263 14h1v10h-1zM264 14h1v10h-1zM265 14h1v10h-1zM266 14h1v10h-1zM267 14h1v10h-1zM268 14h1v10h-1zM269 15h1v9h-1zM270 15h1v9h-1zM271 15h1v9h-1zM272 15h1v9h-1zM273 16h1v8h-1zM274 16h1v8h-1zM275 17h1v7h-1zM276 17h1v7h-1zM277 18h1v6h-1zM278 18h1v6h-1zM279 19h1v5h-1zM280 19h1v5h-1zM281 19h1v5h-1zM282 20h1v4h-1zM283 20h1v4h-1zM284 20h1v4h-1zM285 20h1v4h-1zM286 20h1v4h-1zM287 19h1v5h-1zM288 19h1v5h-1zM289 19h1v5h-1zM290 19h1v5h-1zM291 18h1v6h-1zM292 18h1v6h-1zM293 18h1v6h-1zM294 18h1v6h-1zM295 18h1v6h-1zM296 18h1v6h-1zM297 18h1v6h-1zM298 18h1v6h-1zM299 18h1v6h-1zM300 18h1v6h-1zM301 18h1v6h-1zM302 18h1v6h-1zM303 18h1v6h-1zM304 18h1v6h-1zM305 18h1v6h-1zM306 18h1v6h-1zM307 18h1v6h-1zM308 18h1v6h-1zM309 18h1v6h-1zM310 18h1v6h-1zM311 18h1v6h-1zM312 18h1v6h-1zM313 18h1v6h-1zM314 18h1v6h-1zM315 18h1v6h-1zM316 18h1v6h-1zM317 18h1v6h-1zM318 18h1v6h-1zM319 18h1v6h-1zM320 18h1v6h-1zM321 18h1v6h-1zM322 17h1v7h-1zM323 17h1v7h-1zM324 17h1v7h-1zM325 16h1v8h-1zM326 16h1v8h-1zM327 15h1v9h-1zM328 14h1v10h-1zM329 14h1v10h-1zM330 13h1v11h-1zM331 13h1v11h-1zM332 13h1v11h-1zM333 12h1v12h-1zM334 12h1v12h-1zM335 12h1v12h-1zM336 12h1v12h-1zM337 12h1v12h-1zM338 13h1v11h-1zM339 13h1v11h-1zM340 13h1v11h-1zM341 13h1v11h-1zM342 14h1v10h-1zM343 14h1v10h-1zM344 14h1v10h-1zM345 14h1v10h-1zM346 15h1v9h-1zM347 15h1v9h-1zM348 15h1v9h-1zM349 15h1v9h-1zM350 15h1v9h-1zM351 16h1v8h-1zM352 16h1v8h-1zM353 16h1v8h-1zM354 16h1v8h-1zM355 16h1v8h-1zM356 17h1v7h-1zM357 17h1v7h-1zM358 17h1v7h-1zM359 17h1v7h-1zM360 17h1v7h-1zM361 18h1v6h-1zM362 18h1v6h-1zM363 17h1v7h-1zM364 17h1v7h-1zM365 17h1v7h-1zM366 17h1v7h-1zM367 17h1v7h-1zM368 17h1v7h-1zM369 17h1v7h-1zM370 16h1v8h-1zM371 16h1v8h-1zM372 17h1v7h-1zM373 17h1v7h-1zM374 17h1v7h-1zM375 17h1v7h-1zM376 17h1v7h-1zM377 18h1v6h-1zM378 18h1v6h-1zM379 19h1v5h-1zM380 19h1v5h-1zM381 19h1v5h-1zM382 20h1v4h-1zM383 20h1v4h-1zM384 20h1v4h-1zM385 20h1v4h-1zM386 20h1v4h-1zM387 20h1v4h-1zM388 20h1v4h-1zM389 20h1v4h-1zM390 20h1v4h-1zM391 19h1v5h-1zM392 19h1v5h-1zM393 19h1v5h-1zM394 19h1v5h-1zM395 19h1v5h-1zM396 19h1v5h-1zM397 18h1v6h-1zM398 18h1v6h-1zM399 18h1v6h-1zM400 18h1v6h-1zM401 17h1v7h-1zM402 17h1v7h-1zM403 16h1v8h-1zM404 16h1v8h-1zM405 15h1v9h-1zM406 15h1v9h-1zM407 14h1v10h-1zM408 14h1v10h-1zM409 14h1v10h-1zM410 13h1v11h-1zM411 13h1v11h-1zM412 13h1v11h-1zM413 13h1v11h-1zM414 13h1v11h-1zM415 14h1v10h-1zM416 14h1v10h-1zM417 14h1v10h-1zM418 14h1v10h-1zM419 15h1v9h-1zM420 15h1v9h-1zM421 15h1v9h-1zM422 15h1v9h-1zM423 15h1v9h-1zM424 15h1v9h-1zM425 15h1v9h-1zM426 15h1v9h-1zM427 15h1v9h-1zM428 15h1v9h-1zM429 15h1v9h-1zM430 15h1v9h-1zM431 15h1v9h-1zM432 15h1v9h-1zM433 15h1v9h-1zM434 15h1v9h-1zM435 15h1v9h-1zM436 15h1v9h-1zM437 15h1v9h-1zM438 15h1v9h-1zM439 15h1v9h-1zM440 15h1v9h-1zM441 15h1v9h-1zM442 15h1v9h-1zM443 15h1v9h-1zM444 15h1v9h-1zM445 15h1v9h-1zM446 15h1v9h-1zM447 15h1v9h-1zM448 15h1v9h-1zM449 15h1v9h-1zM450 16h1v8h-1zM451 16h1v8h-1zM452 16h1v8h-1zM453 17h1v7h-1zM454 17h1v7h-1zM455 18h1v6h-1zM456 19h1v5h-1zM457 19h1v5h-1zM458 20h1v4h-1zM459 20h1v4h-1zM460 20h1v4h-1zM461 21h1v3h-1zM462 21h1v3h-1zM463 21h1v3h-1zM464 21h1v3h-1zM465 21h1v3h-1zM466 20h1v4h-1zM467 20h1v4h-1zM468 20h1v4h-1zM469 20h1v4h-1zM470 19h1v5h-1zM471 19h1v5h-1zM472 19h1v5h-1zM473 19h1v5h-1zM474 18h1v6h-1zM475 18h1v6h-1zM476 18h1v6h-1zM477 18h1v6h-1zM478 18h1v6h-1zM479 17h1v7h-1zM480 17h1v7h-1zM481 17h1v7h-1zM482 17h1v7h-1zM483 17h1v7h-1zM484 16h1v8h-1zM485 16h1v8h-1zM486 16h1v8h-1zM487 16h1v8h-1zM488 16h1v8h-1zM489 15h1v9h-1zM490 15h1v9h-1zM491 16h1v8h-1zM492 16h1v8h-1zM493 16h1v8h-1zM494 16h1v8h-1zM495 16h1v8h-1zM496 16h1v8h-1zM497 16h1v8h-1zM498 17h1v7h-1zM499 17h1v7h-1zM500 16h1v8h-1zM501 16h1v8h-1zM502 16h1v8h-1zM503 16h1v8h-1zM504 16h1v8h-1zM505 15h1v9h-1zM506 15h1v9h-1zM507 14h1v10h-1zM508 14h1v10h-1zM509 14h1v10h-1zM510 13h1v11h-1zM511 13h1v11h-1z' fill='%23008751'/%3E%3Cpath d='M11 12h1v2h-1zM10 10h3v2h-3zM43 16h1v2h-1zM42 14h3v2h-3zM75 11h1v2h-1zM74 9h3v2h-3zM107 15h1v2h-1zM106 13h3v2h-3zM139 17h1v2h-1zM138 15h3v2h-3zM171 13h1v2h-1zM170 11h3v2h-3zM203 18h1v2h-1zM202 16h3v2h-3zM235 14h1v2h-1zM234 12h3v2h-3zM267 12h1v2h-1zM266 10h3v2h-3zM299 16h1v2h-1zM298 14h3v2h-3zM331 11h1v2h-1zM330 9h3v2h-3zM363 15h1v2h-1zM362 13h3v2h-3zM395 17h1v2h-1zM394 15h3v2h-3zM427 13h1v2h-1zM426 11h3v2h-3zM459 18h1v2h-1zM458 16h3v2h-3zM491 14h1v2h-1zM490 12h3v2h-3z' fill='%2300e436'/%3E%3C/svg%3E");
+    --px-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='32' viewBox='0 0 24 32' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='2' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='4' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='4' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='4' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='6' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='6' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='6' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='8' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='8' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='8' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='6' y='8' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='8' y='8' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='10' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='10' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='10' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='6' y='10' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='8' y='10' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='10' y='10' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='12' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='12' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='12' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='6' y='12' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='8' y='12' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='10' y='12' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='12' y='12' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='14' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='14' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='14' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='6' y='14' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='8' y='14' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='10' y='14' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='12' y='14' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='14' y='14' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='16' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='16' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='16' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='6' y='16' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='8' y='16' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='10' y='16' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='12' y='16' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='14' y='16' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='16' y='16' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='18' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='18' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='6' y='18' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='8' y='18' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='10' y='18' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='12' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='14' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='16' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='18' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='20' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='20' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='6' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='20' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='10' y='20' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='12' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='22' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='4' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='22' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='12' y='22' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='14' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='24' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='12' y='24' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='14' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='26' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='14' y='26' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='16' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='28' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='28' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='14' y='28' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='16' y='28' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='30' width='2' height='2' fill='%23000'/%3E%3Crect x='14' y='30' width='2' height='2' fill='%23000'/%3E%3C/svg%3E");
+    --px-cursor-hot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='32' viewBox='0 0 24 32' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='2' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='4' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='4' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='4' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='6' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='6' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='6' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='8' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='8' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='8' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='6' y='8' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='8' y='8' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='10' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='10' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='10' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='6' y='10' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='8' y='10' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='10' y='10' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='12' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='12' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='12' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='6' y='12' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='8' y='12' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='10' y='12' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='12' y='12' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='14' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='14' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='14' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='6' y='14' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='8' y='14' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='10' y='14' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='12' y='14' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='14' y='14' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='16' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='16' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='16' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='6' y='16' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='8' y='16' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='10' y='16' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='12' y='16' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='14' y='16' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='16' y='16' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='18' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='18' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='6' y='18' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='8' y='18' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='10' y='18' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='12' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='14' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='16' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='18' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='20' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='20' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='6' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='20' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='10' y='20' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='12' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='22' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='4' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='22' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='12' y='22' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='14' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='24' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='12' y='24' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='14' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='26' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='14' y='26' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='16' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='28' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='28' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='14' y='28' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='16' y='28' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='30' width='2' height='2' fill='%23000'/%3E%3Crect x='14' y='30' width='2' height='2' fill='%23000'/%3E%3C/svg%3E");
+
+    --background: #0b0e24 !important;
+    --foreground: #fff1e8 !important;
+    --card: #1d2b53 !important;
+    --card-foreground: #fff1e8 !important;
+    --popover: #0d1128 !important;
+    --popover-foreground: #fff1e8 !important;
+    --primary: #ffec27 !important;
+    --primary-foreground: #000000 !important;
+    --secondary: #0d1128 !important;
+    --secondary-foreground: #fff1e8 !important;
+    --muted: #0d1128 !important;
+    --muted-foreground: #c2c3c7 !important;
+    --accent: #29366f !important;
+    --accent-foreground: #fff1e8 !important;
+    --border: #5d6b9a !important;
+    --input: #5d6b9a !important;
+    --ring: #ffec27 !important;
+    --stroke: #fff1e8 !important;
+    --destructive: #ff3b6b !important;
+    --success: #00e436 !important;
+    --warning: #ffa300 !important;
+
+    --stroke-power-on: #ffec27 !important;
+    --gradient-start-power-on: #00e436 !important;
+    --gradient-end-power-on: #29adff !important;
+    --stroke-power-off: #5f574f !important;
+    --gradient-start-power-off: #7e2553 !important;
+    --gradient-end-power-off: #4a1530 !important;
+
+    --profile-active: #29366f !important;
+    --stroke-profile-active: #ffec27 !important;
+    --profile-inactive: #1d2b53 !important;
+    --stroke-profile-inactive: #fff1e8 !important;
+
+    --chart-1: #29adff !important;
+    --chart-2: #ffec27 !important;
+    --chart-3: #00e436 !important;
+    --chart-4: #ff77a8 !important;
+    --chart-5: #ffa300 !important;
+
+    --sidebar: #1d2b53 !important;
+    --sidebar-foreground: #fff1e8 !important;
+    --sidebar-primary: #ffec27 !important;
+    --sidebar-primary-foreground: #000000 !important;
+    --sidebar-accent: #29366f !important;
+    --sidebar-accent-foreground: #fff1e8 !important;
+    --sidebar-border: #fff1e8 !important;
+    --sidebar-ring: #ffec27 !important;
+}
+
+
+/* =====================================================================
+   2. GAME BOY (светлая тема) - четыре оттенка зелёного экрана DMG
+   ===================================================================== */
+
+html:not(.dark) {
+    --px-sky-1: #9bbc0f;
+    --px-sky-2: #9bbc0f;
+    --px-sky-3: #8bac0f;
+    --px-sky-4: #8bac0f;
+    --px-panel: #9bbc0f;
+    --px-panel-2: #8bac0f;
+    --px-line: #0f380f;
+    --px-line-2: #306230;
+    --px-shadow: #306230;
+    --px-text: #0f380f;
+    --px-dim: #1a441b;            /* темнее штатного #306230: иначе мелкий текст не читается */
+    --px-hi: #0f380f;             /* на Game Boy выбор - это инверсия */
+    --px-hi-ink: #9bbc0f;
+    --px-title-shadow: #8bac0f;
+    --px-red: #0f380f;
+    --px-green: #0f380f;
+    --px-orange: #306230;
+    --px-blue: #306230;
+    --px-pink: #306230;
+
+    --px-bezel-hi: #8bac0f;
+    --px-bezel: #306230;
+    --px-dome-hi: #9bbc0f;
+    --px-dome: #8bac0f;
+    --px-dome-lo: #306230;
+    --px-dome-off-hi: #8bac0f;
+    --px-dome-off: #306230;
+    --px-dome-off-lo: #0f380f;
+    --px-lights: #0f380f;
+
+    --px-hills: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 24' shape-rendering='crispEdges' preserveAspectRatio='none'%3E%3Cpath d='M0 6h1v18h-1zM1 6h1v18h-1zM2 6h1v18h-1zM3 6h1v18h-1zM4 6h1v18h-1zM5 6h1v18h-1zM6 6h1v18h-1zM7 6h1v18h-1zM8 6h1v18h-1zM9 6h1v18h-1zM10 6h1v18h-1zM11 7h1v17h-1zM12 7h1v17h-1zM13 7h1v17h-1zM14 7h1v17h-1zM15 7h1v17h-1zM16 7h1v17h-1zM17 7h1v17h-1zM18 7h1v17h-1zM19 7h1v17h-1zM20 7h1v17h-1zM21 7h1v17h-1zM22 7h1v17h-1zM23 7h1v17h-1zM24 7h1v17h-1zM25 7h1v17h-1zM26 7h1v17h-1zM27 7h1v17h-1zM28 7h1v17h-1zM29 7h1v17h-1zM30 7h1v17h-1zM31 7h1v17h-1zM32 8h1v16h-1zM33 8h1v16h-1zM34 8h1v16h-1zM35 8h1v16h-1zM36 8h1v16h-1zM37 8h1v16h-1zM38 8h1v16h-1zM39 8h1v16h-1zM40 8h1v16h-1zM41 8h1v16h-1zM42 8h1v16h-1zM43 8h1v16h-1zM44 8h1v16h-1zM45 7h1v17h-1zM46 7h1v17h-1zM47 7h1v17h-1zM48 7h1v17h-1zM49 6h1v18h-1zM50 6h1v18h-1zM51 6h1v18h-1zM52 6h1v18h-1zM53 6h1v18h-1zM54 6h1v18h-1zM55 6h1v18h-1zM56 7h1v17h-1zM57 7h1v17h-1zM58 7h1v17h-1zM59 8h1v16h-1zM60 8h1v16h-1zM61 9h1v15h-1zM62 9h1v15h-1zM63 10h1v14h-1zM64 10h1v14h-1zM65 11h1v13h-1zM66 11h1v13h-1zM67 12h1v12h-1zM68 12h1v12h-1zM69 12h1v12h-1zM70 13h1v11h-1zM71 13h1v11h-1zM72 13h1v11h-1zM73 13h1v11h-1zM74 14h1v10h-1zM75 14h1v10h-1zM76 14h1v10h-1zM77 14h1v10h-1zM78 14h1v10h-1zM79 14h1v10h-1zM80 14h1v10h-1zM81 14h1v10h-1zM82 14h1v10h-1zM83 14h1v10h-1zM84 14h1v10h-1zM85 14h1v10h-1zM86 14h1v10h-1zM87 14h1v10h-1zM88 14h1v10h-1zM89 14h1v10h-1zM90 14h1v10h-1zM91 14h1v10h-1zM92 14h1v10h-1zM93 13h1v11h-1zM94 13h1v11h-1zM95 13h1v11h-1zM96 13h1v11h-1zM97 13h1v11h-1zM98 13h1v11h-1zM99 12h1v12h-1zM100 12h1v12h-1zM101 12h1v12h-1zM102 11h1v13h-1zM103 11h1v13h-1zM104 11h1v13h-1zM105 10h1v14h-1zM106 10h1v14h-1zM107 10h1v14h-1zM108 9h1v15h-1zM109 9h1v15h-1zM110 9h1v15h-1zM111 9h1v15h-1zM112 9h1v15h-1zM113 9h1v15h-1zM114 9h1v15h-1zM115 9h1v15h-1zM116 9h1v15h-1zM117 10h1v14h-1zM118 10h1v14h-1zM119 10h1v14h-1zM120 10h1v14h-1zM121 10h1v14h-1zM122 11h1v13h-1zM123 11h1v13h-1zM124 11h1v13h-1zM125 11h1v13h-1zM126 11h1v13h-1zM127 11h1v13h-1zM128 11h1v13h-1zM129 11h1v13h-1zM130 10h1v14h-1zM131 10h1v14h-1zM132 10h1v14h-1zM133 9h1v15h-1zM134 9h1v15h-1zM135 9h1v15h-1zM136 8h1v16h-1zM137 8h1v16h-1zM138 8h1v16h-1zM139 7h1v17h-1zM140 7h1v17h-1zM141 7h1v17h-1zM142 6h1v18h-1zM143 6h1v18h-1zM144 6h1v18h-1zM145 6h1v18h-1zM146 6h1v18h-1zM147 6h1v18h-1zM148 6h1v18h-1zM149 5h1v19h-1zM150 5h1v19h-1zM151 5h1v19h-1zM152 5h1v19h-1zM153 5h1v19h-1zM154 5h1v19h-1zM155 5h1v19h-1zM156 5h1v19h-1zM157 5h1v19h-1zM158 5h1v19h-1zM159 5h1v19h-1zM160 5h1v19h-1zM161 5h1v19h-1zM162 5h1v19h-1zM163 5h1v19h-1zM164 5h1v19h-1zM165 5h1v19h-1zM166 5h1v19h-1zM167 5h1v19h-1zM168 6h1v18h-1zM169 6h1v18h-1zM170 6h1v18h-1zM171 7h1v17h-1zM172 7h1v17h-1zM173 8h1v16h-1zM174 8h1v16h-1zM175 9h1v15h-1zM176 9h1v15h-1zM177 10h1v14h-1zM178 10h1v14h-1zM179 10h1v14h-1zM180 11h1v13h-1zM181 11h1v13h-1zM182 11h1v13h-1zM183 12h1v12h-1zM184 12h1v12h-1zM185 12h1v12h-1zM186 12h1v12h-1zM187 12h1v12h-1zM188 12h1v12h-1zM189 12h1v12h-1zM190 11h1v13h-1zM191 11h1v13h-1zM192 11h1v13h-1zM193 11h1v13h-1zM194 11h1v13h-1zM195 10h1v14h-1zM196 10h1v14h-1zM197 10h1v14h-1zM198 10h1v14h-1zM199 10h1v14h-1zM200 10h1v14h-1zM201 10h1v14h-1zM202 10h1v14h-1zM203 10h1v14h-1zM204 11h1v13h-1zM205 11h1v13h-1zM206 11h1v13h-1zM207 11h1v13h-1zM208 11h1v13h-1zM209 12h1v12h-1zM210 12h1v12h-1zM211 12h1v12h-1zM212 12h1v12h-1zM213 12h1v12h-1zM214 12h1v12h-1zM215 12h1v12h-1zM216 12h1v12h-1zM217 12h1v12h-1zM218 12h1v12h-1zM219 12h1v12h-1zM220 12h1v12h-1zM221 12h1v12h-1zM222 12h1v12h-1zM223 13h1v11h-1zM224 13h1v11h-1zM225 13h1v11h-1zM226 13h1v11h-1zM227 13h1v11h-1zM228 13h1v11h-1zM229 13h1v11h-1zM230 14h1v10h-1zM231 14h1v10h-1zM232 14h1v10h-1zM233 14h1v10h-1zM234 14h1v10h-1zM235 14h1v10h-1zM236 14h1v10h-1zM237 14h1v10h-1zM238 14h1v10h-1zM239 14h1v10h-1zM240 13h1v11h-1zM241 13h1v11h-1zM242 13h1v11h-1zM243 12h1v12h-1zM244 12h1v12h-1zM245 11h1v13h-1zM246 11h1v13h-1zM247 10h1v14h-1zM248 9h1v15h-1zM249 9h1v15h-1zM250 8h1v16h-1zM251 8h1v16h-1zM252 7h1v17h-1zM253 7h1v17h-1zM254 7h1v17h-1zM255 6h1v18h-1zM256 6h1v18h-1zM257 6h1v18h-1zM258 6h1v18h-1zM259 6h1v18h-1zM260 6h1v18h-1zM261 6h1v18h-1zM262 6h1v18h-1zM263 6h1v18h-1zM264 6h1v18h-1zM265 6h1v18h-1zM266 6h1v18h-1zM267 7h1v17h-1zM268 7h1v17h-1zM269 7h1v17h-1zM270 7h1v17h-1zM271 7h1v17h-1zM272 7h1v17h-1zM273 7h1v17h-1zM274 7h1v17h-1zM275 7h1v17h-1zM276 7h1v17h-1zM277 7h1v17h-1zM278 7h1v17h-1zM279 7h1v17h-1zM280 7h1v17h-1zM281 7h1v17h-1zM282 7h1v17h-1zM283 7h1v17h-1zM284 7h1v17h-1zM285 7h1v17h-1zM286 7h1v17h-1zM287 7h1v17h-1zM288 8h1v16h-1zM289 8h1v16h-1zM290 8h1v16h-1zM291 8h1v16h-1zM292 8h1v16h-1zM293 8h1v16h-1zM294 8h1v16h-1zM295 8h1v16h-1zM296 8h1v16h-1zM297 8h1v16h-1zM298 8h1v16h-1zM299 8h1v16h-1zM300 8h1v16h-1zM301 7h1v17h-1zM302 7h1v17h-1zM303 7h1v17h-1zM304 7h1v17h-1zM305 6h1v18h-1zM306 6h1v18h-1zM307 6h1v18h-1zM308 6h1v18h-1zM309 6h1v18h-1zM310 6h1v18h-1zM311 6h1v18h-1zM312 7h1v17h-1zM313 7h1v17h-1zM314 7h1v17h-1zM315 8h1v16h-1zM316 8h1v16h-1zM317 9h1v15h-1zM318 9h1v15h-1zM319 10h1v14h-1zM320 10h1v14h-1zM321 11h1v13h-1zM322 11h1v13h-1zM323 12h1v12h-1zM324 12h1v12h-1zM325 12h1v12h-1zM326 13h1v11h-1zM327 13h1v11h-1zM328 13h1v11h-1zM329 13h1v11h-1zM330 14h1v10h-1zM331 14h1v10h-1zM332 14h1v10h-1zM333 14h1v10h-1zM334 14h1v10h-1zM335 14h1v10h-1zM336 14h1v10h-1zM337 14h1v10h-1zM338 14h1v10h-1zM339 14h1v10h-1zM340 14h1v10h-1zM341 14h1v10h-1zM342 14h1v10h-1zM343 14h1v10h-1zM344 14h1v10h-1zM345 14h1v10h-1zM346 14h1v10h-1zM347 14h1v10h-1zM348 14h1v10h-1zM349 13h1v11h-1zM350 13h1v11h-1zM351 13h1v11h-1zM352 13h1v11h-1zM353 13h1v11h-1zM354 13h1v11h-1zM355 12h1v12h-1zM356 12h1v12h-1zM357 12h1v12h-1zM358 11h1v13h-1zM359 11h1v13h-1zM360 11h1v13h-1zM361 10h1v14h-1zM362 10h1v14h-1zM363 10h1v14h-1zM364 9h1v15h-1zM365 9h1v15h-1zM366 9h1v15h-1zM367 9h1v15h-1zM368 9h1v15h-1zM369 9h1v15h-1zM370 9h1v15h-1zM371 9h1v15h-1zM372 9h1v15h-1zM373 10h1v14h-1zM374 10h1v14h-1zM375 10h1v14h-1zM376 10h1v14h-1zM377 10h1v14h-1zM378 11h1v13h-1zM379 11h1v13h-1zM380 11h1v13h-1zM381 11h1v13h-1zM382 11h1v13h-1zM383 11h1v13h-1zM384 11h1v13h-1zM385 11h1v13h-1zM386 10h1v14h-1zM387 10h1v14h-1zM388 10h1v14h-1zM389 9h1v15h-1zM390 9h1v15h-1zM391 9h1v15h-1zM392 8h1v16h-1zM393 8h1v16h-1zM394 8h1v16h-1zM395 7h1v17h-1zM396 7h1v17h-1zM397 7h1v17h-1zM398 6h1v18h-1zM399 6h1v18h-1zM400 6h1v18h-1zM401 6h1v18h-1zM402 6h1v18h-1zM403 6h1v18h-1zM404 6h1v18h-1zM405 5h1v19h-1zM406 5h1v19h-1zM407 5h1v19h-1zM408 5h1v19h-1zM409 5h1v19h-1zM410 5h1v19h-1zM411 5h1v19h-1zM412 5h1v19h-1zM413 5h1v19h-1zM414 5h1v19h-1zM415 5h1v19h-1zM416 5h1v19h-1zM417 5h1v19h-1zM418 5h1v19h-1zM419 5h1v19h-1zM420 5h1v19h-1zM421 5h1v19h-1zM422 5h1v19h-1zM423 5h1v19h-1zM424 6h1v18h-1zM425 6h1v18h-1zM426 6h1v18h-1zM427 7h1v17h-1zM428 7h1v17h-1zM429 8h1v16h-1zM430 8h1v16h-1zM431 9h1v15h-1zM432 9h1v15h-1zM433 10h1v14h-1zM434 10h1v14h-1zM435 10h1v14h-1zM436 11h1v13h-1zM437 11h1v13h-1zM438 11h1v13h-1zM439 12h1v12h-1zM440 12h1v12h-1zM441 12h1v12h-1zM442 12h1v12h-1zM443 12h1v12h-1zM444 12h1v12h-1zM445 12h1v12h-1zM446 11h1v13h-1zM447 11h1v13h-1zM448 11h1v13h-1zM449 11h1v13h-1zM450 11h1v13h-1zM451 10h1v14h-1zM452 10h1v14h-1zM453 10h1v14h-1zM454 10h1v14h-1zM455 10h1v14h-1zM456 10h1v14h-1zM457 10h1v14h-1zM458 10h1v14h-1zM459 10h1v14h-1zM460 11h1v13h-1zM461 11h1v13h-1zM462 11h1v13h-1zM463 11h1v13h-1zM464 11h1v13h-1zM465 12h1v12h-1zM466 12h1v12h-1zM467 12h1v12h-1zM468 12h1v12h-1zM469 12h1v12h-1zM470 12h1v12h-1zM471 12h1v12h-1zM472 12h1v12h-1zM473 12h1v12h-1zM474 12h1v12h-1zM475 12h1v12h-1zM476 12h1v12h-1zM477 12h1v12h-1zM478 12h1v12h-1zM479 13h1v11h-1zM480 13h1v11h-1zM481 13h1v11h-1zM482 13h1v11h-1zM483 13h1v11h-1zM484 13h1v11h-1zM485 13h1v11h-1zM486 14h1v10h-1zM487 14h1v10h-1zM488 14h1v10h-1zM489 14h1v10h-1zM490 14h1v10h-1zM491 14h1v10h-1zM492 14h1v10h-1zM493 14h1v10h-1zM494 14h1v10h-1zM495 14h1v10h-1zM496 13h1v11h-1zM497 13h1v11h-1zM498 13h1v11h-1zM499 12h1v12h-1zM500 12h1v12h-1zM501 11h1v13h-1zM502 11h1v13h-1zM503 10h1v14h-1zM504 9h1v15h-1zM505 9h1v15h-1zM506 8h1v16h-1zM507 8h1v16h-1zM508 7h1v17h-1zM509 7h1v17h-1zM510 7h1v17h-1zM511 6h1v18h-1z' fill='%238bac0f'/%3E%3Cpath d='M0 13h1v11h-1zM1 13h1v11h-1zM2 13h1v11h-1zM3 13h1v11h-1zM4 13h1v11h-1zM5 13h1v11h-1zM6 13h1v11h-1zM7 14h1v10h-1zM8 14h1v10h-1zM9 14h1v10h-1zM10 14h1v10h-1zM11 14h1v10h-1zM12 14h1v10h-1zM13 15h1v9h-1zM14 15h1v9h-1zM15 15h1v9h-1zM16 15h1v9h-1zM17 16h1v8h-1zM18 16h1v8h-1zM19 17h1v7h-1zM20 17h1v7h-1zM21 18h1v6h-1zM22 18h1v6h-1zM23 19h1v5h-1zM24 19h1v5h-1zM25 19h1v5h-1zM26 20h1v4h-1zM27 20h1v4h-1zM28 20h1v4h-1zM29 20h1v4h-1zM30 20h1v4h-1zM31 19h1v5h-1zM32 19h1v5h-1zM33 19h1v5h-1zM34 19h1v5h-1zM35 18h1v6h-1zM36 18h1v6h-1zM37 18h1v6h-1zM38 18h1v6h-1zM39 18h1v6h-1zM40 18h1v6h-1zM41 18h1v6h-1zM42 18h1v6h-1zM43 18h1v6h-1zM44 18h1v6h-1zM45 18h1v6h-1zM46 18h1v6h-1zM47 18h1v6h-1zM48 18h1v6h-1zM49 18h1v6h-1zM50 18h1v6h-1zM51 18h1v6h-1zM52 18h1v6h-1zM53 18h1v6h-1zM54 18h1v6h-1zM55 18h1v6h-1zM56 18h1v6h-1zM57 18h1v6h-1zM58 18h1v6h-1zM59 18h1v6h-1zM60 18h1v6h-1zM61 18h1v6h-1zM62 18h1v6h-1zM63 18h1v6h-1zM64 18h1v6h-1zM65 18h1v6h-1zM66 17h1v7h-1zM67 17h1v7h-1zM68 17h1v7h-1zM69 16h1v8h-1zM70 16h1v8h-1zM71 15h1v9h-1zM72 14h1v10h-1zM73 14h1v10h-1zM74 13h1v11h-1zM75 13h1v11h-1zM76 13h1v11h-1zM77 12h1v12h-1zM78 12h1v12h-1zM79 12h1v12h-1zM80 12h1v12h-1zM81 12h1v12h-1zM82 13h1v11h-1zM83 13h1v11h-1zM84 13h1v11h-1zM85 13h1v11h-1zM86 14h1v10h-1zM87 14h1v10h-1zM88 14h1v10h-1zM89 14h1v10h-1zM90 15h1v9h-1zM91 15h1v9h-1zM92 15h1v9h-1zM93 15h1v9h-1zM94 15h1v9h-1zM95 16h1v8h-1zM96 16h1v8h-1zM97 16h1v8h-1zM98 16h1v8h-1zM99 16h1v8h-1zM100 17h1v7h-1zM101 17h1v7h-1zM102 17h1v7h-1zM103 17h1v7h-1zM104 17h1v7h-1zM105 18h1v6h-1zM106 18h1v6h-1zM107 17h1v7h-1zM108 17h1v7h-1zM109 17h1v7h-1zM110 17h1v7h-1zM111 17h1v7h-1zM112 17h1v7h-1zM113 17h1v7h-1zM114 16h1v8h-1zM115 16h1v8h-1zM116 17h1v7h-1zM117 17h1v7h-1zM118 17h1v7h-1zM119 17h1v7h-1zM120 17h1v7h-1zM121 18h1v6h-1zM122 18h1v6h-1zM123 19h1v5h-1zM124 19h1v5h-1zM125 19h1v5h-1zM126 20h1v4h-1zM127 20h1v4h-1zM128 20h1v4h-1zM129 20h1v4h-1zM130 20h1v4h-1zM131 20h1v4h-1zM132 20h1v4h-1zM133 20h1v4h-1zM134 20h1v4h-1zM135 19h1v5h-1zM136 19h1v5h-1zM137 19h1v5h-1zM138 19h1v5h-1zM139 19h1v5h-1zM140 19h1v5h-1zM141 18h1v6h-1zM142 18h1v6h-1zM143 18h1v6h-1zM144 18h1v6h-1zM145 17h1v7h-1zM146 17h1v7h-1zM147 16h1v8h-1zM148 16h1v8h-1zM149 15h1v9h-1zM150 15h1v9h-1zM151 14h1v10h-1zM152 14h1v10h-1zM153 14h1v10h-1zM154 13h1v11h-1zM155 13h1v11h-1zM156 13h1v11h-1zM157 13h1v11h-1zM158 13h1v11h-1zM159 14h1v10h-1zM160 14h1v10h-1zM161 14h1v10h-1zM162 14h1v10h-1zM163 15h1v9h-1zM164 15h1v9h-1zM165 15h1v9h-1zM166 15h1v9h-1zM167 15h1v9h-1zM168 15h1v9h-1zM169 15h1v9h-1zM170 15h1v9h-1zM171 15h1v9h-1zM172 15h1v9h-1zM173 15h1v9h-1zM174 15h1v9h-1zM175 15h1v9h-1zM176 15h1v9h-1zM177 15h1v9h-1zM178 15h1v9h-1zM179 15h1v9h-1zM180 15h1v9h-1zM181 15h1v9h-1zM182 15h1v9h-1zM183 15h1v9h-1zM184 15h1v9h-1zM185 15h1v9h-1zM186 15h1v9h-1zM187 15h1v9h-1zM188 15h1v9h-1zM189 15h1v9h-1zM190 15h1v9h-1zM191 15h1v9h-1zM192 15h1v9h-1zM193 15h1v9h-1zM194 16h1v8h-1zM195 16h1v8h-1zM196 16h1v8h-1zM197 17h1v7h-1zM198 17h1v7h-1zM199 18h1v6h-1zM200 19h1v5h-1zM201 19h1v5h-1zM202 20h1v4h-1zM203 20h1v4h-1zM204 20h1v4h-1zM205 21h1v3h-1zM206 21h1v3h-1zM207 21h1v3h-1zM208 21h1v3h-1zM209 21h1v3h-1zM210 20h1v4h-1zM211 20h1v4h-1zM212 20h1v4h-1zM213 20h1v4h-1zM214 19h1v5h-1zM215 19h1v5h-1zM216 19h1v5h-1zM217 19h1v5h-1zM218 18h1v6h-1zM219 18h1v6h-1zM220 18h1v6h-1zM221 18h1v6h-1zM222 18h1v6h-1zM223 17h1v7h-1zM224 17h1v7h-1zM225 17h1v7h-1zM226 17h1v7h-1zM227 17h1v7h-1zM228 16h1v8h-1zM229 16h1v8h-1zM230 16h1v8h-1zM231 16h1v8h-1zM232 16h1v8h-1zM233 15h1v9h-1zM234 15h1v9h-1zM235 16h1v8h-1zM236 16h1v8h-1zM237 16h1v8h-1zM238 16h1v8h-1zM239 16h1v8h-1zM240 16h1v8h-1zM241 16h1v8h-1zM242 17h1v7h-1zM243 17h1v7h-1zM244 16h1v8h-1zM245 16h1v8h-1zM246 16h1v8h-1zM247 16h1v8h-1zM248 16h1v8h-1zM249 15h1v9h-1zM250 15h1v9h-1zM251 14h1v10h-1zM252 14h1v10h-1zM253 14h1v10h-1zM254 13h1v11h-1zM255 13h1v11h-1zM256 13h1v11h-1zM257 13h1v11h-1zM258 13h1v11h-1zM259 13h1v11h-1zM260 13h1v11h-1zM261 13h1v11h-1zM262 13h1v11h-1zM263 14h1v10h-1zM264 14h1v10h-1zM265 14h1v10h-1zM266 14h1v10h-1zM267 14h1v10h-1zM268 14h1v10h-1zM269 15h1v9h-1zM270 15h1v9h-1zM271 15h1v9h-1zM272 15h1v9h-1zM273 16h1v8h-1zM274 16h1v8h-1zM275 17h1v7h-1zM276 17h1v7h-1zM277 18h1v6h-1zM278 18h1v6h-1zM279 19h1v5h-1zM280 19h1v5h-1zM281 19h1v5h-1zM282 20h1v4h-1zM283 20h1v4h-1zM284 20h1v4h-1zM285 20h1v4h-1zM286 20h1v4h-1zM287 19h1v5h-1zM288 19h1v5h-1zM289 19h1v5h-1zM290 19h1v5h-1zM291 18h1v6h-1zM292 18h1v6h-1zM293 18h1v6h-1zM294 18h1v6h-1zM295 18h1v6h-1zM296 18h1v6h-1zM297 18h1v6h-1zM298 18h1v6h-1zM299 18h1v6h-1zM300 18h1v6h-1zM301 18h1v6h-1zM302 18h1v6h-1zM303 18h1v6h-1zM304 18h1v6h-1zM305 18h1v6h-1zM306 18h1v6h-1zM307 18h1v6h-1zM308 18h1v6h-1zM309 18h1v6h-1zM310 18h1v6h-1zM311 18h1v6h-1zM312 18h1v6h-1zM313 18h1v6h-1zM314 18h1v6h-1zM315 18h1v6h-1zM316 18h1v6h-1zM317 18h1v6h-1zM318 18h1v6h-1zM319 18h1v6h-1zM320 18h1v6h-1zM321 18h1v6h-1zM322 17h1v7h-1zM323 17h1v7h-1zM324 17h1v7h-1zM325 16h1v8h-1zM326 16h1v8h-1zM327 15h1v9h-1zM328 14h1v10h-1zM329 14h1v10h-1zM330 13h1v11h-1zM331 13h1v11h-1zM332 13h1v11h-1zM333 12h1v12h-1zM334 12h1v12h-1zM335 12h1v12h-1zM336 12h1v12h-1zM337 12h1v12h-1zM338 13h1v11h-1zM339 13h1v11h-1zM340 13h1v11h-1zM341 13h1v11h-1zM342 14h1v10h-1zM343 14h1v10h-1zM344 14h1v10h-1zM345 14h1v10h-1zM346 15h1v9h-1zM347 15h1v9h-1zM348 15h1v9h-1zM349 15h1v9h-1zM350 15h1v9h-1zM351 16h1v8h-1zM352 16h1v8h-1zM353 16h1v8h-1zM354 16h1v8h-1zM355 16h1v8h-1zM356 17h1v7h-1zM357 17h1v7h-1zM358 17h1v7h-1zM359 17h1v7h-1zM360 17h1v7h-1zM361 18h1v6h-1zM362 18h1v6h-1zM363 17h1v7h-1zM364 17h1v7h-1zM365 17h1v7h-1zM366 17h1v7h-1zM367 17h1v7h-1zM368 17h1v7h-1zM369 17h1v7h-1zM370 16h1v8h-1zM371 16h1v8h-1zM372 17h1v7h-1zM373 17h1v7h-1zM374 17h1v7h-1zM375 17h1v7h-1zM376 17h1v7h-1zM377 18h1v6h-1zM378 18h1v6h-1zM379 19h1v5h-1zM380 19h1v5h-1zM381 19h1v5h-1zM382 20h1v4h-1zM383 20h1v4h-1zM384 20h1v4h-1zM385 20h1v4h-1zM386 20h1v4h-1zM387 20h1v4h-1zM388 20h1v4h-1zM389 20h1v4h-1zM390 20h1v4h-1zM391 19h1v5h-1zM392 19h1v5h-1zM393 19h1v5h-1zM394 19h1v5h-1zM395 19h1v5h-1zM396 19h1v5h-1zM397 18h1v6h-1zM398 18h1v6h-1zM399 18h1v6h-1zM400 18h1v6h-1zM401 17h1v7h-1zM402 17h1v7h-1zM403 16h1v8h-1zM404 16h1v8h-1zM405 15h1v9h-1zM406 15h1v9h-1zM407 14h1v10h-1zM408 14h1v10h-1zM409 14h1v10h-1zM410 13h1v11h-1zM411 13h1v11h-1zM412 13h1v11h-1zM413 13h1v11h-1zM414 13h1v11h-1zM415 14h1v10h-1zM416 14h1v10h-1zM417 14h1v10h-1zM418 14h1v10h-1zM419 15h1v9h-1zM420 15h1v9h-1zM421 15h1v9h-1zM422 15h1v9h-1zM423 15h1v9h-1zM424 15h1v9h-1zM425 15h1v9h-1zM426 15h1v9h-1zM427 15h1v9h-1zM428 15h1v9h-1zM429 15h1v9h-1zM430 15h1v9h-1zM431 15h1v9h-1zM432 15h1v9h-1zM433 15h1v9h-1zM434 15h1v9h-1zM435 15h1v9h-1zM436 15h1v9h-1zM437 15h1v9h-1zM438 15h1v9h-1zM439 15h1v9h-1zM440 15h1v9h-1zM441 15h1v9h-1zM442 15h1v9h-1zM443 15h1v9h-1zM444 15h1v9h-1zM445 15h1v9h-1zM446 15h1v9h-1zM447 15h1v9h-1zM448 15h1v9h-1zM449 15h1v9h-1zM450 16h1v8h-1zM451 16h1v8h-1zM452 16h1v8h-1zM453 17h1v7h-1zM454 17h1v7h-1zM455 18h1v6h-1zM456 19h1v5h-1zM457 19h1v5h-1zM458 20h1v4h-1zM459 20h1v4h-1zM460 20h1v4h-1zM461 21h1v3h-1zM462 21h1v3h-1zM463 21h1v3h-1zM464 21h1v3h-1zM465 21h1v3h-1zM466 20h1v4h-1zM467 20h1v4h-1zM468 20h1v4h-1zM469 20h1v4h-1zM470 19h1v5h-1zM471 19h1v5h-1zM472 19h1v5h-1zM473 19h1v5h-1zM474 18h1v6h-1zM475 18h1v6h-1zM476 18h1v6h-1zM477 18h1v6h-1zM478 18h1v6h-1zM479 17h1v7h-1zM480 17h1v7h-1zM481 17h1v7h-1zM482 17h1v7h-1zM483 17h1v7h-1zM484 16h1v8h-1zM485 16h1v8h-1zM486 16h1v8h-1zM487 16h1v8h-1zM488 16h1v8h-1zM489 15h1v9h-1zM490 15h1v9h-1zM491 16h1v8h-1zM492 16h1v8h-1zM493 16h1v8h-1zM494 16h1v8h-1zM495 16h1v8h-1zM496 16h1v8h-1zM497 16h1v8h-1zM498 17h1v7h-1zM499 17h1v7h-1zM500 16h1v8h-1zM501 16h1v8h-1zM502 16h1v8h-1zM503 16h1v8h-1zM504 16h1v8h-1zM505 15h1v9h-1zM506 15h1v9h-1zM507 14h1v10h-1zM508 14h1v10h-1zM509 14h1v10h-1zM510 13h1v11h-1zM511 13h1v11h-1z' fill='%23306230'/%3E%3Cpath d='M11 12h1v2h-1zM10 10h3v2h-3zM43 16h1v2h-1zM42 14h3v2h-3zM75 11h1v2h-1zM74 9h3v2h-3zM107 15h1v2h-1zM106 13h3v2h-3zM139 17h1v2h-1zM138 15h3v2h-3zM171 13h1v2h-1zM170 11h3v2h-3zM203 18h1v2h-1zM202 16h3v2h-3zM235 14h1v2h-1zM234 12h3v2h-3zM267 12h1v2h-1zM266 10h3v2h-3zM299 16h1v2h-1zM298 14h3v2h-3zM331 11h1v2h-1zM330 9h3v2h-3zM363 15h1v2h-1zM362 13h3v2h-3zM395 17h1v2h-1zM394 15h3v2h-3zM427 13h1v2h-1zM426 11h3v2h-3zM459 18h1v2h-1zM458 16h3v2h-3zM491 14h1v2h-1zM490 12h3v2h-3z' fill='%230f380f'/%3E%3C/svg%3E");
+    --px-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='32' viewBox='0 0 24 32' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='2' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='4' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='4' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='4' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='6' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='6' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='6' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='8' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='8' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='8' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='6' y='8' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='8' y='8' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='10' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='10' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='10' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='6' y='10' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='8' y='10' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='10' y='10' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='12' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='12' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='12' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='6' y='12' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='8' y='12' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='10' y='12' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='12' y='12' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='14' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='14' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='14' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='6' y='14' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='8' y='14' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='10' y='14' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='12' y='14' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='14' y='14' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='16' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='16' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='16' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='6' y='16' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='8' y='16' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='10' y='16' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='12' y='16' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='14' y='16' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='16' y='16' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='18' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='18' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='6' y='18' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='8' y='18' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='10' y='18' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='12' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='14' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='16' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='18' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='20' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='20' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='6' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='20' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='10' y='20' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='12' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='22' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='4' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='22' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='12' y='22' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='14' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='24' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='12' y='24' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='14' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='26' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='14' y='26' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='16' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='28' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='28' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='14' y='28' width='2' height='2' fill='%239bbc0f'/%3E%3Crect x='16' y='28' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='30' width='2' height='2' fill='%23000'/%3E%3Crect x='14' y='30' width='2' height='2' fill='%23000'/%3E%3C/svg%3E");
+    --px-cursor-hot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='32' viewBox='0 0 24 32' shape-rendering='crispEdges'%3E%3Crect x='0' y='0' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='2' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='4' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='4' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='4' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='6' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='6' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='6' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='8' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='8' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='8' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='6' y='8' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='8' y='8' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='10' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='10' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='10' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='6' y='10' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='8' y='10' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='10' y='10' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='12' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='12' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='12' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='6' y='12' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='8' y='12' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='10' y='12' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='12' y='12' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='14' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='14' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='14' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='6' y='14' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='8' y='14' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='10' y='14' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='12' y='14' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='14' y='14' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='16' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='16' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='16' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='6' y='16' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='8' y='16' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='10' y='16' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='12' y='16' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='14' y='16' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='16' y='16' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='18' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='18' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='6' y='18' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='8' y='18' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='10' y='18' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='12' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='14' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='16' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='18' y='18' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='20' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='20' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='6' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='20' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='10' y='20' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='12' y='20' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='22' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='4' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='22' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='12' y='22' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='14' y='22' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='2' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='8' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='24' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='12' y='24' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='14' y='24' width='2' height='2' fill='%23000'/%3E%3Crect x='0' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='26' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='14' y='26' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='16' y='26' width='2' height='2' fill='%23000'/%3E%3Crect x='10' y='28' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='28' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='14' y='28' width='2' height='2' fill='%238bac0f'/%3E%3Crect x='16' y='28' width='2' height='2' fill='%23000'/%3E%3Crect x='12' y='30' width='2' height='2' fill='%23000'/%3E%3Crect x='14' y='30' width='2' height='2' fill='%23000'/%3E%3C/svg%3E");
+
+    --background: #8bac0f !important;
+    --foreground: #0f380f !important;
+    --card: #9bbc0f !important;
+    --card-foreground: #0f380f !important;
+    --popover: #9bbc0f !important;
+    --popover-foreground: #0f380f !important;
+    --primary: #0f380f !important;
+    --primary-foreground: #9bbc0f !important;
+    --secondary: #8bac0f !important;
+    --secondary-foreground: #0f380f !important;
+    --muted: #8bac0f !important;
+    --muted-foreground: #1a441b !important;
+    --accent: #8bac0f !important;
+    --accent-foreground: #0f380f !important;
+    --border: #306230 !important;
+    --input: #306230 !important;
+    --ring: #0f380f !important;
+    --stroke: #0f380f !important;
+    --destructive: #5c2a0c !important;
+    --success: #0f380f !important;
+    --warning: #306230 !important;
+
+    --stroke-power-on: #0f380f !important;
+    --gradient-start-power-on: #0f380f !important;
+    --gradient-end-power-on: #306230 !important;
+    --stroke-power-off: #306230 !important;
+    --gradient-start-power-off: #8bac0f !important;
+    --gradient-end-power-off: #306230 !important;
+
+    --profile-active: #8bac0f !important;
+    --stroke-profile-active: #0f380f !important;
+    --profile-inactive: #9bbc0f !important;
+    --stroke-profile-inactive: #0f380f !important;
+
+    --chart-1: #0f380f !important;
+    --chart-2: #306230 !important;
+    --chart-3: #8bac0f !important;
+    --chart-4: #1a441b !important;
+    --chart-5: #5c2a0c !important;
+
+    --sidebar: #9bbc0f !important;
+    --sidebar-foreground: #0f380f !important;
+    --sidebar-primary: #0f380f !important;
+    --sidebar-primary-foreground: #9bbc0f !important;
+    --sidebar-accent: #8bac0f !important;
+    --sidebar-accent-foreground: #0f380f !important;
+    --sidebar-border: #0f380f !important;
+    --sidebar-ring: #0f380f !important;
+}
+
+
+/* =====================================================================
+   3. ЭКРАН: НЕБО, ХОЛМЫ, РАЗВЁРТКА, КУРСОР
+   ===================================================================== */
+
+:root body {
+    font-family: var(--px-font);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: none;
+}
+
+/* Пиксельный курсор мыши. Над кликабельным - жёлтый (на Game Boy - светлее) */
+:root,
+:root body {
+    cursor: var(--px-cursor) 0 0, default;
+}
+
+:root :is(button, a, [role="button"], [role="menuitem"], [role="tab"], [role="switch"], [role="option"], .cursor-pointer):not(:disabled) {
+    cursor: var(--px-cursor-hot) 0 0, pointer !important;
+}
+
+:root ::selection {
+    background: var(--px-hi);
+    color: var(--px-hi-ink);
+}
+
+:root :focus-visible {
+    --tw-ring-color: var(--px-hi) !important;
+}
+
+/* Небо полосами (без плавных переходов - как в 8-битной игре) + неподвижные искры */
+:root [data-slot="sidebar-wrapper"] {
+    background:
+        linear-gradient(180deg,
+            var(--px-sky-1) 0 46%,
+            var(--px-sky-2) 46% 68%,
+            var(--px-sky-3) 68% 82%,
+            var(--px-sky-4) 82% 100%) !important;
+    box-shadow: none !important;
+    isolation: isolate;
+}
+
+/* Звёзды медленно плывут вниз, как фон вертикальной стрелялки.
+   Двигается весь слой через transform - это дёшево для процессора */
+html.dark [data-slot="sidebar-wrapper"]::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -320px;
+    height: calc(100% + 640px);
+    z-index: 0;
+    pointer-events: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160' shape-rendering='crispEdges'%3E%3Crect x='82' y='38' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='18' y='136' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='14' y='128' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='110' y='106' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='140' y='108' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='30' y='56' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='14' y='146' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='56' y='10' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='74' y='106' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='146' y='78' width='2' height='2' fill='%23c2c3c7'/%3E%3Crect x='46' y='26' width='2' height='2' fill='%23c2c3c7'/%3E%3Crect x='48' y='94' width='2' height='2' fill='%23c2c3c7'/%3E%3Crect x='16' y='144' width='2' height='2' fill='%23fff1e8'/%3E%3Crect x='126' y='136' width='2' height='2' fill='%2329adff'/%3E%3Crect x='118' y='148' width='4' height='4' fill='%2329adff'/%3E%3Crect x='76' y='62' width='2' height='2' fill='%23c2c3c7'/%3E%3Crect x='62' y='20' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='126' y='86' width='2' height='2' fill='%2329adff'/%3E%3Crect x='154' y='18' width='2' height='2' fill='%23ff77a8'/%3E%3Crect x='42' y='86' width='2' height='2' fill='%23ff77a8'/%3E%3Crect x='106' y='10' width='4' height='4' fill='%23fff1e8'/%3E%3Crect x='142' y='146' width='2' height='2' fill='%2329adff'/%3E%3Crect x='86' y='88' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='116' y='16' width='4' height='4' fill='%2329adff'/%3E%3Crect x='120' y='16' width='2' height='2' fill='%23c2c3c7'/%3E%3Crect x='78' y='146' width='4' height='4' fill='%23ff77a8'/%3E%3Crect x='72' y='98' width='4' height='4' fill='%2329adff'/%3E%3Crect x='4' y='118' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='28' y='126' width='2' height='2' fill='%2329adff'/%3E%3Crect x='32' y='62' width='2' height='2' fill='%23ff77a8'/%3E%3Crect x='20' y='42' width='2' height='2' fill='%23ffec27'/%3E%3Crect x='70' y='34' width='4' height='4' fill='%23ffec27'/%3E%3Crect x='70' y='106' width='4' height='4' fill='%23c2c3c7'/%3E%3Crect x='96' y='58' width='2' height='2' fill='%23fff1e8'/%3E%3C/svg%3E") 0 0 / 320px 320px, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160' shape-rendering='crispEdges'%3E%3Cpath d='M38 56h2v6h-2zM36 58h6v2h-6z' fill='%23fff1e8'/%3E%3Cpath d='M58 0h2v6h-2zM56 2h6v2h-6z' fill='%23fff1e8'/%3E%3Cpath d='M124 148h2v6h-2zM122 150h6v2h-6z' fill='%23fff1e8'/%3E%3Cpath d='M46 64h2v6h-2zM44 66h6v2h-6z' fill='%23fff1e8'/%3E%3Cpath d='M72 -2h2v6h-2zM70 0h6v2h-6z' fill='%23fff1e8'/%3E%3Cpath d='M36 104h2v6h-2zM34 106h6v2h-6z' fill='%23fff1e8'/%3E%3Cpath d='M136 92h2v6h-2zM134 94h6v2h-6z' fill='%23fff1e8'/%3E%3Cpath d='M156 142h2v6h-2zM154 144h6v2h-6z' fill='%23fff1e8'/%3E%3Cpath d='M80 30h2v6h-2zM78 32h6v2h-6z' fill='%23fff1e8'/%3E%3Cpath d='M130 156h2v6h-2zM128 158h6v2h-6z' fill='%23fff1e8'/%3E%3C/svg%3E") 80px 40px / 320px 320px;
+    image-rendering: pixelated;
+    opacity: 0.85;
+    animation: px-stars 60s steps(320) infinite;
+}
+
+@keyframes px-stars {
+    from { transform: translateY(0); }
+    to { transform: translateY(320px); }
+}
+
+/* Карту мира клиента подменяем на полосу пиксельных холмов внизу окна.
+   Полоса шириной 2048px повторяется каждые 1024px и бесконечно едет влево */
+:root [data-slot="sidebar-wrapper"] > img.pointer-events-none {
+    content: var(--px-hills) !important;
+    inset: auto auto 0 0 !important;
+    width: 2048px !important;
+    max-width: none !important;
+    height: 96px !important;
+    object-fit: fill !important;
+    image-rendering: pixelated;
+    opacity: 1 !important;
+    filter: none !important;
+    animation: px-scroll 40s steps(512) infinite;
+}
+
+@keyframes px-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-1024px); }
+}
+
+/* Развёртка ЭЛТ: тёмные строки через каждые 3px и лёгкое мерцание.
+   На Game Boy вместо неё - сетка ЖК-пикселей */
+:root [data-slot="sidebar-wrapper"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+}
+
+html.dark [data-slot="sidebar-wrapper"]::after {
+    background:
+        repeating-linear-gradient(180deg, rgba(0, 0, 0, 0) 0 2px, rgba(0, 0, 0, 0.18) 2px 3px),
+        radial-gradient(120% 90% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.35) 100%);
+    animation: px-flicker 4s steps(1) infinite;
+}
+
+html:not(.dark) [data-slot="sidebar-wrapper"]::after {
+    background:
+        repeating-linear-gradient(90deg, rgba(15, 56, 15, 0.07) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(180deg, rgba(15, 56, 15, 0.07) 0 1px, transparent 1px 3px);
+}
+
+@keyframes px-flicker {
+    0%, 100% { opacity: 1; }
+    37% { opacity: 0.86; }
+    38% { opacity: 1; }
+    71% { opacity: 0.92; }
+    72% { opacity: 1; }
+}
+
+/* Заголовок страницы - как название уровня */
+:root .title {
+    font-size: 17px !important;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--px-hi);
+    text-shadow: 2px 2px 0 var(--px-title-shadow);
+}
+
+/* Полоса прокрутки - пиксельный ползунок */
+:root *::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+:root *::-webkit-scrollbar-track {
+    background: var(--px-panel-2) !important;
+    box-shadow: inset 2px 0 0 var(--px-line-2);
+}
+
+:root *::-webkit-scrollbar-corner {
+    background: transparent !important;
+}
+
+:root *::-webkit-scrollbar-thumb {
+    background: var(--px-hi) !important;
+    border: 2px solid var(--px-panel-2) !important;
+    border-radius: 0 !important;
+    min-height: 32px;
+}
+
+:root *::-webkit-scrollbar-thumb:hover {
+    background: var(--px-orange) !important;
+}
+
+
+/* =====================================================================
+   4. ПИКСЕЛЬНЫЕ ПАНЕЛИ
+   Углы - нулевые, рамка из четырёх полос (углы "срезаны" на пиксель),
+   тень - жёсткая, без размытия.
+   ===================================================================== */
+
+:root [data-slot="card"],
+:root div.rounded-2xl[class*="bg-card/"]:not([data-slot]),
+:root [data-slot="accordion"].rounded-xl.border,
+:root .driver-popover {
+    background: var(--px-panel) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: var(--px-frame), var(--px-drop) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    color: var(--px-text);
+}
+
+:root [data-slot="card"] [data-slot="card"] {
+    box-shadow: var(--px-frame-thin) !important;
+}
+
+/* Разделители в плитке трафика - пунктир из квадратиков */
+:root div.rounded-2xl[class*="bg-card/"] > .w-px.bg-stroke {
+    width: 2px !important;
+    background: repeating-linear-gradient(180deg, var(--px-line-2) 0 2px, transparent 2px 4px) !important;
+}
+
+
+/* =====================================================================
+   5. ГЛАВНАЯ: HUD (pages/home.tsx)
+   ===================================================================== */
+
+/* Название профиля - как имя игрока */
+:root [data-guide="home-profile-header"] .font-medium {
+    color: var(--px-hi);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+/* Плитка подписки - счётчики HUD: значения крупно и жёлтым */
+:root div.rounded-2xl[class*="bg-card/"] .font-bold {
+    color: var(--px-hi);
+    font-size: 18px !important;
+    letter-spacing: 0.04em;
+}
+
+:root div.rounded-2xl[class*="bg-card/"] .text-sm.text-foreground {
+    color: var(--px-dim) !important;
+    font-size: 12px !important;
+}
+
+/* Статус над кнопкой - жёлтый, с пиксельной тенью. При подключении мигает */
+:root .mb-3:has(+ [data-guide="home-power-toggle"]) > div {
+    color: var(--px-hi) !important;
+    letter-spacing: 0.14em;
+    text-shadow: 2px 2px 0 var(--px-title-shadow);
+}
+
+/* Мигание надписи, пока идёт подключение. :has() внутри :has() запрещён, и правило выбрасывалось целиком -
+   поэтому кнопка и её индикатор - одним относительным селектором */
+:root .mb-3:has(+ [data-guide="home-power-toggle"] svg[role="status"].opacity-100) > div {
+    animation: px-blink 0.5s steps(1) infinite;
+}
+
+/* Таймер - "TIME" как в HUD игры */
+:root [data-guide="home-power-toggle"] + div > div {
+    font-size: 20px !important;
+    letter-spacing: 0.08em;
+    color: var(--px-text) !important;
+}
+
+:root [data-guide="home-power-toggle"] + div > div::before {
+    content: "TIME";
+    margin-right: 10px;
+    color: var(--px-hi);
+    font-size: 14px;
+}
+
+:root [data-guide="home-power-toggle"] ~ div svg.text-stroke-power-on {
+    color: var(--px-green) !important;
+}
+
+/* Выбор группы под кнопкой - пиксельная табличка, при наведении рамка жёлтая */
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]) {
+    transition: none !important;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]):hover {
+    --px-line: var(--px-hi);
+    background: var(--px-panel) !important;
+}
+
+:root [data-guide="home-support-link"]:hover {
+    color: var(--px-hi) !important;
+}
+
+/* "Добавить профиль" и "Оплатить" - жёлтые аркадные кнопки */
+:root [class*="bg-gradient-start-power-on/50"] {
+    background: var(--px-hi) !important;
+    color: var(--px-hi-ink) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    font-weight: 700;
+    box-shadow: 0 -2px 0 0 var(--px-shadow), 0 2px 0 0 var(--px-shadow), -2px 0 0 0 var(--px-shadow), 2px 0 0 0 var(--px-shadow), 4px 4px 0 0 var(--px-shadow) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"]:active {
+    translate: 3px 3px;
+    box-shadow: 0 -2px 0 0 var(--px-shadow), 0 2px 0 0 var(--px-shadow), -2px 0 0 0 var(--px-shadow), 2px 0 0 0 var(--px-shadow) !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"] svg {
+    color: inherit !important;
+}
+
+
+/* =====================================================================
+   6. АРКАДНАЯ КНОПКА (кнопка питания, data-guide="home-power-toggle")
+   Разметка клиента: <button> → <div> (круг 128px) → иконки.
+     ::before        → металлический ободок (пиксельный круг 156px);
+     <div>           → купол кнопки (пиксельный круг 128px), иконки клиента скрыты;
+     <div>::after    → надпись READY! на куполе в момент подключения;
+     ::after         → огни автомата вокруг кнопки (горят и мигают при подключении);
+     следующий блок  → надпись под кнопкой: PRESS START / LOADING... / GAME OVER.
+   Нажатие - купол проваливается в ободок.
+   ===================================================================== */
+
+:root [data-guide="home-power-toggle"] {
+    margin: 22px 0 18px;
+    border-radius: 50%;
+    transition: none !important;
+}
+
+:root [data-guide="home-power-toggle"]:active:not(:disabled) {
+    scale: 1 !important;
+}
+
+/* Ободок */
+:root [data-guide="home-power-toggle"]::before {
+    content: "";
+    position: absolute;
+    inset: -14px;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 40%, var(--px-bezel-hi) 0 52%, var(--px-bezel) 52% 100%);
+    -webkit-mask: var(--px-disc) center / 100% 100% no-repeat;
+    mask: var(--px-disc) center / 100% 100% no-repeat;
+    image-rendering: pixelated;
+    filter: drop-shadow(4px 4px 0 var(--px-shadow));
+}
+
+/* Купол: выключено - не горит */
+:root [data-guide="home-power-toggle"] > div {
+    position: relative;
+    z-index: 1;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: radial-gradient(circle at 38% 32%, var(--px-dome-off-hi) 0 15%, var(--px-dome-off) 15% 60%, var(--px-dome-off-lo) 60% 100%) !important;
+    -webkit-mask: var(--px-disc) center / 100% 100% no-repeat;
+    mask: var(--px-disc) center / 100% 100% no-repeat;
+    translate: 0 -6px;
+    transition: none !important;
+}
+
+:root [data-guide="home-power-toggle"] > div > div {
+    visibility: hidden;
+}
+
+/* Нажатие: купол уходит вниз */
+:root [data-guide="home-power-toggle"]:active:not(:disabled) > div {
+    translate: 0 0;
+}
+
+:root [data-guide="home-power-toggle"]:hover:not(:disabled) > div {
+    filter: brightness(1.12);
+}
+
+/* Подключено: купол горит */
+:root [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"] {
+    background: radial-gradient(circle at 38% 32%, #ffffff 0 6%, var(--px-dome-hi) 6% 16%, var(--px-dome) 16% 60%, var(--px-dome-lo) 60% 100%) !important;
+}
+
+/* READY! на куполе: три вспышки при подключении, потом исчезает */
+:root [data-guide="home-power-toggle"] > div::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 105px;
+    height: 21px;
+    margin: -10px 0 0 -52px;
+    background: var(--px-lights);
+    -webkit-mask: var(--px-word-ready) center / 100% 100% no-repeat;
+    mask: var(--px-word-ready) center / 100% 100% no-repeat;
+    opacity: 0;
+    filter: drop-shadow(2px 2px 0 var(--px-shadow));
+}
+
+:root [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"]::after {
+    animation: px-ready 2s steps(1) forwards;
+}
+
+@keyframes px-ready {
+    0% { opacity: 1; }
+    15% { opacity: 0; }
+    30% { opacity: 1; }
+    45% { opacity: 0; }
+    60% { opacity: 1; }
+    99% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* Огни автомата вокруг кнопки: при подключении загораются и мигают по очереди */
+:root [data-guide="home-power-toggle"]::after {
+    content: "";
+    position: absolute;
+    inset: -26px;
+    pointer-events: none;
+    background: var(--px-lights);
+    -webkit-mask: var(--px-ring) center / 100% 100% no-repeat;
+    mask: var(--px-ring) center / 100% 100% no-repeat;
+    opacity: 0;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"])::after {
+    opacity: 1;
+    background: repeating-conic-gradient(var(--px-lights) 0 10deg, transparent 10deg 20deg);
+    animation: px-lights 1.2s steps(2) infinite;
+}
+
+@keyframes px-lights {
+    to { transform: rotate(20deg); }
+}
+
+/* Подключение: купол мигает горит/не горит */
+:root [data-guide="home-power-toggle"]:has(svg[role="status"].opacity-100) > div {
+    animation: px-dome-blink 0.4s steps(1) infinite;
+}
+
+@keyframes px-dome-blink {
+    50% { filter: brightness(1.6); }
+}
+
+/* Ошибка ядра: купол гаснет до серого */
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) > div {
+    background: radial-gradient(circle at 38% 32%, var(--px-bezel-hi) 0 15%, var(--px-bezel) 15% 60%, var(--px-shadow) 60% 100%) !important;
+}
+
+:root [data-guide="home-power-toggle"]:disabled > div {
+    filter: grayscale(1) brightness(0.8);
+}
+
+:root [data-guide="home-power-toggle"]:focus-visible {
+    outline: 3px dashed var(--px-hi) !important;
+    outline-offset: 20px;
+}
+
+/* Надпись под кнопкой. Блок под кнопкой - место таймера; пока таймер скрыт, там надпись */
+:root [data-guide="home-power-toggle"] + div {
+    position: relative;
+}
+
+:root [data-guide="home-power-toggle"] + div::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 195px;
+    height: 21px;
+    margin: -10px 0 0 -97px;
+    background: var(--px-hi);
+    -webkit-mask: var(--px-word-press) center / 100% 100% no-repeat;
+    mask: var(--px-word-press) center / 100% 100% no-repeat;
+    filter: drop-shadow(2px 2px 0 var(--px-title-shadow));
+    animation: px-blink 1s steps(1) infinite;
+    pointer-events: none;
+}
+
+/* Подключено - надпись убирается, на её месте таймер */
+:root [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"]) + div::before {
+    display: none;
+}
+
+:root [data-guide="home-power-toggle"]:has(svg[role="status"].opacity-100) + div::before {
+    width: 177px;
+    margin-left: -88px;
+    -webkit-mask-image: var(--px-word-loading);
+    mask-image: var(--px-word-loading);
+    animation-duration: 0.5s;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) + div::before {
+    width: 159px;
+    margin-left: -79px;
+    background: var(--px-red);
+    -webkit-mask-image: var(--px-word-over);
+    mask-image: var(--px-word-over);
+    animation: none;
+}
+
+@keyframes px-blink {
+    50% { opacity: 0; }
+}
+
+
+/* =====================================================================
+   7. ПРОКСИ, ПРОФИЛИ, ПОДКЛЮЧЕНИЯ
+   ===================================================================== */
+
+/* Карточка сервера (proxy-item.tsx: Card с cursor-pointer и overflow-hidden) - тонкая рамка */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate) {
+    background: var(--px-panel) !important;
+    box-shadow: var(--px-frame-thin), 4px 4px 0 0 var(--px-shadow) !important;
+    transition: none !important;
+}
+
+/* Наведение - карточка подпрыгивает на 2px (два кадра) и подсвечивает рамку */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):not(:has(button:hover)):hover {
+    --px-line-2: var(--px-blue);
+    animation: px-hop 0.24s steps(2) both;
+}
+
+@keyframes px-hop {
+    0% { translate: 0 0; }
+    50% { translate: 0 -3px; }
+    100% { translate: 0 -2px; }
+}
+
+/* Выбранный сервер - жёлтая рамка и мигающий курсор ► слева, как в меню игры */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"] {
+    --px-line-2: var(--px-hi);
+    background: var(--px-panel-2) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"]::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    width: 8px;
+    height: 14px;
+    margin-top: -7px;
+    background: var(--px-hi);
+    -webkit-mask: var(--px-pointer) center / 100% 100% no-repeat;
+    mask: var(--px-pointer) center / 100% 100% no-repeat;
+    animation: px-blink 0.8s steps(1) infinite;
+}
+
+:root [data-slot="card"][class*="border-primary/"] .flag-emoji {
+    color: var(--px-hi);
+    font-weight: 700;
+}
+
+/* Закреплённый сервер - оранжевая рамка */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="bg-amber-500"] {
+    --px-line-2: var(--px-orange);
+}
+
+/* Пинг */
+:root [data-slot="card"] [data-slot="button"][data-variant="ghost"] {
+    border-radius: 0 !important;
+    font-weight: 700;
+}
+
+:root [data-slot="card"] [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    background: var(--px-hi) !important;
+    color: var(--px-hi-ink) !important;
+}
+
+:root [data-slot="card"] [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) * {
+    color: inherit !important;
+}
+
+/* На Game Boy нет цвета: качество пинга и янтарные метки клиента переводим
+   в оттенки зелёного экрана (хороший - самый тёмный, плохой - буро-красный) */
+html:not(.dark) .text-success { color: #0f380f !important; }
+html:not(.dark) .text-warning { color: #306230 !important; }
+html:not(.dark) .text-destructive { color: #5c2a0c !important; }
+html:not(.dark) .text-amber-500 { color: #306230 !important; }
+html:not(.dark) .bg-amber-500\/10 { background: #8bac0f !important; }
+
+/* Индикатор загрузки (спиннер lucide) крутится рывками, по 8 кадров */
+:root svg.animate-spin,
+:root .animate-spin {
+    animation-timing-function: steps(8) !important;
+}
+
+/* Заголовок группы */
+:root [data-slot="card"].cursor-pointer.isolate .font-semibold.flag-emoji {
+    letter-spacing: 0.04em;
+}
+
+:root [data-slot="card"].cursor-pointer.isolate:not(:has(button:hover)):hover {
+    --px-line: var(--px-hi);
+}
+
+:root [data-slot="card"].isolate .size-9.rounded-md {
+    border-radius: 0 !important;
+    box-shadow: 0 0 0 2px currentColor;
+}
+
+/* Стрелка раскрытия группы поворачивается рывком */
+:root [data-slot="card"].isolate svg.transition-transform {
+    transition: rotate 0.2s steps(2), transform 0.2s steps(2) !important;
+}
+
+:root [data-slot="badge"] {
+    border-radius: 0 !important;
+    font-family: var(--px-font) !important;
+}
+
+/* Подложка раскрытой группы - "колодец" под карточками */
+:root div.mx-2[class*="bg-card/30"] {
+    background: var(--px-panel-2) !important;
+    border-color: var(--px-line) !important;
+    border-width: 0 3px !important;
+}
+
+:root div.mx-2[class*="bg-card/30"].rounded-b-xl {
+    border-radius: 0 !important;
+    border-bottom-width: 3px !important;
+}
+
+/* Карточка профиля (profile-item.tsx, всегда с aria-busy) */
+:root div.rounded-2xl[aria-busy] {
+    background: var(--px-panel) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: var(--px-frame), var(--px-drop) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: none !important;
+}
+
+:root div.rounded-2xl[aria-busy]:not(:has(button:hover)):hover {
+    animation: px-hop 0.24s steps(2) both;
+}
+
+/* Текущий профиль - "выбранный картридж": жёлтая рамка */
+:root div.rounded-2xl[aria-busy].border-stroke-profile-active {
+    --px-line: var(--px-hi);
+}
+
+:root div.rounded-2xl[aria-busy].border-stroke-profile-active h3 {
+    color: var(--px-hi);
+}
+
+:root div.rounded-2xl[aria-busy] .border-foreground\/10 {
+    border-color: var(--px-line-2) !important;
+    border-style: dashed !important;
+}
+
+/* Строки подключений */
+:root div.rounded-xl.cursor-pointer:is([class*="bg-card/40"], [class*="to-card/40"]) {
+    background: var(--px-panel) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: var(--px-frame-thin), 4px 4px 0 0 var(--px-shadow) !important;
+    transition: none !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="bg-card/40"]:hover {
+    --px-line-2: var(--px-blue);
+}
+
+:root div.rounded-xl.cursor-pointer[class*="to-card/40"] {
+    --px-line-2: var(--px-green);
+}
+
+:root div.rounded-xl.cursor-pointer .size-12.rounded-lg {
+    border-radius: 0 !important;
+    background: var(--px-panel-2) !important;
+    box-shadow: 0 0 0 2px var(--px-line-2);
+}
+
+
+/* =====================================================================
+   8. БОКОВАЯ ПАНЕЛЬ
+   ===================================================================== */
+
+:root [data-slot="sidebar-inner"] {
+    background: var(--px-panel) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: var(--px-frame), var(--px-drop) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="sidebar-menu-button"] {
+    border-radius: 0 !important;
+    transition: width 200ms steps(4), height 200ms steps(4), padding 200ms steps(4) !important;
+}
+
+:root [data-slot="sidebar-menu-button"]:hover:not([data-active="true"]) {
+    background: var(--px-panel-2) !important;
+    color: var(--px-hi) !important;
+    box-shadow: none !important;
+}
+
+/* Активный пункт - инверсия: жёлтая плашка, тёмная иконка */
+:root [data-slot="sidebar-menu-button"][data-active="true"] {
+    background: var(--px-hi) !important;
+    color: var(--px-hi-ink) !important;
+    box-shadow: 3px 3px 0 0 var(--px-shadow) !important;
+}
+
+/* Переключатель режима */
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] {
+    background: var(--px-panel-2) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: var(--px-frame-thin) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button {
+    border-radius: 0 !important;
+    border-color: transparent !important;
+    transition: none !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button[class*="border-stroke-power-on/50"] {
+    background: var(--px-hi) !important;
+    color: var(--px-hi-ink) !important;
+    box-shadow: none !important;
+}
+
+
+/* =====================================================================
+   9. КНОПКИ
+   Основная - жёлтый блок с чёрной рамкой и тенью. Нажатие - кнопка
+   "проваливается" на 3px и теряет тень (без плавности, одним кадром).
+   ===================================================================== */
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]) {
+    border-radius: 0 !important;
+    font-family: var(--px-font);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    transition: none !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"],
+:root [data-slot="button"][data-variant="destructive"] {
+    background: var(--px-hi) !important;
+    color: var(--px-hi-ink) !important;
+    box-shadow: 0 -2px 0 0 var(--px-shadow), 0 2px 0 0 var(--px-shadow), -2px 0 0 0 var(--px-shadow), 2px 0 0 0 var(--px-shadow), 4px 4px 0 0 var(--px-shadow) !important;
+}
+
+:root [data-slot="button"][data-variant="destructive"] {
+    background: var(--px-red) !important;
+    color: #ffffff !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"]:hover:not(:disabled) {
+    background: var(--px-orange) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"]:active:not(:disabled),
+:root [data-slot="button"][data-variant="destructive"]:active:not(:disabled) {
+    translate: 3px 3px;
+    box-shadow: 0 -2px 0 0 var(--px-shadow), 0 2px 0 0 var(--px-shadow), -2px 0 0 0 var(--px-shadow), 2px 0 0 0 var(--px-shadow) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]) {
+    background: var(--px-panel) !important;
+    color: var(--px-text) !important;
+    border: 0 !important;
+    box-shadow: var(--px-frame-thin), 4px 4px 0 0 var(--px-shadow) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]):hover:not(:disabled) {
+    --px-line-2: var(--px-hi);
+    color: var(--px-hi) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]):active:not(:disabled) {
+    translate: 3px 3px;
+    box-shadow: var(--px-frame-thin) !important;
+}
+
+:root [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    background: var(--px-panel-2) !important;
+    color: var(--px-hi) !important;
+}
+
+:root .wc-win .wc-btn {
+    border-radius: 0 !important;
+    transition: none !important;
+}
+
+:root .wc-win .wc-btn:hover {
+    background: var(--px-panel-2) !important;
+    color: var(--px-hi) !important;
+}
+
+:root .wc-win .wc-close:hover {
+    background: var(--px-red) !important;
+    color: #ffffff !important;
+}
+
+
+/* =====================================================================
+   10. ПОЛЯ, ПЕРЕКЛЮЧАТЕЛИ, ВКЛАДКИ
+   ===================================================================== */
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="input-group"], [data-slot="select-trigger"], button[role="combobox"]) {
+    background: var(--px-panel-2) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: var(--px-frame-thin) !important;
+    color: var(--px-text) !important;
+    caret-color: var(--px-hi);
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: none !important;
+}
+
+:root [data-slot="input-group"] :is(input, textarea) {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"]):focus,
+:root [data-slot="input-group"]:focus-within,
+:root :is([data-slot="select-trigger"], button[role="combobox"])[data-state="open"],
+:root :is([data-slot="select-trigger"], button[role="combobox"]):hover {
+    --px-line-2: var(--px-hi);
+    outline: none !important;
+}
+
+/* Переключатель - пиксельный тумблер: квадратный бегунок едет в три кадра */
+:root [data-slot="switch"] {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: var(--px-panel-2) !important;
+    box-shadow: 0 0 0 2px var(--px-line) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: none !important;
+}
+
+:root [data-slot="switch"][data-state="checked"] {
+    background: var(--px-green) !important;
+}
+
+:root [data-slot="switch-thumb"] {
+    border-radius: 0 !important;
+    background: var(--px-line) !important;
+    transition: translate 0.18s steps(3), transform 0.18s steps(3) !important;
+}
+
+html.dark [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+    background: #000000 !important;
+}
+
+html:not(.dark) [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+    background: #9bbc0f !important;
+}
+
+:root [data-slot="checkbox"] {
+    border-radius: 0 !important;
+    border-width: 2px !important;
+    border-color: var(--px-line) !important;
+}
+
+/* Вкладки - выбор картриджа: активная залита */
+:root [data-slot="tabs-list"][data-variant="default"] {
+    background: var(--px-panel-2) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: var(--px-frame-thin) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"] {
+    border-radius: 0 !important;
+    border-color: transparent !important;
+    color: var(--px-dim) !important;
+    transition: none !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"]:hover:not([data-state="active"]) {
+    color: var(--px-hi) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"][data-state="active"] {
+    background: var(--px-hi) !important;
+    color: var(--px-hi-ink) !important;
+    box-shadow: none !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"]::after {
+    background: var(--px-hi) !important;
+    border-radius: 0 !important;
+}
+
+
+/* =====================================================================
+   11. МЕНЮ И ОКНА В СТИЛЕ RPG, ПОДСКАЗКИ, ТОСТЫ
+   ===================================================================== */
+
+/* Окно RPG: тёмный фон, двойная рамка (внешняя полосами, внутренняя - вписанная) */
+:root :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+    [data-slot="select-content"], [data-slot="popover-content"],
+    [data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"]) {
+    background: var(--px-panel-2) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow:
+        inset 0 0 0 3px var(--px-panel-2),
+        inset 0 0 0 5px var(--px-line-2),
+        var(--px-frame),
+        var(--px-drop) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    color: var(--px-text) !important;
+}
+
+/* Появление рывком: 4 кадра от маленького к полному */
+:root :is([data-slot="dropdown-menu-content"], [data-slot="select-content"], [data-slot="popover-content"])[data-state="open"] {
+    animation: px-pop-menu 0.16s steps(4) both !important;
+}
+
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])[data-state="open"] {
+    animation: px-pop-dialog 0.2s steps(4) both !important;
+}
+
+@keyframes px-pop-menu {
+    from { scale: 0.6; opacity: 0.4; }
+    to { scale: 1; opacity: 1; }
+}
+
+/* Диалог центрируется через translate клиента, поэтому анимируем отдельное свойство scale */
+@keyframes px-pop-dialog {
+    from { scale: 0.5; }
+    to { scale: 1; }
+}
+
+/* Мигающая стрелка ▼ в углу диалога - "нажмите, чтобы продолжить" */
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])::after {
+    content: "▼";
+    position: absolute;
+    right: 14px;
+    bottom: 8px;
+    font-size: 11px;
+    color: var(--px-hi);
+    animation: px-blink 0.8s steps(1) infinite;
+    pointer-events: none;
+}
+
+:root :is([data-slot="dialog-title"], [data-slot="alert-dialog-title"], [data-slot="sheet-title"]) {
+    color: var(--px-hi) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 16px !important;
+    text-shadow: 2px 2px 0 var(--px-title-shadow);
+}
+
+:root :is([data-slot="dialog-description"], [data-slot="alert-dialog-description"]) {
+    color: var(--px-dim) !important;
+}
+
+:root [data-slot="alert-dialog-media"] {
+    background: var(--px-panel) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: var(--px-frame-thin) !important;
+}
+
+/* Пункты меню: подсвеченный - курсор ► и жёлтый текст, как в меню RPG */
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"], [data-slot="command-item"]) {
+    border-radius: 0 !important;
+    padding-left: 18px !important;
+    transition: none !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted],
+:root [data-slot="dropdown-menu-sub-trigger"][data-state="open"],
+:root [data-slot="command-item"][data-selected="true"] {
+    background: transparent !important;
+    color: var(--px-hi) !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted] svg {
+    color: var(--px-hi) !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted]::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 50%;
+    width: 6px;
+    height: 10px;
+    margin-top: -5px;
+    background: var(--px-hi);
+    -webkit-mask: var(--px-pointer) center / 100% 100% no-repeat;
+    mask: var(--px-pointer) center / 100% 100% no-repeat;
+    animation: px-blink 0.8s steps(1) infinite;
+}
+
+:root [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted] {
+    color: var(--px-red) !important;
+}
+
+:root [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted]::before {
+    background: var(--px-red);
+}
+
+:root :is([data-slot="dropdown-menu-separator"], [data-slot="select-separator"]) {
+    height: 2px !important;
+    background: repeating-linear-gradient(90deg, var(--px-line-2) 0 2px, transparent 2px 4px) !important;
+}
+
+:root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background: repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0 2px, rgba(0, 0, 0, 0.62) 2px 4px) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+html:not(.dark) :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background: repeating-linear-gradient(180deg, rgba(15, 56, 15, 0.25) 0 2px, rgba(15, 56, 15, 0.4) 2px 4px) !important;
+}
+
+/* Подсказки - реплика персонажа: светлый пузырь с тёмной рамкой */
+:root [data-slot="tooltip-content"] {
+    background: var(--px-line) !important;
+    color: var(--px-panel-2) !important;
+    border-radius: 0 !important;
+    box-shadow: 0 -2px 0 0 var(--px-shadow), 0 2px 0 0 var(--px-shadow), -2px 0 0 0 var(--px-shadow), 2px 0 0 0 var(--px-shadow) !important;
+    font-family: var(--px-font);
+    font-weight: 700;
+}
+
+:root [data-slot="tooltip-content"] svg[class*="fill-"] {
+    background: var(--px-line) !important;
+    fill: var(--px-line) !important;
+    border-radius: 0 !important;
+}
+
+/* Тосты: окно RPG, въезжает справа в 5 кадров */
+:root [data-sonner-toast] {
+    background: var(--px-panel-2) !important;
+    color: var(--px-text) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: var(--px-frame), var(--px-drop) !important;
+    font-family: var(--px-font) !important;
+}
+
+:root [data-sonner-toast][data-mounted="true"] {
+    animation: px-slide 0.25s steps(5) both;
+}
+
+@keyframes px-slide {
+    from { translate: 110% 0; }
+    to { translate: 0 0; }
+}
+
+/* Обучающий тур (driver.js) */
+:root .driver-popover {
+    background: var(--px-panel-2) !important;
+}
+
+:root .driver-popover-title {
+    color: var(--px-hi) !important;
+    font-family: var(--px-font) !important;
+    text-transform: uppercase;
+}
+
+:root .driver-popover-navigation-btns button {
+    border-radius: 0 !important;
+    background: var(--px-panel) !important;
+    border-color: var(--px-line) !important;
+    font-family: var(--px-font) !important;
+}
+
+:root .driver-popover-navigation-btns .driver-popover-next-btn {
+    background: var(--px-hi) !important;
+    color: var(--px-hi-ink) !important;
+}
+
+
+/* =====================================================================
+   12. МЕЛОЧИ И ПЛАВАЮЩЕЕ ОКНО
+   ===================================================================== */
+
+/* Разделители - пунктир из квадратиков */
+:root [data-slot="separator"] {
+    height: 2px !important;
+    background: repeating-linear-gradient(90deg, var(--px-line-2) 0 2px, transparent 2px 6px) !important;
+}
+
+/* Полоса загрузки - сегменты, как шкала здоровья */
+:root [data-slot="progress"] {
+    background: var(--px-panel-2) !important;
+    border-radius: 0 !important;
+    box-shadow: 0 0 0 2px var(--px-line);
+}
+
+:root [data-slot="progress-indicator"] {
+    background: repeating-linear-gradient(90deg, var(--px-green) 0 6px, transparent 6px 8px) !important;
+}
+
+:root [data-slot="skeleton"] {
+    border-radius: 0 !important;
+    animation: px-blink 0.6s steps(1) infinite !important;
+}
+
+:root tbody tr:hover {
+    background: var(--px-panel-2) !important;
+    color: var(--px-hi);
+}
+
+/* Плавающее окно */
+:root .floating-bg {
+    background: var(--px-panel-2) !important;
+    border: 2px solid var(--px-line) !important;
+    border-radius: 0 !important;
+}
+
+:root .floating-thumb {
+    border-radius: 0 !important;
+}
+
+
+/* =====================================================================
+   13. УМЕНЬШЕНИЕ АНИМАЦИИ
+   Звёзды и холмы стоят, экран не мерцает, ничего не мигает и не прыгает.
+   Надписи и курсоры остаются видны - просто без мигания.
+   ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    :root *,
+    :root *::before,
+    :root *::after {
+        animation: none !important;
+        transition-duration: 0.01ms !important;
+    }
+}

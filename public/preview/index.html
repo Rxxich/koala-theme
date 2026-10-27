@@ -1,0 +1,160 @@
+<!doctype html>
+<!--
+  Макет интерфейса Koala Clash 1.5.0 для живого превью тем.
+  Разметка и классы повторяют исходники клиента (src/renderer/src), а app.css - это
+  Tailwind клиента, собранный из тех же исходников (tools/app-css).
+  Тема вставляется в <style id="kt-theme"> ДО app.css - в настоящем приложении
+  webContents.insertCSS() кладёт тему так же, перед стилями клиента.
+-->
+<html lang="ru" class="dark" style="color-scheme: dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Koala Clash</title>
+<style id="kt-theme"></style>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="mock.css">
+</head>
+<body>
+
+<div data-slot="sidebar-wrapper" id="wrapper" style="--sidebar-width:13rem;--sidebar-width-icon:3rem;background-color:#080F16" class="group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full relative h-screen overflow-hidden">
+  <img id="map" src="map-dark.svg" alt="" class="pointer-events-none absolute inset-0 opacity-65 w-full h-full object-cover z-0 transition-[filter] duration-500">
+
+  <!-- Боковая панель (components/app-sidebar.tsx) -->
+  <div id="sb" class="group peer text-sidebar-foreground hidden md:block" data-state="collapsed" data-collapsible="icon" data-variant="floating" data-side="left" data-slot="sidebar" data-guide="app-sidebar">
+    <div data-slot="sidebar-gap" class="relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear group-data-[collapsible=offcanvas]:w-0 group-data-[side=right]:rotate-180 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"></div>
+    <div data-slot="sidebar-container" class="fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)] pt-14.25">
+      <div data-sidebar="sidebar" data-slot="sidebar-inner" class="bg-card/50 backdrop-blur-xl group-data-[variant=floating]:border-stroke flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm">
+        <div data-slot="sidebar-content" data-sidebar="content" class="flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden">
+          <div data-slot="sidebar-group" data-sidebar="group" class="relative flex w-full min-w-0 flex-col p-2">
+            <div data-slot="sidebar-group-content" class="w-full text-sm">
+              <ul data-slot="sidebar-menu" data-sidebar="menu" class="flex w-full min-w-0 flex-col gap-1" id="nav"></ul>
+            </div>
+          </div>
+        </div>
+        <div data-slot="sidebar-footer" data-sidebar="footer" class="flex flex-col gap-2 p-2">
+          <div class="flex flex-col items-center gap-2">
+            <div id="modeSw" class="flex items-center rounded-lg border border-stroke bg-card/50 backdrop-blur-xl p-0.75 transition-opacity duration-150 flex-col gap-1">
+              <button data-mode="rule" data-tip="Правила" class="mode-btn flex items-center justify-center rounded-md font-medium transition-colors size-8 bg-gradient-to-br from-gradient-start-power-on/15 to-gradient-end-power-on/15 border border-stroke-power-on/50 text-foreground shadow-sm cursor-pointer"><svg class="shrink-0 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></button>
+              <button data-mode="global" data-tip="Глобальный" class="mode-btn flex items-center justify-center rounded-md font-medium transition-colors size-8 border border-transparent text-muted-foreground hover:text-foreground cursor-pointer"><svg class="shrink-0 size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></button>
+            </div>
+            <ul data-slot="sidebar-menu" data-sidebar="menu" class="flex w-full min-w-0 flex-col gap-1">
+              <li data-slot="sidebar-menu-item" class="group/menu-item relative"><button id="sbToggle" data-tip="Показать панель" data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" data-active="false" class="peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding,color,background-color,box-shadow] hover:bg-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:ring-1 active:ring-stroke active:bg-accent data-[active=true]:ring-1 data-[active=true]:ring-stroke data-[active=true]:bg-accent data-[active=true]:font-medium group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 hover:ring-1 hover:ring-stroke h-8 text-sm cursor-pointer"><svg id="sbToggleIcon" viewBox="0 0 20 20" fill="currentColor"></svg><span>Скрыть панель</span></button></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="relative z-10 main grow h-full overflow-y-auto">
+    <div class="w-full h-full">
+      <!-- Заголовок окна с кнопками управления (components/window-controls.tsx) -->
+      <div class="sticky top-0 z-40 h-14.25 w-full">
+        <div class="app-drag px-2 pt-3 pb-2 flex justify-between h-14.25">
+          <div class="title h-full text-lg leading-8 flex items-center gap-1" id="pageTitle">Главная</div>
+          <div class="header flex gap-1 h-full items-center" id="pageHeader">
+            <!-- Новый профиль - только на странице профилей (кнопка new-profile в pages/profiles.tsx) -->
+            <button id="hdrNew" data-act="import" data-slot="button" data-variant="ghost" data-size="icon-sm" data-tip="Новый профиль" style="display: none" class="new-profile inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all outline-none hover:bg-accent/50 text-foreground size-8 p-1 bg-clip-content app-nodrag cursor-pointer"><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button id="hdrAction" data-slot="button" data-variant="ghost" data-size="icon-sm" data-tip="Обновить" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all outline-none hover:bg-accent/50 text-foreground size-8 p-1 bg-clip-content app-nodrag cursor-pointer"><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg></button>
+            <div class="wc-group wc-win">
+              <button class="wc-btn wc-minimize" data-wc="min"><svg viewBox="0 0 10 10"><path d="M1 5h8" stroke="currentColor"/></svg></button>
+              <button class="wc-btn wc-maximize" data-wc="max"><svg viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor"/></svg></button>
+              <button class="wc-btn wc-close" data-wc="close"><svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content h-[calc(100vh-57px)] overflow-y-auto custom-scrollbar" id="content">
+
+        <!-- ГЛАВНАЯ (pages/home.tsx) -->
+        <div class="page on h-full" data-page="home">
+          <div class="flex flex-col h-full px-2 pb-2 gap-3">
+            <div class="rounded-2xl border border-stroke bg-card/50 backdrop-blur-xl p-4">
+              <div data-guide="home-profile-header" class="flex items-center justify-center gap-3">
+                <span class="font-medium text-base" id="homeProfile">Koala VPN · Premium</span>
+                <button data-act="refresh-profile" data-tip="Обновить подписку" class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50 cursor-pointer"><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg></button>
+              </div>
+              <div data-guide="home-profile-announce" class="text-sm font-medium text-center mt-2 whitespace-pre-line">Новые серверы в Финляндии и Японии 🎉</div>
+            </div>
+            <div class="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center rounded-2xl border border-stroke bg-card/50 backdrop-blur-xl p-1">
+              <div class="flex flex-col items-center py-2 px-1"><span class="text-sm text-foreground">Трафика осталось:</span><span class="font-bold text-base mt-0.5" id="trafficLeft">184.2 GB</span></div>
+              <div class="h-8 w-px bg-stroke"></div>
+              <div class="flex flex-col items-center py-2 px-1"><span class="text-sm text-foreground">Дней осталось:</span><span class="text-base font-bold mt-0.5">23</span></div>
+              <div class="h-8 w-px bg-stroke"></div>
+              <div class="flex flex-col items-center py-2 px-1"><span class="text-sm text-foreground">Истекает:</span><span class="text-base font-bold mt-0.5">16.11.2026</span></div>
+            </div>
+            <div class="flex flex-col grow-3 items-center justify-center min-h-0">
+              <div class="mb-3 flex h-6 items-center justify-center">
+                <div class="relative inline-grid whitespace-nowrap h-6 leading-none text-foreground font-semibold uppercase"><span class="col-start-1 row-start-1 justify-self-center" id="statusText">Отключено</span></div>
+              </div>
+              <button id="power" data-guide="home-power-toggle" class="relative group transition-transform active:scale-95 cursor-pointer">
+                <div id="powerCircle" class="w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 bg-radial-[at_30%_45%] backdrop-blur-xl border-2 from-gradient-start-power-off/50 to-gradient-end-power-off/50 border-stroke-power-off">
+                  <div class="relative size-16">
+                    <svg role="status" aria-label="Loading" class="animate-spin absolute inset-0 m-auto size-16 text-[#FAFAFA] transition-all duration-300 ease-out opacity-0 scale-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    <img alt="" class="absolute inset-0 size-16 fill-foreground transition-all duration-300 ease-out opacity-0 scale-90" src="data:image/svg+xml,%3Csvg width='72' height='72' viewBox='0 0 72 72' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M21 10V62M51 10V62' stroke='%23FAFAFA' stroke-width='9' stroke-linecap='round'/%3E%3C/svg%3E">
+                    <img alt="" class="absolute inset-0 size-16 fill-foreground transition-all duration-300 ease-out opacity-100 scale-100" src="data:image/svg+xml,%3Csvg width='72' height='72' viewBox='0 0 72 72' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M56.4058 19.6319C60.3907 23.5336 63.1041 28.5042 64.203 33.9152C65.302 39.3262 64.737 44.9347 62.5797 50.0315C60.4223 55.1283 56.7694 59.4845 52.0828 62.5493C47.3962 65.6142 41.8864 67.25 36.25 67.25C30.6136 67.25 25.1038 65.6142 20.4172 62.5493C15.7306 59.4845 12.0777 55.1283 9.92034 50.0315C7.76297 44.9347 7.19803 39.3262 8.29695 33.9152C9.39588 28.5042 12.1093 23.5336 16.0942 19.6319M36.2658 5.25V36.2455' stroke='%23FAFAFA' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+                    <img alt="" class="absolute inset-0 size-16 fill-foreground transition-all duration-300 ease-out opacity-0 scale-90" src="data:image/svg+xml,%3Csvg width='72' height='72' viewBox='0 0 72 72' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M36 9V43' stroke='%23FAFAFA' stroke-width='8' stroke-linecap='round'/%3E%3Ccircle cx='36' cy='60.5' r='5.5' fill='%23FAFAFA'/%3E%3C/svg%3E">
+                  </div>
+                </div>
+              </button>
+              <div class="mt-3 h-8 flex items-center justify-center"><div id="timer" class="inline-flex items-center gap-0.5 text-base font-bold text-foreground tabular-nums transition-all duration-300 ease-out opacity-0 translate-y-1">00:00:00</div></div>
+              <div id="traffic" class="mt-2 flex items-center gap-4 tabular-nums transition-all duration-300 ease-out opacity-0 -translate-y-1">
+                <div class="flex items-center gap-1.5 text-sm text-muted-foreground"><svg class="size-3.5 text-stroke-power-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span id="up">0 B/s</span></div>
+                <div class="h-3 w-px bg-stroke"></div>
+                <div class="flex items-center gap-1.5 text-sm text-muted-foreground"><svg class="size-3.5 text-stroke-power-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg><span id="down">0 B/s</span></div>
+              </div>
+            </div>
+            <div class="flag-emoji flex flex-col items-center mx-auto w-full max-w-3xs max-h-16">
+              <div data-guide="home-group-selector" class="w-full cursor-pointer" id="groupSelector">
+                <div class="flex items-center justify-between h-9 rounded-2xl border border-stroke pl-3 pr-1 py-3 backdrop-blur-xl bg-card/50 transition-colors hover:bg-card/70">
+                  <div class="flag-emoji text-sm truncate max-w-52" id="homeProxy">🇳🇱 Нидерланды · Амстердам</div>
+                  <svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="flex justify-center text-sm text-muted-foreground">
+              <button data-guide="home-support-link" data-act="support" type="button" class="inline-flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer"><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg><span>Поддержка</span></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ПРОФИЛИ (pages/profiles.tsx, components/profiles/profile-item.tsx) -->
+        <div class="page" data-page="profiles">
+          <div class="grid grid-cols-2 gap-2 mx-2 mb-2" id="profileGrid"></div>
+        </div>
+
+        <!-- ПРОКСИ (pages/proxies.tsx) -->
+        <!-- Список групп - как GroupedVirtuoso в pages/proxies.tsx: своя область прокрутки, список внутри абсолютный -->
+        <div class="page" data-page="proxies"><div class="h-[calc(100vh-58px)]"><div data-testid="virtuoso-scroller" data-virtuoso-scroller="true" tabindex="0" style="height: 100%; outline: none; overflow-y: auto; position: relative;"><div data-viewport-type="element" style="height: 100%; position: absolute; top: 0px; width: 100%;"><div data-testid="virtuoso-item-list" id="proxyGroups" style="box-sizing: border-box;"></div></div></div></div></div>
+
+        <!-- ПОДКЛЮЧЕНИЯ (pages/connections.tsx) -->
+        <div class="page" data-page="connections">
+          <div class="px-2 pb-2 flex gap-2 items-center">
+            <div data-slot="tabs" class="group/tabs flex gap-2"><div role="tablist" data-slot="tabs-list" data-variant="default" class="rounded-lg p-[3px] h-8 group/tabs-list text-muted-foreground inline-flex w-fit items-center justify-center border border-stroke bg-card/50 backdrop-blur-xl" id="connTabs"></div></div>
+            <div class="grow"></div>
+            <button data-act="close-all" data-slot="button" data-variant="outline" data-size="sm" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all outline-none border border-stroke bg-card/50 backdrop-blur-xl hover:bg-accent/50 text-foreground h-8 px-3 cursor-pointer">Закрыть все</button>
+          </div>
+          <div id="connList"></div>
+        </div>
+
+        <!-- ПРАВИЛА (pages/rules.tsx, components/rules/rule-item.tsx) -->
+        <div class="page" data-page="rules"><div id="ruleList"></div></div>
+
+        <!-- ЛОГИ (pages/logs.tsx, components/logs/log-item.tsx) -->
+        <div class="page" data-page="logs"><div id="logList" style="--log-seq-width:3ch"></div></div>
+
+        <!-- НАСТРОЙКИ (pages/settings.tsx) -->
+        <div class="page" data-page="settings"><div id="settingsBody"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Всплывающие элементы (в клиенте - порталы Radix в конце body) -->
+<div id="portal"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,1072 @@
+/* Koala Liquid Glass */
+/*
+  Тема для Koala Clash 1.5.0 в духе Apple Liquid Glass (iOS 26 / macOS Tahoe).
+
+  ИДЕЯ
+  Интерфейс - слой живого стекла над цветными обоями. Глубина передаётся не тенями,
+  а прозрачностью, размытием и бликом по кромке: верхний край стекла светлее,
+  нижний ловит отражённый свет. Скругления вложены друг в друга (окно > карточка >
+  пункт), а все элементы управления - капсулы. Движение - пружинное, как в iOS.
+  Единственная фоновая анимация - медленный дрейф обоев. Всё остальное двигается
+  только в ответ на действие.
+
+  Светлая тема - пастельные обои, белое стекло, системный синий #007aff.
+  Тёмная - глубокие обои с яркими пятнами, дымчатое стекло, синий #0a84ff.
+  Подключение отмечено зелёным, как переключатель VPN в iOS.
+
+  КАК ПОДКЛЮЧАЕТСЯ
+  Тема вставляется через webContents.insertCSS(). Такая таблица стилей идёт в каскаде
+  раньше CSS самого клиента, поэтому все правила начинаются с :root - это поднимает
+  специфичность ровно настолько, чтобы перебить клиента.
+  Палитры: html:not(.dark) - светлая, html.dark - тёмная.
+
+  СОДЕРЖАНИЕ
+    0. Материал и движение    - стекло, пружины, радиусы
+    1. Светлая палитра
+    2. Тёмная палитра
+    3. База и обои
+    4. Стекло: общие поверхности
+    5. Главная и кнопка питания
+    6. Прокси, профили, подключения
+    7. Боковая панель и сегменты
+    8. Кнопки
+    9. Поля, переключатели, вкладки
+   10. Меню, окна, подсказки, тосты
+   11. Мелочи и плавающее окно
+   12. Уменьшение анимации
+*/
+
+
+/* =====================================================================
+   0. МАТЕРИАЛ И ДВИЖЕНИЕ
+   ===================================================================== */
+
+:root {
+    --radius: 1.25rem !important;
+
+    /* Радиусы вложены: внутренний = внешний - отступ. Так углы читаются как "концентрические" */
+    --lg-r-window: 26px;     /* боковая панель, диалоги */
+    --lg-r-card: 20px;       /* плитки, группы */
+    --lg-r-cell: 15px;       /* карточки серверов и профилей */
+    --lg-r-item: 10px;       /* пункты меню */
+    --lg-r-pill: 999px;      /* кнопки, поля, переключатели */
+
+    /* Пружина с небольшим перелётом - как отклик на нажатие в iOS */
+    --lg-spring: linear(0, 0.13 4%, 0.46 9%, 0.79 15%, 0.96 20%, 1.04 26%, 1.06 31%, 1.04 38%, 1.01 46%, 0.995 58%, 1);
+    --lg-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --lg-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+    /* Шрифты: SF Pro на macOS, Segoe UI Variable на Windows */
+    --lg-font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --lg-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+
+    /* Кромка стекла: светлый верх, мягкие бока, отражённый свет снизу */
+    --lg-rim:
+        inset 0 1px 0 0 var(--lg-rim-top),
+        inset 1px 0 0 0 var(--lg-rim-side),
+        inset -1px 0 0 0 var(--lg-rim-side),
+        inset 0 -1px 0 0 var(--lg-rim-bottom);
+}
+
+
+/* =====================================================================
+   1. СВЕТЛАЯ ПАЛИТРА
+   ===================================================================== */
+
+html:not(.dark) {
+    --background: #eef1f8 !important;
+    --foreground: #1d1d1f !important;
+    --card: #ffffff !important;
+    --card-foreground: #1d1d1f !important;
+    --popover: #ffffff !important;
+    --popover-foreground: #1d1d1f !important;
+    --primary: #007aff !important;
+    --primary-foreground: #ffffff !important;
+    --secondary: rgba(255, 255, 255, 0.5) !important;
+    --secondary-foreground: #1d1d1f !important;
+    --muted: rgba(118, 118, 128, 0.12) !important;
+    --muted-foreground: #5f5f69 !important;
+    --accent: rgba(255, 255, 255, 0.55) !important;
+    --accent-foreground: #1d1d1f !important;
+    --border: rgba(29, 29, 31, 0.08) !important;
+    --input: rgba(29, 29, 31, 0.1) !important;
+    --ring: #007aff !important;
+    --stroke: rgba(255, 255, 255, 0.6) !important;   /* все рамки клиента становятся кромкой стекла */
+    --destructive: #ff3b30 !important;
+    --success: #34c759 !important;
+    --warning: #ff9500 !important;
+
+    --stroke-power-on: rgba(255, 255, 255, 0.7) !important;
+    --gradient-start-power-on: #4cd964 !important;
+    --gradient-end-power-on: #28b14c !important;
+    --stroke-power-off: rgba(255, 255, 255, 0.6) !important;
+    --gradient-start-power-off: #ffffff !important;
+    --gradient-end-power-off: #dfe3ec !important;
+
+    --profile-active: rgba(0, 122, 255, 0.12) !important;
+    --stroke-profile-active: rgba(0, 122, 255, 0.4) !important;
+    --profile-inactive: rgba(255, 255, 255, 0.34) !important;
+    --stroke-profile-inactive: rgba(255, 255, 255, 0.6) !important;
+
+    --chart-1: #007aff !important;
+    --chart-2: #ff9500 !important;
+    --chart-3: #34c759 !important;
+    --chart-4: #af52de !important;
+    --chart-5: #ff2d55 !important;
+
+    --sidebar: rgba(255, 255, 255, 0.34) !important;
+    --sidebar-foreground: #1d1d1f !important;
+    --sidebar-primary: #007aff !important;
+    --sidebar-primary-foreground: #ffffff !important;
+    --sidebar-accent: rgba(255, 255, 255, 0.6) !important;
+    --sidebar-accent-foreground: #1d1d1f !important;
+    --sidebar-border: rgba(255, 255, 255, 0.6) !important;
+    --sidebar-ring: #007aff !important;
+
+    /* Обои: пастельные пятна неба, сирени, персика и мяты */
+    --lg-wall-base: #e9edf7;
+    --lg-wall-1: #8fc1ff;
+    --lg-wall-2: #d4b2ff;
+    --lg-wall-3: #ffc6a8;
+    --lg-wall-4: #9fe8d0;
+
+    /* Стекло */
+    --lg-fill: rgba(255, 255, 255, 0.34);
+    --lg-fill-hover: rgba(255, 255, 255, 0.52);
+    --lg-fill-strong: rgba(250, 251, 255, 0.72);    /* меню и диалоги: текст должен читаться */
+    --lg-fill-well: rgba(255, 255, 255, 0.45);      /* поля ввода - "лунка" в стекле */
+    --lg-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 45%);
+    --lg-edge: rgba(255, 255, 255, 0.6);
+    --lg-rim-top: rgba(255, 255, 255, 0.95);
+    --lg-rim-side: rgba(255, 255, 255, 0.35);
+    --lg-rim-bottom: rgba(255, 255, 255, 0.3);
+    --lg-shade: 0 1px 1px rgba(16, 24, 48, 0.05), 0 14px 34px -12px rgba(16, 24, 48, 0.24);
+    --lg-shade-pop: 0 2px 6px rgba(16, 24, 48, 0.08), 0 30px 70px -20px rgba(16, 24, 48, 0.35);
+    --lg-blur: blur(22px) saturate(190%);
+    --lg-blur-strong: blur(34px) saturate(200%);
+
+    --lg-tint-selected: rgba(0, 122, 255, 0.16);
+    --lg-edge-selected: rgba(0, 122, 255, 0.45);
+    --lg-segment: rgba(118, 118, 128, 0.12);
+    --lg-segment-on: #ffffff;
+    --lg-switch-off: rgba(120, 120, 128, 0.2);
+    --lg-scroll: rgba(29, 29, 31, 0.28);
+    --lg-icon-filter: brightness(0) opacity(0.72);  /* белые иконки клиента → тёмные на светлом стекле */
+}
+
+
+/* =====================================================================
+   2. ТЁМНАЯ ПАЛИТРА
+   ===================================================================== */
+
+html.dark {
+    --background: #06070d !important;
+    --foreground: #f5f5f7 !important;
+    --card: #1c1c24 !important;
+    --card-foreground: #f5f5f7 !important;
+    --popover: #1c1c24 !important;
+    --popover-foreground: #f5f5f7 !important;
+    --primary: #0a84ff !important;
+    --primary-foreground: #ffffff !important;
+    --secondary: rgba(255, 255, 255, 0.08) !important;
+    --secondary-foreground: #f5f5f7 !important;
+    --muted: rgba(118, 118, 128, 0.24) !important;
+    --muted-foreground: #a7a7b2 !important;
+    --accent: rgba(255, 255, 255, 0.12) !important;
+    --accent-foreground: #f5f5f7 !important;
+    --border: rgba(255, 255, 255, 0.1) !important;
+    --input: rgba(255, 255, 255, 0.14) !important;
+    --ring: #0a84ff !important;
+    --stroke: rgba(255, 255, 255, 0.16) !important;
+    --destructive: #ff453a !important;
+    --success: #30d158 !important;
+    --warning: #ff9f0a !important;
+
+    --stroke-power-on: rgba(255, 255, 255, 0.4) !important;
+    --gradient-start-power-on: #30d158 !important;
+    --gradient-end-power-on: #1f9e45 !important;
+    --stroke-power-off: rgba(255, 255, 255, 0.2) !important;
+    --gradient-start-power-off: #3a3a46 !important;
+    --gradient-end-power-off: #23232c !important;
+
+    --profile-active: rgba(10, 132, 255, 0.2) !important;
+    --stroke-profile-active: rgba(10, 132, 255, 0.5) !important;
+    --profile-inactive: rgba(42, 44, 58, 0.36) !important;
+    --stroke-profile-inactive: rgba(255, 255, 255, 0.14) !important;
+
+    --chart-1: #0a84ff !important;
+    --chart-2: #ff9f0a !important;
+    --chart-3: #30d158 !important;
+    --chart-4: #bf5af2 !important;
+    --chart-5: #ff375f !important;
+
+    --sidebar: rgba(30, 31, 42, 0.4) !important;
+    --sidebar-foreground: #f5f5f7 !important;
+    --sidebar-primary: #0a84ff !important;
+    --sidebar-primary-foreground: #ffffff !important;
+    --sidebar-accent: rgba(255, 255, 255, 0.14) !important;
+    --sidebar-accent-foreground: #f5f5f7 !important;
+    --sidebar-border: rgba(255, 255, 255, 0.14) !important;
+    --sidebar-ring: #0a84ff !important;
+
+    /* Обои: ультрамарин, фиолет, бирюза и малина в глубине */
+    --lg-wall-base: #07080f;
+    --lg-wall-1: #2350ff;
+    --lg-wall-2: #7b2cff;
+    --lg-wall-3: #00a39a;
+    --lg-wall-4: #e2306f;
+
+    --lg-fill: rgba(44, 46, 62, 0.34);
+    --lg-fill-hover: rgba(70, 72, 92, 0.44);
+    --lg-fill-strong: rgba(28, 29, 40, 0.74);
+    --lg-fill-well: rgba(0, 0, 0, 0.22);
+    --lg-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0) 42%);
+    --lg-edge: rgba(255, 255, 255, 0.14);
+    --lg-rim-top: rgba(255, 255, 255, 0.3);
+    --lg-rim-side: rgba(255, 255, 255, 0.09);
+    --lg-rim-bottom: rgba(255, 255, 255, 0.07);
+    --lg-shade: 0 1px 1px rgba(0, 0, 0, 0.3), 0 16px 40px -14px rgba(0, 0, 0, 0.65);
+    --lg-shade-pop: 0 2px 8px rgba(0, 0, 0, 0.35), 0 34px 80px -20px rgba(0, 0, 0, 0.8);
+    --lg-blur: blur(26px) saturate(170%) brightness(0.92);
+    --lg-blur-strong: blur(38px) saturate(180%) brightness(0.85);
+
+    --lg-tint-selected: rgba(10, 132, 255, 0.24);
+    --lg-edge-selected: rgba(10, 132, 255, 0.55);
+    --lg-segment: rgba(118, 118, 128, 0.24);
+    --lg-segment-on: rgba(255, 255, 255, 0.2);
+    --lg-switch-off: rgba(120, 120, 128, 0.36);
+    --lg-scroll: rgba(255, 255, 255, 0.3);
+    --lg-icon-filter: none;
+}
+
+
+/* =====================================================================
+   3. БАЗА И ОБОИ
+   ===================================================================== */
+
+:root body {
+    font-family: var(--lg-font-text);
+    letter-spacing: -0.005em;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+}
+
+:root ::selection {
+    background: color-mix(in oklab, var(--primary) 28%, transparent);
+}
+
+/* Фокус с клавиатуры - кольцо системного синего, как в macOS */
+:root :focus-visible {
+    --tw-ring-color: color-mix(in oklab, var(--primary) 55%, transparent) !important;
+}
+
+/* Корневой контейнер окна (SidebarProvider в App.tsx): основа обоев.
+   Клиент задаёт ему цвет инлайн-стилем, поэтому !important */
+:root [data-slot="sidebar-wrapper"] {
+    background: var(--lg-wall-base) !important;
+    box-shadow: none !important;
+}
+
+/* Сами обои - псевдоэлемент с цветными пятнами, медленно дрейфует.
+   Это единственная анимация, которая идёт без участия пользователя */
+:root [data-slot="sidebar-wrapper"]::before {
+    content: "";
+    position: absolute;
+    inset: -18%;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(38% 46% at 16% 22%, var(--lg-wall-1) 0%, transparent 70%),
+        radial-gradient(34% 44% at 86% 14%, var(--lg-wall-2) 0%, transparent 70%),
+        radial-gradient(42% 48% at 82% 86%, var(--lg-wall-3) 0%, transparent 70%),
+        radial-gradient(38% 44% at 18% 88%, var(--lg-wall-4) 0%, transparent 70%);
+    opacity: 0.9;
+    animation: lg-drift 48s var(--lg-ease) infinite alternate;
+}
+
+html.dark [data-slot="sidebar-wrapper"]::before {
+    opacity: 0.55;
+}
+
+@keyframes lg-drift {
+    0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+    50% { transform: translate3d(3%, -2%, 0) rotate(6deg) scale(1.06); }
+    100% { transform: translate3d(-3%, 2%, 0) rotate(-4deg) scale(1.03); }
+}
+
+/* Карта мира клиента не нужна - её место занимают обои */
+:root [data-slot="sidebar-wrapper"] > img.pointer-events-none {
+    display: none !important;
+}
+
+/* Заголовок страницы - крупный, плотный, как Large Title в iOS */
+:root .title {
+    font-family: var(--lg-font-display);
+    font-size: 22px !important;
+    font-weight: 700;
+    letter-spacing: -0.022em;
+}
+
+/* Полоса прокрутки: тонкая капсула поверх контента, как в macOS */
+:root *::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+}
+
+:root *::-webkit-scrollbar-track,
+:root *::-webkit-scrollbar-corner {
+    background: transparent !important;
+}
+
+:root *::-webkit-scrollbar-thumb {
+    background: var(--lg-scroll) padding-box !important;
+    border: 3px solid transparent !important;
+    border-radius: 999px !important;
+    min-height: 40px;
+}
+
+:root *::-webkit-scrollbar-thumb:hover {
+    border-width: 2px !important;
+}
+
+
+/* =====================================================================
+   4. СТЕКЛО: ОБЩИЕ ПОВЕРХНОСТИ
+   Один рецепт материала на все панели: заливка + блик сверху + размытие +
+   кромка + мягкая тень. Отличаются только радиус и плотность.
+   ===================================================================== */
+
+/* Карточки (Card), плитки главной, баннер обновления, настройки-аккордеоны */
+:root [data-slot="card"],
+:root div.rounded-2xl[class*="bg-card/"]:not([data-slot]),
+:root [data-slot="accordion"].rounded-xl.border,
+:root .driver-popover {
+    background-color: var(--lg-fill) !important;
+    background-image: var(--lg-sheen) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: var(--lg-r-card) !important;
+    box-shadow: var(--lg-rim), var(--lg-shade) !important;
+    -webkit-backdrop-filter: var(--lg-blur) !important;
+    backdrop-filter: var(--lg-blur) !important;
+}
+
+/* Карточка внутри карточки - без собственной тени */
+:root [data-slot="card"] [data-slot="card"] {
+    box-shadow: var(--lg-rim) !important;
+}
+
+/* Разделители в плитке трафика на главной */
+:root div.rounded-2xl[class*="bg-card/"] > .w-px.bg-stroke {
+    background: color-mix(in oklab, var(--foreground) 12%, transparent) !important;
+}
+
+/* Боковая панель - самая крупная стеклянная плита */
+:root [data-slot="sidebar-inner"] {
+    background-color: var(--lg-fill) !important;
+    background-image: var(--lg-sheen) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: var(--lg-r-window) !important;
+    box-shadow: var(--lg-rim), var(--lg-shade) !important;
+    -webkit-backdrop-filter: var(--lg-blur-strong) !important;
+    backdrop-filter: var(--lg-blur-strong) !important;
+}
+
+
+/* =====================================================================
+   5. ГЛАВНАЯ И КНОПКА ПИТАНИЯ (pages/home.tsx)
+   ===================================================================== */
+
+/* Статус над кнопкой: без капса, как подпись в Пункте управления */
+:root .mb-3:has(+ [data-guide="home-power-toggle"]) > div {
+    text-transform: none !important;
+    font-family: var(--lg-font-display);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--muted-foreground) !important;
+    transition: color 0.4s var(--lg-ease);
+}
+
+:root .mb-3:has(+ [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"]) > div {
+    color: var(--success) !important;
+}
+
+/* Таймер подключения - крупные цифры */
+:root [data-guide="home-power-toggle"] + div > div {
+    font-family: var(--lg-font-display);
+    font-size: 26px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em;
+}
+
+/* Стрелки трафика под таймером: клиент красит их цветом рамки кнопки (у нас это белая
+   кромка стекла) - перекрашиваем в зелёный "подключено" */
+:root [data-guide="home-power-toggle"] ~ div svg.text-stroke-power-on {
+    color: var(--success) !important;
+}
+
+/* Кнопка питания - стеклянная линза.
+   Разметка: <button data-guide> → <div> (круг) → иконки (спиннер, пауза, питание, ошибка) */
+:root [data-guide="home-power-toggle"] {
+    border-radius: 50%;
+    transition: scale 0.6s var(--lg-spring) !important;
+}
+
+:root [data-guide="home-power-toggle"]:hover:not(:disabled) {
+    scale: 1.045;
+}
+
+:root [data-guide="home-power-toggle"] > div {
+    border: 1px solid var(--lg-edge) !important;
+    background:
+        radial-gradient(120% 120% at 30% 16%, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.16) 36%, rgba(255, 255, 255, 0.04) 62%, rgba(255, 255, 255, 0.24) 100%),
+        var(--lg-fill) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(200%) !important;
+    backdrop-filter: blur(14px) saturate(200%) !important;
+    box-shadow:
+        inset 0 2px 1px rgba(255, 255, 255, 0.85),
+        inset 0 -12px 26px rgba(255, 255, 255, 0.16),
+        inset 0 -2px 2px rgba(0, 0, 0, 0.06),
+        0 22px 50px -18px rgba(16, 24, 48, 0.45),
+        0 2px 6px rgba(16, 24, 48, 0.1) !important;
+    transition: background 0.5s var(--lg-ease), box-shadow 0.5s var(--lg-ease) !important;
+}
+
+html.dark [data-guide="home-power-toggle"] > div {
+    background:
+        radial-gradient(120% 120% at 30% 16%, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.06) 36%, rgba(255, 255, 255, 0.02) 62%, rgba(255, 255, 255, 0.12) 100%),
+        var(--lg-fill) !important;
+    box-shadow:
+        inset 0 1.5px 1px rgba(255, 255, 255, 0.4),
+        inset 0 -12px 26px rgba(255, 255, 255, 0.06),
+        0 24px 60px -18px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Иконки клиента белые - в светлой теме перекрашиваем их в тёмный */
+:root [data-guide="home-power-toggle"] > div img {
+    filter: var(--lg-icon-filter);
+    transition: filter 0.4s var(--lg-ease), opacity 0.3s var(--lg-ease), scale 0.3s var(--lg-ease) !important;
+}
+
+html:not(.dark) [data-guide="home-power-toggle"] svg[role="status"] {
+    color: #1d1d1f !important;
+}
+
+/* Подключено: стекло окрашивается в зелёный, иконка снова белая */
+:root [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"] {
+    border-color: rgba(255, 255, 255, 0.55) !important;
+    background:
+        radial-gradient(120% 120% at 30% 16%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 40%, rgba(255, 255, 255, 0) 64%),
+        linear-gradient(180deg, color-mix(in oklab, var(--success) 88%, transparent), color-mix(in oklab, var(--success) 72%, black)) !important;
+    box-shadow:
+        inset 0 2px 1px rgba(255, 255, 255, 0.7),
+        inset 0 -10px 24px rgba(255, 255, 255, 0.2),
+        0 22px 60px -14px color-mix(in oklab, var(--success) 70%, transparent),
+        0 2px 6px rgba(16, 24, 48, 0.12) !important;
+}
+
+:root [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"] img {
+    filter: none;
+}
+
+/* Подключено: от линзы расходится тихая волна - соединение "дышит" */
+:root [data-guide="home-power-toggle"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    border: 2px solid color-mix(in oklab, var(--success) 70%, transparent);
+    opacity: 0;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div[class*="border-stroke-power-on"])::after {
+    animation: lg-pulse 2.8s var(--lg-ease-out) infinite;
+}
+
+@keyframes lg-pulse {
+    0% { opacity: 0.75; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.55); }
+}
+
+/* Подключение: по кромке бежит синяя дуга */
+:root [data-guide="home-power-toggle"]::before {
+    content: "";
+    position: absolute;
+    inset: -7px;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    background: conic-gradient(from 0deg, transparent 0 55%, var(--primary) 100%);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+    transition: opacity 0.3s var(--lg-ease);
+}
+
+:root [data-guide="home-power-toggle"]:has(svg[role="status"].opacity-100)::before {
+    opacity: 1;
+    animation: lg-spin 1.1s linear infinite;
+}
+
+@keyframes lg-spin {
+    to { transform: rotate(1turn); }
+}
+
+/* Ошибка ядра: стекло краснеет */
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) > div {
+    background:
+        radial-gradient(120% 120% at 30% 16%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.08) 40%, rgba(255, 255, 255, 0) 64%),
+        linear-gradient(180deg, color-mix(in oklab, var(--destructive) 85%, transparent), color-mix(in oklab, var(--destructive) 70%, black)) !important;
+}
+
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) img {
+    filter: none;
+}
+
+/* Кнопка выбора группы под питанием - стеклянная капсула */
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]) {
+    border-radius: var(--lg-r-pill) !important;
+    transition: background-color 0.25s var(--lg-ease), scale 0.5s var(--lg-spring) !important;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]):hover {
+    background-color: var(--lg-fill-hover) !important;
+    scale: 1.02;
+}
+
+/* Кнопки "Добавить профиль" и "Оплатить" на главной */
+:root [class*="bg-gradient-start-power-on/50"] {
+    border-radius: var(--lg-r-pill) !important;
+    border: 0 !important;
+    background: linear-gradient(180deg, color-mix(in oklab, var(--primary) 85%, white), var(--primary)) !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 8px 20px -8px color-mix(in oklab, var(--primary) 70%, transparent) !important;
+    transition: filter 0.2s var(--lg-ease), scale 0.5s var(--lg-spring) !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"]:hover {
+    filter: brightness(1.08);
+}
+
+:root [class*="bg-gradient-start-power-on/50"]:active {
+    scale: 0.97;
+}
+
+:root [class*="bg-gradient-start-power-on/50"] svg {
+    color: inherit !important;
+}
+
+
+/* =====================================================================
+   6. ПРОКСИ, ПРОФИЛИ, ПОДКЛЮЧЕНИЯ
+   ===================================================================== */
+
+/* Карточка сервера (components/proxies/proxy-item.tsx: Card с cursor-pointer и overflow-hidden) */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate) {
+    border-radius: var(--lg-r-cell) !important;
+    box-shadow: var(--lg-rim) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+    backdrop-filter: blur(16px) saturate(180%) !important;
+    transition: background-color 0.25s var(--lg-ease), border-color 0.25s var(--lg-ease), scale 0.55s var(--lg-spring), box-shadow 0.3s var(--lg-ease) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):not(:has(button:hover)):hover {
+    background-color: var(--lg-fill-hover) !important;
+    scale: 1.015;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):active {
+    scale: 0.985;
+}
+
+/* Выбранный сервер: стекло подкрашено системным синим, название - синим */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"] {
+    background-color: var(--lg-tint-selected) !important;
+    border-color: var(--lg-edge-selected) !important;
+    box-shadow: var(--lg-rim), 0 8px 24px -10px color-mix(in oklab, var(--primary) 60%, transparent) !important;
+}
+
+:root [data-slot="card"][class*="border-primary/"] .flag-emoji {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+/* Закреплённый сервер - янтарное стекло */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="bg-amber-500"] {
+    background-color: rgba(255, 149, 0, 0.16) !important;
+    border-color: rgba(255, 149, 0, 0.45) !important;
+}
+
+/* Кнопки внутри карточек (пинг, открепить, тест группы) - круглая подсветка */
+:root [data-slot="card"] [data-slot="button"][data-variant="ghost"] {
+    border-radius: var(--lg-r-pill) !important;
+}
+
+/* Заголовок группы (pages/proxies.tsx) */
+:root [data-slot="card"].cursor-pointer.isolate {
+    transition: background-color 0.25s var(--lg-ease) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.isolate:not(:has(button:hover)):hover {
+    background-color: var(--lg-fill-hover) !important;
+}
+
+/* Цветной квадрат с иконкой типа группы - скруглённая "иконка приложения" */
+:root [data-slot="card"].isolate .size-9.rounded-md {
+    border-radius: 11px !important;
+}
+
+/* Подложка раскрытой группы: прозрачная, без размытия - иначе карточки серверов
+   внутри не смогут размыть обои (вложенное размытие в Chromium не работает) */
+:root div.mx-2[class*="bg-card/30"] {
+    background: color-mix(in oklab, var(--lg-fill) 45%, transparent) !important;
+    border-color: var(--lg-edge) !important;
+}
+
+:root div.mx-2[class*="bg-card/30"].rounded-b-xl {
+    border-radius: 0 0 var(--lg-r-card) var(--lg-r-card) !important;
+}
+
+/* Карточка профиля (components/profiles/profile-item.tsx, у неё всегда есть aria-busy) */
+:root div.rounded-2xl[aria-busy] {
+    background-color: var(--lg-fill) !important;
+    background-image: var(--lg-sheen) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: var(--lg-r-card) !important;
+    box-shadow: var(--lg-rim), var(--lg-shade) !important;
+    -webkit-backdrop-filter: var(--lg-blur) !important;
+    backdrop-filter: var(--lg-blur) !important;
+    transition: background-color 0.25s var(--lg-ease), scale 0.55s var(--lg-spring), opacity 0.25s var(--lg-ease) !important;
+}
+
+:root div.rounded-2xl[aria-busy]:not(:has(button:hover)):hover {
+    background-color: var(--lg-fill-hover) !important;
+    scale: 1.012;
+}
+
+:root div.rounded-2xl[aria-busy].border-stroke-profile-active {
+    background-color: var(--lg-tint-selected) !important;
+    border-color: var(--lg-edge-selected) !important;
+}
+
+:root div.rounded-2xl[aria-busy] .border-foreground\/10 {
+    border-color: color-mix(in oklab, var(--foreground) 10%, transparent) !important;
+}
+
+/* Строки на странице "Подключения" */
+:root div.rounded-xl.cursor-pointer:is([class*="bg-card/40"], [class*="to-card/40"]) {
+    background: var(--lg-sheen), var(--lg-fill) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: var(--lg-r-cell) !important;
+    box-shadow: var(--lg-rim) !important;
+    -webkit-backdrop-filter: var(--lg-blur) !important;
+    backdrop-filter: var(--lg-blur) !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="bg-card/40"]:hover {
+    background: var(--lg-sheen), var(--lg-fill-hover) !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="to-card/40"] {
+    background: var(--lg-sheen), var(--lg-tint-selected) !important;
+    border-color: var(--lg-edge-selected) !important;
+}
+
+/* Значок приложения в строке подключения */
+:root div.rounded-xl.cursor-pointer .size-12.rounded-lg {
+    border-radius: 12px !important;
+    background: var(--muted) !important;
+}
+
+/* Бейджи - капсулы */
+:root [data-slot="badge"] {
+    border-radius: var(--lg-r-pill) !important;
+}
+
+
+/* =====================================================================
+   7. БОКОВАЯ ПАНЕЛЬ И СЕГМЕНТЫ
+   ===================================================================== */
+
+:root [data-slot="sidebar-menu-button"] {
+    border-radius: var(--lg-r-item) !important;
+    transition: width 200ms linear, height 200ms linear, padding 200ms linear,
+        background-color 0.2s var(--lg-ease), color 0.2s var(--lg-ease), box-shadow 0.25s var(--lg-ease), scale 0.5s var(--lg-spring) !important;
+}
+
+:root [data-slot="sidebar-menu-button"]:hover:not([data-active="true"]) {
+    background-color: color-mix(in oklab, var(--lg-fill-hover) 80%, transparent) !important;
+    box-shadow: none !important;
+}
+
+:root [data-slot="sidebar-menu-button"]:active {
+    scale: 0.94;
+}
+
+/* Активный пункт: белая стеклянная "таблетка", иконка системного синего */
+:root [data-slot="sidebar-menu-button"][data-active="true"] {
+    background-color: var(--lg-segment-on) !important;
+    color: var(--primary) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 4px 12px -4px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Переключатель "Правила / Глобальный" - сегментированный контрол iOS */
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] {
+    background: var(--lg-segment) !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button {
+    border-radius: 9px !important;
+    border-color: transparent !important;
+    transition: background-color 0.25s var(--lg-ease), color 0.2s var(--lg-ease), box-shadow 0.25s var(--lg-ease) !important;
+}
+
+:root [data-guide="app-sidebar"] button[class*="border-stroke-power-on/50"] {
+    background: var(--lg-segment-on) !important;
+    color: var(--primary) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04) !important;
+}
+
+
+/* =====================================================================
+   8. КНОПКИ (components/ui/button.tsx: data-slot="button" + data-variant)
+   Все кнопки - капсулы. Нажатие - пружинное сжатие.
+   ===================================================================== */
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]) {
+    border-radius: var(--lg-r-pill) !important;
+    transition: background-color 0.2s var(--lg-ease), filter 0.2s var(--lg-ease), box-shadow 0.25s var(--lg-ease), color 0.2s var(--lg-ease), opacity 0.2s var(--lg-ease), scale 0.5s var(--lg-spring) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]):active:not(:disabled) {
+    scale: 0.95;
+}
+
+/* Основная: насыщенная капсула с бликом сверху */
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"] {
+    background: linear-gradient(180deg, color-mix(in oklab, var(--primary) 85%, white), var(--primary)) !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 18px -8px color-mix(in oklab, var(--primary) 80%, transparent) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"]:hover:not(:disabled) {
+    filter: brightness(1.08);
+}
+
+:root [data-slot="button"][data-variant="destructive"] {
+    background: linear-gradient(180deg, color-mix(in oklab, var(--destructive) 85%, white), var(--destructive)) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 18px -8px color-mix(in oklab, var(--destructive) 80%, transparent) !important;
+}
+
+/* Вторичные - стеклянные капсулы */
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]) {
+    background: var(--lg-sheen), var(--lg-fill) !important;
+    border: 1px solid var(--lg-edge) !important;
+    box-shadow: var(--lg-rim) !important;
+    -webkit-backdrop-filter: var(--lg-blur) !important;
+    backdrop-filter: var(--lg-blur) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]):hover:not(:disabled) {
+    background: var(--lg-sheen), var(--lg-fill-hover) !important;
+}
+
+:root [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    background-color: var(--lg-fill-hover) !important;
+}
+
+/* Кнопки окна (Windows): мягкие капсулы, закрыть - красная */
+:root .wc-win .wc-btn {
+    border-radius: var(--lg-r-pill) !important;
+    transition: background-color 0.2s var(--lg-ease), color 0.2s var(--lg-ease) !important;
+}
+
+:root .wc-win .wc-btn:hover {
+    background: var(--lg-fill-hover) !important;
+}
+
+:root .wc-win .wc-close:hover {
+    background: var(--destructive) !important;
+    color: #ffffff !important;
+}
+
+
+/* =====================================================================
+   9. ПОЛЯ, ПЕРЕКЛЮЧАТЕЛИ, ВКЛАДКИ
+   ===================================================================== */
+
+/* Поля ввода - "лунка" в стекле, фокус - кольцо системного синего */
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="input-group"]) {
+    background: var(--lg-fill-well) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    backdrop-filter: blur(12px) !important;
+    transition: box-shadow 0.2s var(--lg-ease), border-color 0.2s var(--lg-ease) !important;
+}
+
+:root [data-slot="input-group"] :is(input, textarea) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"]):focus,
+:root [data-slot="input-group"]:focus-within {
+    border-color: color-mix(in oklab, var(--primary) 70%, transparent) !important;
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 26%, transparent) !important;
+    outline: none !important;
+}
+
+/* Выпадающий список (кнопка) - стеклянная капсула */
+:root :is([data-slot="select-trigger"], button[role="combobox"]) {
+    background: var(--lg-sheen), var(--lg-fill) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: var(--lg-r-pill) !important;
+    box-shadow: var(--lg-rim) !important;
+    transition: background-color 0.2s var(--lg-ease), box-shadow 0.2s var(--lg-ease) !important;
+}
+
+:root :is([data-slot="select-trigger"], button[role="combobox"]):hover {
+    background: var(--lg-sheen), var(--lg-fill-hover) !important;
+}
+
+:root :is([data-slot="select-trigger"], button[role="combobox"])[data-state="open"] {
+    box-shadow: var(--lg-rim), 0 0 0 4px color-mix(in oklab, var(--primary) 26%, transparent) !important;
+}
+
+/* Переключатель - как в iOS: серая дорожка, зелёный при включении, белый бегунок с тенью */
+:root [data-slot="switch"] {
+    border: 0 !important;
+    background: var(--lg-switch-off) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: background-color 0.3s var(--lg-ease) !important;
+}
+
+:root [data-slot="switch"][data-state="checked"] {
+    background: var(--success) !important;
+}
+
+:root [data-slot="switch-thumb"] {
+    background: #ffffff !important;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.05) !important;
+    transition: translate 0.5s var(--lg-spring), transform 0.5s var(--lg-spring) !important;
+}
+
+/* Чекбокс - скруглённый квадрат системного синего */
+:root [data-slot="checkbox"] {
+    border-radius: 6px !important;
+}
+
+/* Вкладки - сегментированный контрол */
+:root [data-slot="tabs-list"][data-variant="default"] {
+    background: var(--lg-segment) !important;
+    border: 0 !important;
+    border-radius: 11px !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"] {
+    border-radius: 8px !important;
+    border-color: transparent !important;
+    transition: background-color 0.25s var(--lg-ease), color 0.2s var(--lg-ease), box-shadow 0.25s var(--lg-ease) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"][data-state="active"] {
+    background: var(--lg-segment-on) !important;
+    color: var(--foreground) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"]::after {
+    background: var(--primary) !important;
+}
+
+
+/* =====================================================================
+   10. МЕНЮ, ОКНА, ПОДСКАЗКИ, ТОСТЫ
+   Плотное стекло: под меню и диалогами текст должен читаться.
+   Подсвеченный пункт меню заливается системным синим, как в macOS.
+   ===================================================================== */
+
+:root :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+    [data-slot="select-content"], [data-slot="popover-content"]) {
+    background: var(--lg-sheen), var(--lg-fill-strong) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: 16px !important;
+    box-shadow: var(--lg-rim), var(--lg-shade-pop) !important;
+    -webkit-backdrop-filter: var(--lg-blur-strong) !important;
+    backdrop-filter: var(--lg-blur-strong) !important;
+    padding: 5px !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"], [data-slot="command-item"]) {
+    border-radius: 9px !important;
+    transition: none !important;   /* в macOS подсветка пункта мгновенная */
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted],
+:root [data-slot="dropdown-menu-sub-trigger"][data-state="open"],
+:root [data-slot="command-item"][data-selected="true"] {
+    background: var(--primary) !important;
+    color: #ffffff !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted] svg {
+    color: #ffffff !important;
+}
+
+:root [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted] {
+    background: var(--destructive) !important;
+}
+
+:root :is([data-slot="dropdown-menu-separator"], [data-slot="select-separator"]) {
+    background: color-mix(in oklab, var(--foreground) 10%, transparent) !important;
+    margin-inline: 6px !important;
+}
+
+/* Диалоги и шторки - большие стеклянные листы */
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"]) {
+    background: var(--lg-sheen), var(--lg-fill-strong) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: 28px !important;
+    box-shadow: var(--lg-rim), var(--lg-shade-pop) !important;
+    -webkit-backdrop-filter: var(--lg-blur-strong) !important;
+    backdrop-filter: var(--lg-blur-strong) !important;
+}
+
+:root :is([data-slot="dialog-title"], [data-slot="alert-dialog-title"]) {
+    font-family: var(--lg-font-display);
+    font-weight: 700 !important;
+    letter-spacing: -0.02em;
+}
+
+:root [data-slot="alert-dialog-media"] {
+    background: var(--muted) !important;
+    border: 0 !important;
+    border-radius: 18px !important;
+}
+
+/* Затемнение под диалогом: лёгкое, с размытием - обои угадываются */
+:root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background: rgba(10, 14, 30, 0.18) !important;
+    -webkit-backdrop-filter: blur(6px) saturate(120%) !important;
+    backdrop-filter: blur(6px) saturate(120%) !important;
+}
+
+html.dark :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Подсказки - маленькие стеклянные капсулы без стрелки */
+:root [data-slot="tooltip-content"] {
+    background: var(--lg-fill-strong) !important;
+    color: var(--foreground) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: 9px !important;
+    box-shadow: var(--lg-rim), 0 6px 18px -6px rgba(0, 0, 0, 0.25) !important;
+    -webkit-backdrop-filter: var(--lg-blur-strong) !important;
+    backdrop-filter: var(--lg-blur-strong) !important;
+    font-weight: 500;
+}
+
+:root [data-slot="tooltip-content"] svg[class*="fill-"] {
+    display: none !important;
+}
+
+/* Тосты (sonner) - стеклянные уведомления */
+:root [data-sonner-toast] {
+    background: var(--lg-sheen), var(--lg-fill-strong) !important;
+    border: 1px solid var(--lg-edge) !important;
+    border-radius: 18px !important;
+    box-shadow: var(--lg-rim), var(--lg-shade-pop) !important;
+    -webkit-backdrop-filter: var(--lg-blur-strong) !important;
+    backdrop-filter: var(--lg-blur-strong) !important;
+}
+
+/* Обучающий тур (driver.js) */
+:root .driver-popover {
+    background-color: var(--lg-fill-strong) !important;
+    border-radius: 22px !important;
+}
+
+:root .driver-popover-navigation-btns button {
+    border-radius: var(--lg-r-pill) !important;
+    background: var(--lg-fill) !important;
+    border-color: var(--lg-edge) !important;
+}
+
+:root .driver-popover-navigation-btns .driver-popover-next-btn {
+    background: var(--primary) !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+}
+
+
+/* =====================================================================
+   11. МЕЛОЧИ И ПЛАВАЮЩЕЕ ОКНО
+   ===================================================================== */
+
+:root [data-slot="separator"] {
+    background: color-mix(in oklab, var(--foreground) 9%, transparent) !important;
+}
+
+:root [data-slot="progress"] {
+    background: var(--lg-segment) !important;
+    border-radius: var(--lg-r-pill) !important;
+}
+
+:root [data-slot="progress-indicator"] {
+    background: var(--primary) !important;
+    border-radius: var(--lg-r-pill) !important;
+}
+
+:root tbody tr:hover {
+    background: var(--lg-fill-hover) !important;
+}
+
+/* Плавающее окно (FloatingApp.tsx). Окно прозрачное, размывать под ним нечего,
+   поэтому стекло здесь плотнее */
+:root .floating-bg {
+    background: var(--lg-fill-strong) !important;
+    border-color: var(--lg-edge) !important;
+    box-shadow: var(--lg-rim) !important;
+}
+
+:root .floating-thumb {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+}
+
+
+/* =====================================================================
+   12. УМЕНЬШЕНИЕ АНИМАЦИИ
+   Если в системе выключены эффекты анимации, обои стоят, волна не идёт,
+   пружины становятся мгновенными. Состояния (выбор, подключение) остаются видны.
+   ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    :root *,
+    :root *::before,
+    :root *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    :root [data-slot="sidebar-wrapper"]::before {
+        animation: none !important;
+    }
+}

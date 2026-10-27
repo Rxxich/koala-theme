@@ -1,0 +1,997 @@
+/* Koala Dark Bento */
+/*
+  Тема для Koala Clash 1.5.0: тёмный минимализм, бенто-сетка, микровзаимодействия.
+
+  ИДЕЯ
+  Всё разложено по аккуратным панелям одной сетки с одинаковыми промежутками 8px.
+  Главная пересобрана как бенто: профиль - широкая плитка, данные подписки - три
+  отдельные плитки, подключение - большая плитка, выбор группы - строка внизу.
+  Текст выровнен по левому краю, иерархия - только размером и насыщенностью.
+  Цвет почти не используется: графит, тонкие линии и один сдержанный акцент -
+  барвинковый #8b9cff. Им отмечено подключение, выбор и фокус.
+
+  Эффекты деликатные и всегда в ответ на действие:
+    - наведение: рамка светлеет, на карточке появляется мягкий свет сверху;
+    - нажатие: элемент чуть сжимается (на 1-4%);
+    - переключатель: бегунок вытягивается в сторону хода, пока кнопка зажата;
+    - пункт меню под курсором сдвигается на 2px;
+    - стрелка в строке выбора группы уходит вправо при наведении;
+    - выбранный сервер: в углу "впрыгивает" точка акцента.
+
+  Тема тёмная в обоих режимах программы ("Тёмная" и "Светлая" выглядят одинаково).
+
+  КАК ПОДКЛЮЧАЕТСЯ
+  Тема вставляется через webContents.insertCSS() и в каскаде идёт раньше CSS клиента,
+  поэтому все правила начинаются с :root, а палитра - с html:root.
+
+  СОДЕРЖАНИЕ
+    0. Палитра и ритм
+    1. Фон
+    2. Панели
+    3. Главная: бенто-сетка
+    4. Кнопка подключения
+    5. Прокси, профили, подключения
+    6. Боковая панель
+    7. Кнопки
+    8. Поля, переключатели, вкладки
+    9. Меню, окна, подсказки, тосты
+   10. Мелочи
+   11. Уменьшение анимации
+*/
+
+
+/* =====================================================================
+   0. ПАЛИТРА И РИТМ
+   ===================================================================== */
+
+html:root {
+    --bn-bg: #09090b;
+    --bn-panel: #111114;
+    --bn-panel-2: #17171b;        /* панель под курсором */
+    --bn-well: #0c0c0e;           /* поля ввода */
+    --bn-line: #222226;           /* рамки */
+    --bn-line-2: #2f2f35;         /* рамки под курсором */
+    --bn-line-3: #42424a;         /* активные рамки */
+    --bn-text: #ededef;
+    --bn-muted: #8b8b94;
+    --bn-faint: #5d5d66;
+    --bn-accent: #8b9cff;
+    --bn-accent-soft: rgba(139, 156, 255, 0.14);
+    --bn-accent-line: rgba(139, 156, 255, 0.55);
+
+    --bn-gap: 8px;
+    --bn-r-tile: 14px;
+    --bn-r-control: 9px;
+    --bn-r-item: 7px;
+
+    --bn-fast: 120ms;
+    --bn-base: 200ms;
+    --bn-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --bn-ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+    --bn-spring: linear(0, 0.13 4%, 0.46 9%, 0.79 15%, 0.96 20%, 1.04 26%, 1.06 31%, 1.04 38%, 1.01 46%, 0.995 58%, 1);
+
+    --bn-font: "Segoe UI Variable Text", "Segoe UI", -apple-system, system-ui, sans-serif;
+    --bn-font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, system-ui, sans-serif;
+
+    /* Свет сверху на панели под курсором */
+    --bn-spot: radial-gradient(120% 80% at 50% -20%, rgba(255, 255, 255, 0.05), transparent 60%);
+
+    --radius: 0.875rem !important;
+    --background: #09090b !important;
+    --foreground: #ededef !important;
+    --card: #111114 !important;
+    --card-foreground: #ededef !important;
+    --popover: #111114 !important;
+    --popover-foreground: #ededef !important;
+    --primary: #ededef !important;
+    --primary-foreground: #09090b !important;
+    --secondary: #17171b !important;
+    --secondary-foreground: #ededef !important;
+    --muted: #17171b !important;
+    --muted-foreground: #8b8b94 !important;
+    --accent: #17171b !important;
+    --accent-foreground: #ededef !important;
+    --border: #222226 !important;
+    --input: #2f2f35 !important;
+    --ring: #8b9cff !important;
+    --stroke: #222226 !important;
+    --destructive: #f87171 !important;
+    --success: #8b9cff !important;
+    --warning: #fbbf24 !important;
+
+    --stroke-power-on: #8b9cff !important;
+    --gradient-start-power-on: #8b9cff !important;
+    --gradient-end-power-on: #6577f3 !important;
+    --stroke-power-off: #2f2f35 !important;
+    --gradient-start-power-off: #17171b !important;
+    --gradient-end-power-off: #111114 !important;
+
+    --profile-active: #17171b !important;
+    --stroke-profile-active: rgba(139, 156, 255, 0.55) !important;
+    --profile-inactive: #111114 !important;
+    --stroke-profile-inactive: #222226 !important;
+
+    --chart-1: #8b9cff !important;
+    --chart-2: #ededef !important;
+    --chart-3: #8b8b94 !important;
+    --chart-4: #fbbf24 !important;
+    --chart-5: #f87171 !important;
+
+    --sidebar: #111114 !important;
+    --sidebar-foreground: #ededef !important;
+    --sidebar-primary: #8b9cff !important;
+    --sidebar-primary-foreground: #09090b !important;
+    --sidebar-accent: #17171b !important;
+    --sidebar-accent-foreground: #ededef !important;
+    --sidebar-border: #222226 !important;
+    --sidebar-ring: #8b9cff !important;
+
+    color-scheme: dark;
+}
+
+:root body {
+    font-family: var(--bn-font);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+}
+
+:root ::selection {
+    background: var(--bn-accent-soft);
+    color: #ffffff;
+}
+
+/* Фокус с клавиатуры - тонкое кольцо акцента с отступом */
+:root :focus-visible {
+    --tw-ring-color: var(--bn-accent) !important;
+}
+
+:root :is(button, [role="button"], a):focus-visible {
+    outline: 1px solid var(--bn-accent) !important;
+    outline-offset: 2px;
+}
+
+
+/* =====================================================================
+   1. ФОН
+   Ровный графит и едва заметная точечная сетка - на ней держится ритм панелей.
+   ===================================================================== */
+
+:root [data-slot="sidebar-wrapper"] {
+    background:
+        radial-gradient(80% 50% at 50% -10%, rgba(139, 156, 255, 0.06), transparent 70%),
+        radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 20px 20px,
+        var(--bn-bg) !important;
+    box-shadow: none !important;
+}
+
+:root [data-slot="sidebar-wrapper"] > img.pointer-events-none {
+    display: none !important;
+}
+
+:root .title {
+    font-family: var(--bn-font-display);
+    font-size: 19px !important;
+    font-weight: 600;
+    letter-spacing: -0.012em;
+}
+
+
+/* =====================================================================
+   2. ПАНЕЛИ
+   Плоские, без теней: только фон, линия 1px и радиус 14px.
+   ===================================================================== */
+
+:root [data-slot="card"],
+:root div.rounded-2xl[class*="bg-card/"]:not([data-slot]):not([class*="grid-cols-[1fr_auto"]),
+:root [data-slot="accordion"].rounded-xl.border,
+:root .driver-popover {
+    background: var(--bn-panel) !important;
+    border: 1px solid var(--bn-line) !important;
+    border-radius: var(--bn-r-tile) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="card"] [data-slot="card"] {
+    box-shadow: none !important;
+}
+
+
+/* =====================================================================
+   3. ГЛАВНАЯ: БЕНТО-СЕТКА (pages/home.tsx)
+   Контейнер страницы - колонка с промежутками 8px. Плитка подписки разбита на
+   три самостоятельные плитки, блок подключения стал большой плиткой.
+   ===================================================================== */
+
+:root .flex.flex-col.h-full:has([data-guide="home-power-toggle"]) {
+    gap: var(--bn-gap) !important;
+}
+
+/* Профиль - широкая плитка, всё по левому краю */
+:root [data-guide="home-profile-header"] {
+    justify-content: flex-start !important;
+}
+
+:root [data-guide="home-profile-header"] .font-medium {
+    font-family: var(--bn-font-display);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+:root [data-guide="home-profile-announce"] {
+    text-align: left !important;
+    color: var(--bn-muted);
+    font-weight: 400 !important;
+}
+
+/* Подписка: из одной плитки с разделителями - три отдельные */
+:root div.rounded-2xl[class*="grid-cols-[1fr_auto"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: var(--bn-gap) !important;
+    padding: 0 !important;
+    background: none !important;
+    border: 0 !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root div.rounded-2xl[class*="grid-cols-[1fr_auto"] > .w-px {
+    display: none !important;
+}
+
+:root div.rounded-2xl[class*="grid-cols-[1fr_auto"] > div.flex {
+    align-items: flex-start !important;
+    padding: 12px 14px !important;
+    background: var(--bn-panel);
+    border: 1px solid var(--bn-line);
+    border-radius: var(--bn-r-tile);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+:root div.rounded-2xl[class*="grid-cols-[1fr_auto"] .text-sm {
+    font-size: 12px !important;
+    color: var(--bn-muted) !important;
+}
+
+:root div.rounded-2xl[class*="grid-cols-[1fr_auto"] .font-bold {
+    font-family: var(--bn-font-display);
+    font-size: 19px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em;
+    margin-top: 4px !important;
+}
+
+/* Блок подключения - большая плитка */
+:root div.grow-3:has(> [data-guide="home-power-toggle"]) {
+    background: var(--bn-panel);
+    border: 1px solid var(--bn-line);
+    border-radius: var(--bn-r-tile);
+    padding: 20px 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+    transition: background var(--bn-base) var(--bn-ease), border-color var(--bn-base) var(--bn-ease);
+}
+
+/* Подключено: в плитке загорается мягкий свет акцента */
+:root div.grow-3:has(> [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"]) {
+    background: radial-gradient(60% 55% at 50% 45%, rgba(139, 156, 255, 0.08), transparent 70%), var(--bn-panel);
+    border-color: var(--bn-line-2);
+}
+
+/* Статус - без капса, мелко. Подключено - акцентом */
+:root .mb-3:has(+ [data-guide="home-power-toggle"]) > div {
+    text-transform: none !important;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--bn-muted) !important;
+    transition: color var(--bn-base) var(--bn-ease);
+}
+
+:root .mb-3:has(+ [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"]) > div {
+    color: var(--bn-accent) !important;
+}
+
+:root [data-guide="home-power-toggle"] + div > div {
+    font-family: var(--bn-font-display);
+    font-size: 28px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em;
+}
+
+:root [data-guide="home-power-toggle"] ~ div svg.text-stroke-power-on {
+    color: var(--bn-muted) !important;
+}
+
+/* Выбор группы - строка во всю ширину */
+:root div.flag-emoji:has(> [data-guide="home-group-selector"]) {
+    max-width: none !important;
+    max-height: none !important;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]) {
+    height: 46px !important;
+    padding: 0 10px 0 16px !important;
+    transition: background var(--bn-fast) var(--bn-ease), border-color var(--bn-fast) var(--bn-ease), scale var(--bn-fast) var(--bn-ease) !important;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]):hover {
+    background: var(--bn-spot), var(--bn-panel-2) !important;
+    border-color: var(--bn-line-2) !important;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]):active {
+    scale: 0.99;
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]) > svg {
+    color: var(--bn-muted);
+    transition: translate var(--bn-base) var(--bn-ease-out), color var(--bn-fast);
+}
+
+:root div.rounded-2xl[class*="hover:bg-card/70"]:not([data-slot]):hover > svg {
+    translate: 3px 0;
+    color: var(--bn-text);
+}
+
+/* "Добавить профиль" и "Оплатить" - основные кнопки */
+:root [class*="bg-gradient-start-power-on/50"] {
+    background: var(--bn-text) !important;
+    color: var(--bn-bg) !important;
+    border: 0 !important;
+    border-radius: var(--bn-r-control) !important;
+    font-weight: 600;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: background var(--bn-fast) var(--bn-ease), scale var(--bn-fast) var(--bn-ease) !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"]:hover {
+    background: #ffffff !important;
+}
+
+:root [class*="bg-gradient-start-power-on/50"]:active {
+    scale: 0.98;
+}
+
+:root [class*="bg-gradient-start-power-on/50"] svg {
+    color: inherit !important;
+}
+
+
+/* =====================================================================
+   4. КНОПКА ПОДКЛЮЧЕНИЯ (data-guide="home-power-toggle")
+   Строгий круг с тонкой рамкой. Иконки клиента остаются.
+     выключено   - графитовый круг;
+     наведение   - рамка светлее;
+     нажатие     - сжатие (клиент: active:scale-95);
+     подключено  - кольцо акцента и мягкий ореол;
+     подключение - по кольцу бежит дуга акцента;
+     ошибка ядра - красное кольцо.
+   ===================================================================== */
+
+:root [data-guide="home-power-toggle"] {
+    border-radius: 50%;
+}
+
+:root [data-guide="home-power-toggle"] > div {
+    width: 112px !important;
+    height: 112px !important;
+    border: 1px solid var(--bn-line-2) !important;
+    background: radial-gradient(circle at 50% 30%, #1d1d22, var(--bn-panel-2) 70%) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 0 transparent !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: border-color var(--bn-base) var(--bn-ease), box-shadow 0.4s var(--bn-ease) !important;
+}
+
+:root [data-guide="home-power-toggle"]:hover:not(:disabled) > div {
+    border-color: var(--bn-line-3) !important;
+}
+
+:root [data-guide="home-power-toggle"] > div > div {
+    scale: 0.8;
+}
+
+:root [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"] {
+    border-color: var(--bn-accent) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 5px var(--bn-accent-soft), 0 0 50px -10px rgba(139, 156, 255, 0.55) !important;
+}
+
+/* Дуга на время подключения */
+:root [data-guide="home-power-toggle"]::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    pointer-events: none;
+    background: conic-gradient(from 0deg, transparent 0 70%, var(--bn-accent) 100%);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+    opacity: 0;
+    transition: opacity var(--bn-base) var(--bn-ease);
+}
+
+:root [data-guide="home-power-toggle"]:has(svg[role="status"].opacity-100)::before {
+    opacity: 1;
+    animation: bn-spin 0.9s linear infinite;
+}
+
+@keyframes bn-spin {
+    to { transform: rotate(1turn); }
+}
+
+:root [data-guide="home-power-toggle"]:has(> div > div > img:nth-child(4).opacity-100) > div {
+    border-color: var(--destructive) !important;
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--destructive) 14%, transparent) !important;
+}
+
+
+/* =====================================================================
+   5. ПРОКСИ, ПРОФИЛИ, ПОДКЛЮЧЕНИЯ
+   ===================================================================== */
+
+/* Карточка сервера (proxy-item.tsx: Card с cursor-pointer и overflow-hidden) */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate) {
+    border-radius: 11px !important;
+    transition: background var(--bn-fast) var(--bn-ease), border-color var(--bn-fast) var(--bn-ease), scale var(--bn-fast) var(--bn-ease) !important;
+}
+
+/* Наведение: рамка светлее и мягкий свет сверху */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):not(:has(button:hover)):hover {
+    background: var(--bn-spot), var(--bn-panel-2) !important;
+    border-color: var(--bn-line-3) !important;
+}
+
+/* Нажатие - чуть сжимается */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate):not(:has(button:active)):active {
+    scale: 0.985;
+}
+
+/* Выбранный сервер: рамка акцента и точка в правом верхнем углу */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"] {
+    background: linear-gradient(180deg, rgba(139, 156, 255, 0.07), transparent 70%), var(--bn-panel) !important;
+    border-color: var(--bn-accent-line) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="border-primary/"]::after {
+    content: "";
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--bn-accent);
+    box-shadow: 0 0 0 3px var(--bn-accent-soft);
+    pointer-events: none;
+    animation: bn-dot 0.45s var(--bn-spring) both;
+}
+
+@keyframes bn-dot {
+    from { scale: 0; }
+    to { scale: 1; }
+}
+
+/* Закреплённый сервер - янтарная рамка */
+:root [data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)[class*="bg-amber-500"] {
+    background: var(--bn-panel) !important;
+    border-color: rgba(251, 191, 36, 0.45) !important;
+}
+
+/* Кнопка пинга: подсветка и цифры акцентом */
+:root [data-slot="card"] [data-slot="button"][data-variant="ghost"] {
+    border-radius: var(--bn-r-item) !important;
+}
+
+:root [data-slot="card"] [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    background: var(--bn-line) !important;
+}
+
+/* Заголовок группы */
+:root [data-slot="card"].cursor-pointer.isolate {
+    transition: border-color var(--bn-fast) var(--bn-ease), background var(--bn-fast) var(--bn-ease) !important;
+}
+
+:root [data-slot="card"].cursor-pointer.isolate:not(:has(button:hover)):hover {
+    background: var(--bn-spot), var(--bn-panel-2) !important;
+    border-color: var(--bn-line-2) !important;
+}
+
+:root [data-slot="card"].isolate .size-9.rounded-md {
+    border-radius: var(--bn-r-control) !important;
+    background: var(--bn-panel-2) !important;
+    border: 1px solid var(--bn-line);
+    color: var(--bn-text) !important;
+}
+
+:root [data-slot="card"].isolate svg.transition-transform {
+    transition: rotate var(--bn-base) var(--bn-ease-out), transform var(--bn-base) var(--bn-ease-out) !important;
+}
+
+:root [data-slot="badge"] {
+    border-radius: 5px !important;
+    background: var(--bn-panel-2) !important;
+    color: var(--bn-muted) !important;
+    border: 1px solid var(--bn-line) !important;
+}
+
+:root div.mx-2[class*="bg-card/30"] {
+    background: rgba(17, 17, 20, 0.6) !important;
+    border-color: var(--bn-line) !important;
+}
+
+:root div.mx-2[class*="bg-card/30"].rounded-b-xl {
+    border-radius: 0 0 var(--bn-r-tile) var(--bn-r-tile) !important;
+}
+
+/* Карточка профиля (profile-item.tsx, всегда с aria-busy) */
+:root div.rounded-2xl[aria-busy] {
+    background: var(--bn-panel) !important;
+    border: 1px solid var(--bn-line) !important;
+    border-radius: var(--bn-r-tile) !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: background var(--bn-fast) var(--bn-ease), border-color var(--bn-fast) var(--bn-ease), scale var(--bn-fast) var(--bn-ease), opacity var(--bn-base) !important;
+}
+
+:root div.rounded-2xl[aria-busy]:not(:has(button:hover)):hover {
+    background: var(--bn-spot), var(--bn-panel-2) !important;
+    border-color: var(--bn-line-3) !important;
+}
+
+:root div.rounded-2xl[aria-busy]:not(:has(button:active)):active {
+    scale: 0.99;
+}
+
+:root div.rounded-2xl[aria-busy].border-stroke-profile-active {
+    border-color: var(--bn-accent-line) !important;
+}
+
+:root div.rounded-2xl[aria-busy] .border-foreground\/10 {
+    border-color: var(--bn-line) !important;
+}
+
+/* Строки подключений */
+:root div.rounded-xl.cursor-pointer:is([class*="bg-card/40"], [class*="to-card/40"]) {
+    background: var(--bn-panel) !important;
+    border: 1px solid var(--bn-line) !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    transition: background var(--bn-fast) var(--bn-ease), border-color var(--bn-fast) var(--bn-ease) !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="bg-card/40"]:hover {
+    background: var(--bn-spot), var(--bn-panel-2) !important;
+    border-color: var(--bn-line-3) !important;
+}
+
+:root div.rounded-xl.cursor-pointer[class*="to-card/40"] {
+    border-color: var(--bn-accent-line) !important;
+}
+
+:root div.rounded-xl.cursor-pointer .size-12.rounded-lg {
+    border-radius: 10px !important;
+    background: var(--bn-panel-2) !important;
+    border: 1px solid var(--bn-line);
+}
+
+
+/* =====================================================================
+   6. БОКОВАЯ ПАНЕЛЬ
+   ===================================================================== */
+
+:root [data-slot="sidebar-inner"] {
+    background: var(--bn-panel) !important;
+    border: 1px solid var(--bn-line) !important;
+    border-radius: var(--bn-r-tile) !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="sidebar-menu-button"] {
+    border-radius: var(--bn-r-control) !important;
+    color: var(--bn-muted) !important;
+    transition: width 200ms linear, height 200ms linear, padding 200ms linear,
+        background var(--bn-fast) var(--bn-ease), color var(--bn-fast) var(--bn-ease), box-shadow var(--bn-fast) var(--bn-ease), scale var(--bn-fast) var(--bn-ease) !important;
+}
+
+:root [data-slot="sidebar-menu-button"]:hover:not([data-active="true"]) {
+    background: var(--bn-panel-2) !important;
+    color: var(--bn-text) !important;
+    box-shadow: none !important;
+}
+
+:root [data-slot="sidebar-menu-button"]:active {
+    scale: 0.94;
+}
+
+/* Активный пункт - приподнятая плашка с тонкой рамкой, иконка акцентом */
+:root [data-slot="sidebar-menu-button"][data-active="true"] {
+    background: var(--bn-panel-2) !important;
+    color: var(--bn-text) !important;
+    box-shadow: inset 0 0 0 1px var(--bn-line-3) !important;
+}
+
+:root [data-slot="sidebar-menu-button"][data-active="true"] svg {
+    color: var(--bn-accent);
+}
+
+/* Переключатель режима - сегменты */
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] {
+    background: var(--bn-well) !important;
+    border: 1px solid var(--bn-line) !important;
+    border-radius: 11px !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button {
+    border-radius: var(--bn-r-item) !important;
+    border-color: transparent !important;
+    transition: background var(--bn-fast) var(--bn-ease), color var(--bn-fast) var(--bn-ease), scale var(--bn-fast) var(--bn-ease) !important;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button:active {
+    scale: 0.92;
+}
+
+:root [data-guide="app-sidebar"] div.rounded-lg[class*="bg-card/50"] button[class*="border-stroke-power-on/50"] {
+    background: var(--bn-panel-2) !important;
+    color: var(--bn-accent) !important;
+    box-shadow: inset 0 0 0 1px var(--bn-line-3) !important;
+}
+
+
+/* =====================================================================
+   7. КНОПКИ
+   Основная - светлая (белая на графите), остальные - графитовые.
+   Наведение - 120 мс, нажатие - сжатие на 3%.
+   ===================================================================== */
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]) {
+    border-radius: var(--bn-r-control) !important;
+    font-weight: 500;
+    transition: background var(--bn-fast) var(--bn-ease), border-color var(--bn-fast) var(--bn-ease), color var(--bn-fast) var(--bn-ease), scale var(--bn-fast) var(--bn-ease), opacity var(--bn-fast) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"], [data-slot="alert-dialog-cancel"]):active:not(:disabled) {
+    scale: 0.97;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"] {
+    background: var(--bn-text) !important;
+    color: var(--bn-bg) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-action"])[data-variant="default"]:hover:not(:disabled) {
+    background: #ffffff !important;
+}
+
+:root [data-slot="button"][data-variant="destructive"] {
+    background: transparent !important;
+    color: var(--destructive) !important;
+    border: 1px solid color-mix(in oklab, var(--destructive) 45%, transparent) !important;
+}
+
+:root [data-slot="button"][data-variant="destructive"]:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--destructive) 12%, transparent) !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]) {
+    background: var(--bn-panel) !important;
+    border: 1px solid var(--bn-line-2) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root :is([data-slot="button"], [data-slot="alert-dialog-cancel"]):is([data-variant="outline"], [data-variant="secondary"]):hover:not(:disabled) {
+    background: var(--bn-panel-2) !important;
+    border-color: var(--bn-line-3) !important;
+}
+
+:root [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+    background: var(--bn-panel-2) !important;
+}
+
+:root .wc-win .wc-btn {
+    border-radius: var(--bn-r-item) !important;
+    transition: background var(--bn-fast) var(--bn-ease), color var(--bn-fast) var(--bn-ease) !important;
+}
+
+:root .wc-win .wc-btn:hover {
+    background: var(--bn-panel-2) !important;
+}
+
+:root .wc-win .wc-close:hover {
+    background: var(--destructive) !important;
+    color: #ffffff !important;
+}
+
+
+/* =====================================================================
+   8. ПОЛЯ, ПЕРЕКЛЮЧАТЕЛИ, ВКЛАДКИ
+   ===================================================================== */
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="input-group"], [data-slot="select-trigger"], button[role="combobox"]) {
+    background: var(--bn-well) !important;
+    border: 1px solid var(--bn-line-2) !important;
+    border-radius: var(--bn-r-control) !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: border-color var(--bn-fast) var(--bn-ease), box-shadow var(--bn-base) var(--bn-ease) !important;
+}
+
+:root [data-slot="input-group"] :is(input, textarea) {
+    background: transparent !important;
+    border: 0 !important;
+}
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"], [data-slot="select-trigger"], button[role="combobox"]):hover {
+    border-color: var(--bn-line-3) !important;
+}
+
+:root :is(input[data-slot="input"], textarea[data-slot="textarea"]):focus,
+:root [data-slot="input-group"]:focus-within,
+:root :is([data-slot="select-trigger"], button[role="combobox"])[data-state="open"] {
+    border-color: var(--bn-accent) !important;
+    box-shadow: 0 0 0 3px var(--bn-accent-soft) !important;
+    outline: none !important;
+}
+
+/* Переключатель. Пока кнопка зажата, бегунок вытягивается в сторону, куда поедет:
+   точка опоры - край, к которому он сейчас прижат. Смена опоры ждёт, пока бегунок
+   вернёт форму, - иначе он на кадр дёрнулся бы назад */
+:root [data-slot="switch"] {
+    border: 0 !important;
+    background: #26262b !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transition: background var(--bn-base) var(--bn-ease) !important;
+}
+
+:root [data-slot="switch"][data-state="checked"] {
+    background: var(--bn-accent) !important;
+}
+
+:root [data-slot="switch-thumb"] {
+    background: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4) !important;
+    transform-origin: left center;
+    transition: translate 260ms var(--bn-ease-out), scale 140ms ease-out, transform-origin 0s 140ms !important;
+}
+
+:root [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+    transform-origin: right center;
+}
+
+:root [data-slot="switch"]:active:not(:disabled) [data-slot="switch-thumb"] {
+    scale: 1.2 1;
+}
+
+:root [data-slot="switch"][data-state="unchecked"] [data-slot="switch-thumb"] {
+    background: #a1a1aa !important;
+}
+
+/* Чекбокс - галочка "впрыгивает" */
+:root [data-slot="checkbox"] {
+    border-radius: 5px !important;
+    border-color: var(--bn-line-3) !important;
+}
+
+:root [data-slot="checkbox"][data-state="checked"] {
+    background: var(--bn-accent) !important;
+    border-color: var(--bn-accent) !important;
+    color: var(--bn-bg) !important;
+}
+
+:root [data-slot="checkbox-indicator"] {
+    animation: bn-dot 0.35s var(--bn-spring) both;
+}
+
+/* Вкладки - сегменты с приподнятой активной плашкой */
+:root [data-slot="tabs-list"][data-variant="default"] {
+    background: var(--bn-well) !important;
+    border: 1px solid var(--bn-line) !important;
+    border-radius: var(--bn-r-control) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"] {
+    border-radius: 6px !important;
+    border-color: transparent !important;
+    transition: background var(--bn-fast) var(--bn-ease), color var(--bn-fast) var(--bn-ease), box-shadow var(--bn-fast) var(--bn-ease) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="default"] [data-slot="tabs-trigger"][data-state="active"] {
+    background: var(--bn-panel-2) !important;
+    color: var(--bn-text) !important;
+    box-shadow: inset 0 0 0 1px var(--bn-line-3) !important;
+}
+
+:root [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"]::after {
+    background: var(--bn-accent) !important;
+}
+
+
+/* =====================================================================
+   9. МЕНЮ, ОКНА, ПОДСКАЗКИ, ТОСТЫ
+   ===================================================================== */
+
+:root :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+    [data-slot="select-content"], [data-slot="popover-content"]) {
+    background: var(--bn-panel) !important;
+    border: 1px solid var(--bn-line-2) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    padding: 4px !important;
+}
+
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"], [data-slot="command-item"]) {
+    border-radius: var(--bn-r-item) !important;
+    transition: background 0s, color 0s, padding-left var(--bn-base) var(--bn-ease-out) !important;
+}
+
+/* Пункт под курсором: фон появляется сразу, текст сдвигается на 2px */
+:root :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="select-item"])[data-highlighted],
+:root [data-slot="dropdown-menu-sub-trigger"][data-state="open"],
+:root [data-slot="command-item"][data-selected="true"] {
+    background: var(--bn-panel-2) !important;
+    color: var(--bn-text) !important;
+    padding-left: 12px !important;
+}
+
+:root [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted] {
+    background: color-mix(in oklab, var(--destructive) 12%, transparent) !important;
+    color: var(--destructive) !important;
+}
+
+:root :is([data-slot="dropdown-menu-separator"], [data-slot="select-separator"]) {
+    background: var(--bn-line) !important;
+}
+
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"]) {
+    background: var(--bn-panel) !important;
+    border: 1px solid var(--bn-line-2) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])[data-state="open"] {
+    animation: bn-surface 0.22s var(--bn-ease-out) both !important;
+}
+
+:root :is([data-slot="dropdown-menu-content"], [data-slot="select-content"], [data-slot="popover-content"])[data-state="open"] {
+    animation: bn-surface 0.16s var(--bn-ease-out) both !important;
+}
+
+@keyframes bn-surface {
+    from { opacity: 0; scale: 0.97; }
+    to { opacity: 1; scale: 1; }
+}
+
+:root :is([data-slot="dialog-title"], [data-slot="alert-dialog-title"]) {
+    font-family: var(--bn-font-display);
+    font-weight: 600 !important;
+    letter-spacing: -0.01em;
+}
+
+:root [data-slot="alert-dialog-media"] {
+    background: var(--bn-panel-2) !important;
+    border: 1px solid var(--bn-line-2) !important;
+    border-radius: var(--bn-r-tile) !important;
+}
+
+:root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    background: rgba(0, 0, 0, 0.62) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+/* Подсказка - светлая на тёмном */
+:root [data-slot="tooltip-content"] {
+    background: var(--bn-text) !important;
+    color: var(--bn-bg) !important;
+    border-radius: 6px !important;
+    font-weight: 500;
+}
+
+:root [data-slot="tooltip-content"] svg[class*="fill-"] {
+    background: var(--bn-text) !important;
+    fill: var(--bn-text) !important;
+}
+
+:root [data-sonner-toast] {
+    background: var(--bn-panel) !important;
+    border: 1px solid var(--bn-line-2) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7) !important;
+}
+
+:root .driver-popover-navigation-btns button {
+    border-radius: var(--bn-r-control) !important;
+    background: var(--bn-panel) !important;
+    border-color: var(--bn-line-2) !important;
+}
+
+:root .driver-popover-navigation-btns .driver-popover-next-btn {
+    background: var(--bn-text) !important;
+    color: var(--bn-bg) !important;
+}
+
+
+/* =====================================================================
+   10. МЕЛОЧИ
+   ===================================================================== */
+
+:root [data-slot="separator"] {
+    background: var(--bn-line) !important;
+}
+
+:root [data-slot="progress"] {
+    background: var(--bn-line) !important;
+    border-radius: 999px !important;
+}
+
+:root [data-slot="progress-indicator"] {
+    background: var(--bn-accent) !important;
+}
+
+:root tbody tr {
+    transition: background 0s;
+}
+
+:root tbody tr:hover {
+    background: var(--bn-panel-2) !important;
+}
+
+:root *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+:root *::-webkit-scrollbar-track,
+:root *::-webkit-scrollbar-corner {
+    background: transparent !important;
+}
+
+:root *::-webkit-scrollbar-thumb {
+    background: var(--bn-line-2) padding-box !important;
+    border: 3px solid transparent !important;
+    border-radius: 999px !important;
+}
+
+:root *::-webkit-scrollbar-thumb:hover {
+    background: var(--bn-line-3) padding-box !important;
+}
+
+:root .floating-bg {
+    background: var(--bn-panel) !important;
+    border-color: var(--bn-line-2) !important;
+}
+
+
+/* =====================================================================
+   11. УМЕНЬШЕНИЕ АНИМАЦИИ
+   ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    :root *,
+    :root *::before,
+    :root *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
