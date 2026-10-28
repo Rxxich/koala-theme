@@ -31,7 +31,8 @@ export const SHADOW_LAYERS: Record<Exclude<ShadowPreset, 'app'>, { card: Layer[]
   inner: { card: [L(0, 1, 3, 0.12, { inset: true }), L(0, 0, 0, 0.04, { spread: 1, inset: true, fixed: true })], pop: [L(0, 18, 40, 0.2)], btn: [L(0, 1, 2, 0.15, { inset: true })] }
 };
 
-export interface ShadowSet { card: string; hover: string; pop: string; button: string }
+/** bare и bareHover - тень карточек без блика по кромке: для кнопки подключения, у которой блик свой */
+export interface ShadowSet { card: string; hover: string; bare: string; bareHover: string; pop: string; button: string }
 
 /** Смещение, размытие и разброс слоя с учётом направления света и ползунков. grow - во сколько раз тень больше (наведение) */
 function placer(s: Shadows) {
@@ -47,6 +48,23 @@ function placer(s: Shadows) {
       spread: (l.spread ?? 0) + (l.fixed || l.c === 'solid' ? 0 : s.spread)
     };
   };
+}
+
+/** Запас под тень над страницей, px. Больше нельзя: выше - прозрачный заголовок страницы, и
+ *  прокрученные карточки заезжали бы под его надпись (см. «Место для теней» в генераторе) */
+export const TOP_ROOM = 16;
+
+/**
+ * Слой тени карточек, который поднимается выше TOP_ROOM, у верхних карточек обрывался ровной линией
+ * (заметно на светлом фоне у «Парящих»). Сжимаем слой разбросом и сдвигаем вниз на столько же: низ
+ * тени остаётся на месте, бока - чуть уже, а верх укладывается в запас и тает до края. Сдвиг ограничен
+ * четвертью размытия, чтобы тень, направленная вверх, не исчезала совсем
+ */
+function fitTop(p: { x: number; y: number; blur: number; spread: number }) {
+  const over = p.spread + p.blur - p.y - TOP_ROOM;
+  if (over <= 0) return p;
+  const d = Math.min(over / 2, p.blur / 4);
+  return { ...p, y: p.y + d, spread: p.spread - d };
 }
 
 /** Во сколько раз тень при наведении больше обычной */
@@ -66,7 +84,7 @@ export function shadowReach(s: Shadows, hover: boolean): { left: number; top: nu
   for (const grow of hover ? [1, hoverGrow(s)] : [1]) {
     for (const l of layersOf(s).card) {
       if (l.inset) continue;
-      const p = place(l, grow);
+      const p = fitTop(place(l, grow));
       left = Math.max(left, p.spread + p.blur - p.x);
       top = Math.max(top, p.spread + p.blur - p.y);
     }
@@ -97,8 +115,10 @@ export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: b
       default: return rgba(base, Math.min(1, a * k * boost));
     }
   };
-  const render = (layers: Layer[], mul = 1, grow = 1) => layers.map((l) => {
-    const { x, y, blur, spread } = place(l, grow);
+  // fit - тень карточек, которые стоят в прокрутке страницы: верх укладывается в TOP_ROOM
+  const render = (layers: Layer[], mul = 1, grow = 1, fit = false) => layers.map((l) => {
+    const p = place(l, grow);
+    const { x, y, blur, spread } = fit && !l.inset ? fitTop(p) : p;
     const r = (v: number) => Math.round(v * 10) / 10;
     return `${l.inset ? 'inset ' : ''}${r(x)}px ${r(y)}px ${r(blur)}px ${r(spread)}px ${color(l, mul)}`;
   });
@@ -107,8 +127,10 @@ export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: b
   const set = layersOf(s);
   const h = s.hover / 100;
   return {
-    card: join([...hi, ...render(set.card)]),
-    hover: join([...hi, ...render(set.card, h, hoverGrow(s))]),
+    card: join([...hi, ...render(set.card, 1, 1, true)]),
+    hover: join([...hi, ...render(set.card, h, hoverGrow(s), true)]),
+    bare: join(render(set.card, 1, 1, true)),
+    bareHover: join(render(set.card, h, hoverGrow(s), true)),
     pop: join(render(set.pop)),
     button: join(render(set.btn))
   };

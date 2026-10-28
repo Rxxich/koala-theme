@@ -11,12 +11,12 @@
 import { mix, readableOn, rgba, rgbToHsl, parseColor } from './color';
 import { fontStack, isGoogleFontsUrl, isMonoFont } from './fonts';
 import { APP_WRAPPER, isAppPalette } from './defaults';
-import { highlightShadow, shadowReach, shadowSet, textShadowCss, textShadowReach } from './shadows';
-import { powerKeyframes, powerRules } from './power';
+import { highlightShadow, shadowReach, shadowSet, textShadowCss, textShadowReach, TOP_ROOM } from './shadows';
+import { powerKeyframes, powerRules, type GlassLook } from './power';
 import { particleSet, patternLayer } from './backdrop';
 import { clickRules, funRules, PROXY_SEL } from './effects';
 import { dividerRules } from './dividers';
-import type { Background, IconPlate, Scheme, SelectedStyle, StyleColor, ThemeConfig } from './types';
+import type { Background, GradientStop, IconPlate, Scheme, SelectedStyle, StyleColor, ThemeConfig } from './types';
 
 const P = ':root';
 const WRAP = `${P} [data-slot="sidebar-wrapper"]`;
@@ -258,6 +258,16 @@ function mapRules(cfg: ThemeConfig): string {
 
 /* ---------- Палитра ---------- */
 
+/** Свой градиент карточек (не «Лёгкий»): точки цвета схемы с прозрачностью заливки alpha, % */
+export function cardGradientCss(s: ThemeConfig['surfaces'], stops: GradientStop[], alpha: number): string {
+  const list = [...stops].sort((a, b) => a.pos - b.pos).map((x) => `${cm(x.color, alpha)} ${pct(x.pos)}`).join(', ');
+  const at = `at ${pct(s.gradientX)} ${pct(s.gradientY)}`;
+  if (s.gradientKind === 'radial') return `radial-gradient(ellipse ${at}, ${list})`;
+  if (s.gradientKind === 'conic') return `conic-gradient(from ${s.gradientAngle}deg ${at}, ${list})`;
+  return `linear-gradient(${s.gradientAngle}deg, ${list})`;
+}
+const ownGradient = (s: ThemeConfig['surfaces']) => s.custom && s.gradient && s.gradientKind !== 'soft';
+
 function paletteRules(cfg: ThemeConfig, scheme: Scheme, scope: string): string {
   const p = cfg.palette[scheme];
   const sh = shadowSet(cfg.shadows, scheme, p, cfg.surfaces.highlight);
@@ -293,9 +303,16 @@ function paletteRules(cfg: ThemeConfig, scheme: Scheme, scope: string): string {
   ];
   const own = [
     cfg.surfaces.buttons === 'power' && t('on-power', onPower),
-    // Блик по кромке без теней темы - отдельной переменной (с тенями он входит в тень карточек)
-    !sh && cfg.surfaces.highlight && t('highlight', highlightShadow(scheme)),
-    sh && t('shadow-card', sh.card), sh && t('shadow-hover', sh.hover), sh && t('shadow-pop', sh.pop), sh && t('shadow-btn', sh.button)
+    // Блик по кромке - отдельной переменной: им рисуют карточки при тенях клиента (с тенями темы он
+    // входит в тень карточек) и стеклянные кнопки подключения при любых тенях
+    cfg.surfaces.highlight && t('highlight', highlightShadow(scheme)),
+    sh && t('shadow-card', sh.card), sh && t('shadow-hover', sh.hover), sh && t('shadow-pop', sh.pop), sh && t('shadow-btn', sh.button),
+    // Тень кнопки подключения - без блика: у кнопки он свой, иначе получался двойной
+    sh && cfg.shadows.power && cfg.surfaces.highlight && t('shadow-bare', sh.bare),
+    sh && cfg.shadows.power && cfg.surfaces.highlight && t('shadow-bare-hover', sh.bareHover),
+    // Свой градиент карточек: цвета у каждой схемы свои. glass-grad - для стеклянной панели и окошка режима
+    ownGradient(cfg.surfaces) && t('card-grad', cardGradientCss(cfg.surfaces, cfg.surfaces.gradientStops[scheme], cardAlpha(cfg.surfaces))),
+    ownGradient(cfg.surfaces) && t('glass-grad', cardGradientCss(cfg.surfaces, cfg.surfaces.gradientStops[scheme], cfg.surfaces.opacity))
   ].filter(Boolean) as string[];
   return rule(scope, [...vars, own.length ? '/* Переменные темы */' : false, ...own]);
 }
@@ -305,23 +322,40 @@ function paletteRules(cfg: ThemeConfig, scheme: Scheme, scope: string): string {
 /** Непрозрачность заливки карточек: стекло - по ползунку, сплошные - 100%, контур и "без фона" - 0 */
 export const cardAlpha = (s: ThemeConfig['surfaces']) => s.fill === 'solid' ? 100 : s.fill === 'glass' ? s.opacity : 0;
 
+/** «Лёгкий» градиент карточек: чуть светлее сверху */
+const shade = (a: number, b: number) => `linear-gradient(180deg, ${cm('color-mix(in oklab, var(--card) 94%, var(--foreground))', a)}, ${cm('var(--card)', b)})`;
+
+/**
+ * Стекло по ползункам «Карточки и плитки» - даже если сами карточки другие (сплошные, контур).
+ * Им же рисуются стеклянная боковая панель, окошко режима и тумблер «Стекло»
+ */
+function glassLook(s: ThemeConfig['surfaces']): GlassLook {
+  const fill = ownGradient(s) ? 'var(--kt-glass-grad)' : s.gradient ? shade(s.opacity, Math.max(0, s.opacity - 14)) : cm('var(--card)', s.opacity);
+  // Шероховатость стекла - зерно отдельным верхним слоем фона: матовое стекло вместо гладкого
+  const grain = s.grain > 0 ? `${noiseUri(s.grain * 0.45)} 0 0 / 180px 180px, ` : '';
+  const stroke = pickColor(s.borderColor, s.borderCustom) ?? 'var(--stroke)';
+  return {
+    grain, fill,
+    filter: s.blur > 0 ? `blur(${s.blur}px) saturate(${s.saturate}%)` : 'none',
+    stroke: s.borderOpacity >= 100 ? stroke : cm(stroke, s.borderOpacity)
+  };
+}
+
 function surfaceRules(cfg: ThemeConfig): string {
   const s = cfg.surfaces;
   const sh = cfg.shadows.preset !== 'app';
   const glass = s.fill === 'glass';
   const alpha = cardAlpha(s);
-  const shade = (a: number, b: number) => `linear-gradient(180deg, ${cm('color-mix(in oklab, var(--card) 94%, var(--foreground))', a)}, ${cm('var(--card)', b)})`;
-  // Стекло по ползункам - для стеклянной боковой панели и окон, даже если сами карточки другие
-  const glassBlur = s.blur > 0 ? `blur(${s.blur}px) saturate(${s.saturate}%)` : 'none';
-  const glassFill = s.gradient ? shade(s.opacity, Math.max(0, s.opacity - 14)) : cm('var(--card)', s.opacity);
-  // Шероховатость стекла - зерно отдельным верхним слоем фона: матовое стекло вместо гладкого
-  const glassGrain = s.grain > 0 ? `${noiseUri(s.grain * 0.45)} 0 0 / 180px 180px, ` : '';
+  const gl = glassLook(s);
+  const glassBlur = gl.filter, glassFill = gl.fill, glassGrain = gl.grain;
+  const own = ownGradient(s);
   const grain = glass ? glassGrain : '';
   const blur = glass ? glassBlur : 'none';
-  const fill = !glass && s.fill !== 'solid' ? 'transparent' : s.gradient ? shade(alpha, Math.max(0, alpha - (glass ? 14 : 0))) : cm('var(--card)', alpha);
+  const fill = !glass && s.fill !== 'solid' ? 'transparent' : own ? 'var(--kt-card-grad)'
+    : s.gradient ? shade(alpha, Math.max(0, alpha - (glass ? 14 : 0))) : cm('var(--card)', alpha);
   const bw = s.fill === 'transparent' ? 0 : s.fill === 'outline' ? Math.max(1, s.borderWidth) : s.borderWidth;
   const stroke = pickColor(s.borderColor, s.borderCustom) ?? 'var(--stroke)';
-  const border = bw === 0 ? 'transparent' : s.borderOpacity >= 100 ? stroke : cm(stroke, s.borderOpacity);
+  const border = bw === 0 ? 'transparent' : gl.stroke;
   let out = '';
 
   // Скругления. Клиент считает rounded-sm/md/lg/xl как --radius ± несколько пикселей, поэтому при
@@ -419,7 +453,7 @@ function surfaceRules(cfg: ThemeConfig): string {
   // Сверху - не больше 16px: прокручиваемое содержимое уходит под заголовок страницы, а он прозрачный.
   // Подъём выносит карточку на 2px вверх вместе с тенью: у самой верхней группы прокси срезалась рамка
   const lifts = [s.hover, s.groupHover, s.selectedHover, s.profileHover, s.profileSelectedHover].includes('lift');
-  const roomT = Math.min(16, Math.ceil(Math.max(reach.top + (lifts ? 2 : 0), glowReach)));
+  const roomT = Math.min(TOP_ROOM, Math.ceil(Math.max(reach.top + (lifts ? 2 : 0), glowReach)));
   const content = `${P} .content.custom-scrollbar`;
   if (roomL > 8) {
     out += rule(`${P} .main.overflow-y-auto`, [`margin-left: -${roomL}px`, `padding-left: ${roomL}px`]);
@@ -567,6 +601,9 @@ function surfaceRules(cfg: ThemeConfig): string {
   // берут акцент из той же переменной
   out += rule(sel, accentVars(pickColor(s.selectedColor, s.selectedCustom)));
   if (s.selected !== 'app') out += rule(sel, [...baseSel, ...selDecls(s.selected, fw), fw > 0 && `--kt-frame: ${fw}px`]);
+  // И у стиля клиента: его рамка (1px) оставалась при рамке карточек 0 - выбранный был выше соседей, и
+  // ряд прыгал при каждом щелчке. Цвет рамки клиента (border-primary/30) тогда - контуром
+  if (s.selected === 'app' && s.custom) out += rule(sel, [`border-width: ${bw}px !important`, ...(selOutline ? bc(pm(30)) : [])]);
 
   // Подъём - без transform: под ним браузер растягивает готовую картинку стеклянного слоя, и текст
   // мылится. Карточка поднимается через top на 2px и на столько же вытягивается вниз - нижний край
@@ -1134,7 +1171,7 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
   css += section(++n, 'Фон окна', 'Корневой контейнер [data-slot="sidebar-wrapper"]. Клиент задаёт ему цвет инлайн-стилем,\nпоэтому нужен !important. ::before - градиент или картинка, ::after - частицы, узор, зерно, виньетка', bgCss);
   css += section(++n, 'Карта на фоне', 'Картинка map_darktheme / map_lighttheme из App.tsx', mapRules(cfg));
   css += section(++n, 'Поверхности', 'Карточки, плитки главной, боковая панель, окна, меню, выбранный сервер, кнопки, тени', surfaceRules(cfg));
-  css += section(++n, 'Кнопка подключения', 'pages/home.tsx, data-guide="home-power-toggle". Состояния определяются по классам круга и видимой иконке', powerRules(cfg, rule));
+  css += section(++n, 'Кнопка подключения', 'pages/home.tsx, data-guide="home-power-toggle". Состояния определяются по классам круга и видимой иконке', powerRules(cfg, rule, glassLook(cfg.surfaces)));
   css += section(++n, 'Флаги серверов', 'Название сервера - <span class="flag-emoji" title="...">. Правила срабатывают, только если\nназвание начинается с флага (буквы-регионы U+1F1E6...U+1F1FF)', flagRules(cfg));
 
   const div = dividerRules(cfg, rule);

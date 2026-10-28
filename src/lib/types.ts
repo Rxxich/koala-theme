@@ -92,6 +92,8 @@ export type ButtonStyle = 'app' | 'glossy' | 'power' | 'glow' | 'outline' | 'pil
 /** Подложка под картинкой группы прокси ('app' - без подложки, как в клиенте) */
 export type IconPlate = 'app' | 'soft' | 'solid' | 'tint' | 'power' | 'glass' | 'white';
 export type IconShape = 'app' | 'squircle' | 'circle' | 'square';
+/** Градиент карточек: 'soft' - лёгкий (чуть светлее сверху), остальные - свои точки цвета */
+export type CardGradient = 'soft' | 'linear' | 'radial' | 'conic';
 
 export interface Surfaces {
   /** false - карточки как в клиенте, правила фона/стекла/рамок не генерируются */
@@ -107,6 +109,14 @@ export interface Surfaces {
   borderOpacity: number;
   radius: number;
   gradient: boolean;
+  gradientKind: CardGradient;
+  /** Угол линейного и конического градиента, ° */
+  gradientAngle: number;
+  /** Центр радиального и конического градиента, % */
+  gradientX: number;
+  gradientY: number;
+  /** Точки цвета - для каждой схемы свои: цвета обычно берутся из её палитры */
+  gradientStops: Record<Scheme, GradientStop[]>;
   highlight: boolean;
   /** Цвет рамки карточек (при custom). 'auto' - цвет рамок палитры */
   borderColor: StyleColor;
@@ -164,12 +174,19 @@ export interface Shadows {
   cards: boolean;
   popups: boolean;
   buttons: boolean;
+  /** Кнопка подключения на главной */
+  power: boolean;
 }
 
 export type PowerStyle = 'app' | 'glow' | 'pulse' | 'ring' | 'glass' | 'neon' | 'minimal' | 'sphere'
   | 'network' | 'globe' | 'dots' | 'plasma'
-  | 'rocket' | 'orbit' | 'radar' | 'liquid' | 'equalizer' | 'heartbeat' | 'portal' | 'toggle';
+  | 'rocket' | 'orbit' | 'radar' | 'liquid' | 'equalizer' | 'heartbeat' | 'portal' | 'toggle' | 'daynight';
 export type PowerShape = 'circle' | 'squircle' | 'square';
+/** Цвет рамки круга: 'app' - цвета рамки кнопки из палитры, 'gradient' - градиентом цветов кнопки */
+export type PowerRing = 'app' | 'gradient' | 'primary' | 'foreground' | 'custom';
+export type PowerVolume = 'none' | 'convex' | 'concave' | 'gloss';
+export type ToggleLook = 'classic' | 'glass';
+export type DayScene = 'clouds' | 'hills';
 export type PowerFill = 'app' | 'radial' | 'linear' | 'conic' | 'solid' | 'none';
 export type PowerHover = 'app' | 'scale' | 'lift' | 'tilt' | 'glow' | 'none';
 export type PowerIdle = 'none' | 'float' | 'breathe' | 'wobble';
@@ -191,9 +208,33 @@ export interface Power {
   glowPulse: boolean;
   /* Форма и заливка круга */
   shape: PowerShape;
+  /** Скругление углов у сквиркла и квадрата, % от высоты */
+  corner: number;
+  /** Ширина кнопки, % (круг шире 100% становится капсулой) */
+  stretch: number;
   fill: PowerFill;
   fillOpacity: number;
+  /** Направление линейной и конической заливки, °; у радиальной - откуда падает свет */
+  fillAngle: number;
   ringWidth: number;
+  ringColor: PowerRing;
+  ringCustom: string;
+  /** Второе кольцо снаружи: толщина (0 - нет) и зазор до круга, px */
+  outerRing: number;
+  outerGap: number;
+  volume: PowerVolume;
+  /** Тень под кнопкой, % */
+  drop: number;
+  /** Стиль «Стекло»: размер блика сверху, % (0 - без блика) */
+  glassShine: number;
+  /* Тумблеры */
+  toggleLook: ToggleLook;
+  toggleIcon: boolean;
+  /** Тумблер «Стекло»: ручка светится цветом кнопки */
+  toggleGlow: boolean;
+  dayScene: DayScene;
+  /** «День и ночь»: днём - подключено (иначе наоборот) */
+  dayOn: boolean;
   /* Поведение */
   hover: PowerHover;
   idle: PowerIdle;

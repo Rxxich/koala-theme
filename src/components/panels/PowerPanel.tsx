@@ -5,7 +5,8 @@ import { RotateCcw } from 'lucide-react';
 import { useStore, useEditScheme } from '../../state/store';
 import { EASE } from '../../lib/generator';
 import { sphereImage } from '../../lib/sphere';
-import type { ClickEffect, Easing, Entrance, PowerFill, PowerHover, PowerIcon, PowerIdle, PowerShape, PowerStyle } from '../../lib/types';
+import { POWER_PLAIN, POWER_STRETCH, POWER_TOGGLES } from '../../lib/power';
+import type { ClickEffect, DayScene, Easing, Entrance, PowerFill, PowerHover, PowerIcon, PowerIdle, PowerRing, PowerShape, PowerStyle, PowerVolume, ToggleLook } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
 import { PanelHead, useCfg } from './common';
@@ -30,7 +31,14 @@ const STYLES: { value: PowerStyle; label: string; note: string; fun?: boolean }[
   { value: 'equalizer', label: 'Эквалайзер', note: 'Полоски танцуют, пока есть соединение', fun: true },
   { value: 'heartbeat', label: 'Кардиограмма', note: 'Линия пульса и биение сердца', fun: true },
   { value: 'portal', label: 'Портал', note: 'Закручивающийся вихрь', fun: true },
-  { value: 'toggle', label: 'Тумблер', note: 'Большой переключатель вместо круга', fun: true }
+  { value: 'toggle', label: 'Тумблер', note: 'Большой переключатель вместо круга', fun: true },
+  { value: 'daynight', label: 'День и ночь', note: 'Тумблер-пейзаж: солнце и облака сменяются луной и звёздами', fun: true }
+];
+const RINGS: { value: PowerRing; label: string }[] = [
+  { value: 'app', label: 'Как в клиенте' }, { value: 'gradient', label: 'Градиент' }, { value: 'primary', label: 'Акцент' }, { value: 'foreground', label: 'Цвет текста' }, { value: 'custom', label: 'Свой' }
+];
+const VOLUMES: { value: PowerVolume; label: string }[] = [
+  { value: 'none', label: 'Плоская' }, { value: 'convex', label: 'Выпуклая' }, { value: 'concave', label: 'Вдавленная' }, { value: 'gloss', label: 'Глянец' }
 ];
 
 export function PowerPanel() {
@@ -48,8 +56,10 @@ export function PowerPanel() {
     });
     setUi({ page: 'home', power: power === 'off' ? 'on' : power });
   };
-  const standard = !['sphere', 'rocket', 'equalizer', 'heartbeat', 'toggle', 'network', 'globe', 'dots'].includes(pw.style);
+  const standard = !['sphere', 'rocket', 'equalizer', 'heartbeat', 'toggle', 'daynight', 'network', 'globe', 'dots'].includes(pw.style);
   const ball = ['sphere', 'network', 'globe', 'dots', 'plasma'].includes(pw.style);
+  const toggle = POWER_TOGGLES.includes(pw.style);
+  const plain = POWER_PLAIN.includes(pw.style);
   // Превью SVG-сфер - те же картинки, что попадут в тему: вращение под курсором, в покое неподвижный кадр
   const nets = useMemo(() => ({
     '--net': sphereImage('network', true, 40), '--globe': sphereImage('globe', true, 30), '--dots': sphereImage('dots', true, 24),
@@ -94,11 +104,37 @@ export function PowerPanel() {
         )}
       </Group>
 
+      {toggle && (
+        <Group title="Тумблер">
+          {pw.style === 'toggle' && (
+            <>
+              <Row label="Вид"><Segmented<ToggleLook> size="sm" value={pw.toggleLook} onChange={(v) => set('power', 'toggleLook', v)} options={[{ value: 'classic', label: 'Классический' }, { value: 'glass', label: 'Стекло' }]} /></Row>
+              {pw.toggleLook === 'glass' && (
+                <>
+                  <p className="note">Дорожка - стекло карточек из «Поверхностей»: непрозрачность, градиент, размытие, насыщенность, шероховатость, цвет и заметность рамки, блик по верхней кромке. Толщина рамки - ниже, в «Форме и заливке».</p>
+                  <Toggle label="Свечение ручки" hint="Ручка светится цветом кнопки подключения, свет растекается по стеклу. Выключите - останется ручка цвета кнопки с обычной тенью" checked={pw.toggleGlow} onChange={(v) => set('power', 'toggleGlow', v)} />
+                </>
+              )}
+              <Toggle label="Значок на ручке" hint="Питание и пауза. Спиннер подключения и знак ошибки видны всегда" checked={pw.toggleIcon} onChange={(v) => set('power', 'toggleIcon', v)} />
+            </>
+          )}
+          {pw.style === 'daynight' && (
+            <>
+              <Row label="Пейзаж"><Segmented<DayScene> size="sm" value={pw.dayScene} onChange={(v) => set('power', 'dayScene', v)} options={[{ value: 'clouds', label: 'Облака' }, { value: 'hills', label: 'Холмы' }]} /></Row>
+              <Toggle label="День, когда подключено" hint="Выключите - и подключение будет ночью, а отключённая кнопка - днём" checked={pw.dayOn} onChange={(v) => set('power', 'dayOn', v)} />
+            </>
+          )}
+        </Group>
+      )}
+
       <Group title="Форма и заливка">
         <Slider label="Размер" value={pw.size} min={70} max={150} unit="%" onChange={(v) => set('power', 'size', v)} />
-        {!ball && pw.style !== 'toggle' && (
-          <Row label="Форма"><Segmented<PowerShape> size="sm" value={pw.shape} onChange={(v) => set('power', 'shape', v)} options={[{ value: 'circle', label: 'Круг' }, { value: 'squircle', label: 'Сквиркл' }, { value: 'square', label: 'Квадрат' }]} /></Row>
+        {!ball && !toggle && (
+          <Row label="Форма"><Segmented<PowerShape> size="sm" value={pw.shape} options={[{ value: 'circle', label: 'Круг' }, { value: 'squircle', label: 'Сквиркл' }, { value: 'square', label: 'Квадрат' }]}
+            onChange={(v) => update((c) => { c.power.shape = v; if (v !== 'circle') c.power.corner = v === 'square' ? 20 : 34; })} /></Row>
         )}
+        {!ball && !toggle && pw.shape !== 'circle' && <Slider label="Скругление углов" hint="Доля от высоты кнопки. 50% - углы полностью круглые" value={pw.corner} min={0} max={50} unit="%" onChange={(v) => set('power', 'corner', v)} />}
+        {POWER_STRETCH.includes(pw.style) && <Slider label="Ширина" hint="Круг шире 100% становится капсулой, сквиркл и квадрат - прямоугольником" value={pw.stretch} min={100} max={200} step={5} unit="%" onChange={(v) => set('power', 'stretch', v)} />}
         {standard && !ball && (
           <>
             <Row label="Заливка" stack>
@@ -106,12 +142,41 @@ export function PowerPanel() {
                 { value: 'app', label: 'Как в клиенте' }, { value: 'radial', label: 'Радиальная' }, { value: 'linear', label: 'Линейная' }, { value: 'conic', label: 'Коническая' }, { value: 'solid', label: 'Сплошная' }, { value: 'none', label: 'Прозрачная' }
               ]} />
             </Row>
-            {pw.fill !== 'app' && pw.fill !== 'none' && <Slider label="Плотность заливки" value={pw.fillOpacity} min={10} max={100} unit="%" onChange={(v) => set('power', 'fillOpacity', v)} />}
+            {pw.fill !== 'app' && pw.fill !== 'none' && pw.style !== 'glass' && <Slider label="Плотность заливки" value={pw.fillOpacity} min={10} max={100} unit="%" onChange={(v) => set('power', 'fillOpacity', v)} />}
+            {(pw.fill === 'radial' || pw.fill === 'linear' || pw.fill === 'conic' || (plain && pw.ringColor === 'gradient')) && (
+              <Slider label="Направление" hint="Угол градиента заливки и градиентной рамки. У радиальной заливки - откуда падает свет" value={pw.fillAngle} min={0} max={360} unit="°" onChange={(v) => set('power', 'fillAngle', v)} />
+            )}
           </>
         )}
-        {!ball && <Slider label="Толщина рамки" value={pw.ringWidth} min={0} max={6} step={0.5} unit="px" onChange={(v) => set('power', 'ringWidth', v)} />}
+        {!ball && <Slider label={pw.style === 'daynight' ? 'Толщина рамки дорожки' : 'Толщина рамки'} value={pw.ringWidth} min={0} max={6} step={0.5} unit="px" onChange={(v) => set('power', 'ringWidth', v)} />}
+        {pw.style === 'glass' && <p className="note">Стекло - как у карточек в «Поверхностях»: непрозрачность (она же плотность заливки), размытие, насыщенность, шероховатость, цвет и заметность рамки, блик по верхней кромке. «Прозрачная» заливка - стекло цвета карточек.</p>}
+        {pw.style === 'glass' && <Slider label="Размер блика" hint="Светлое пятно сверху, как на стеклянном шаре. 0 - без блика" value={pw.glassShine} min={0} max={200} step={5} unit="%" onChange={(v) => set('power', 'glassShine', v)} />}
+        {plain && (
+          <>
+            <Row label="Цвет рамки" hint="Градиент - цветами кнопки подключения, по направлению выше" stack>
+              <Segmented<PowerRing> wrap size="sm" value={pw.ringColor} onChange={(v) => set('power', 'ringColor', v)} options={RINGS} />
+            </Row>
+            {pw.ringColor === 'custom' && <Row label="Свой цвет"><ColorField value={pw.ringCustom} onChange={(v) => set('power', 'ringCustom', v)} /></Row>}
+            <Slider label="Внешнее кольцо" hint="Второе тонкое кольцо вокруг кнопки с зазором. 0 - нет" value={pw.outerRing} min={0} max={6} step={0.5} unit="px" onChange={(v) => set('power', 'outerRing', v)} />
+            {pw.outerRing > 0 && <Slider label="Зазор до кольца" value={pw.outerGap} min={2} max={16} unit="px" onChange={(v) => set('power', 'outerGap', v)} />}
+          </>
+        )}
         {pw.style === 'sphere' && <Slider label="Размер частиц" value={pw.sphereDot} min={0.8} max={3} step={0.1} unit="px" onChange={(v) => set('power', 'sphereDot', v)} />}
+        {!ball && (
+          <>
+            <Toggle label="Тень из вкладки «Тени»" hint="Тень карточек под кнопкой, при наведении - тень наведения. То же, что «Тени» → «Где показывать» → «Кнопка подключения»"
+              checked={config.shadows.power} onChange={(v) => set('shadows', 'power', v)} />
+            {config.shadows.power && config.shadows.preset === 'app' && <p className="note">Сейчас тени «Как в клиенте» - выберите стиль во вкладке «Тени», и тень появится.</p>}
+          </>
+        )}
       </Group>
+
+      {plain && (
+        <Group title="Объём">
+          <Segmented<PowerVolume> wrap size="sm" value={pw.volume} onChange={(v) => set('power', 'volume', v)} options={VOLUMES} />
+          <Slider label="Тень под кнопкой" value={pw.drop} min={0} max={100} unit="%" onChange={(v) => set('power', 'drop', v)} />
+        </Group>
+      )}
 
       {standard && (
         <Group title="Иконка">

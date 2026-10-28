@@ -10,11 +10,30 @@ export function cx(...xs: (string | false | null | undefined)[]) {
 
 /* ---------- Подсказка "?" ---------- */
 
+// Пузырь - в отдельном слое поверх страницы (портал в body, position: fixed): внутри панели его
+// обрезала прокрутка панели, как только он заходил на сцену с окном клиента
 export function Tip({ text }: { text: string }) {
+  const anchor = useRef<HTMLSpanElement>(null);
+  const bubble = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    const a = anchor.current, b = bubble.current;
+    if (!open || !a || !b) return;
+    const r = a.getBoundingClientRect();
+    const left = Math.max(8, Math.min(window.innerWidth - b.offsetWidth - 8, r.left - 12));
+    // Над значком, а если сверху не хватает места - под ним
+    const above = r.top - b.offsetHeight - 8;
+    b.style.left = `${left}px`;
+    b.style.top = `${above >= 8 ? above : r.bottom + 8}px`;
+    b.classList.toggle('below', above < 8);
+  }, [open]);
+
   return (
-    <span className="tip" tabIndex={0} aria-label={text}>
+    <span ref={anchor} className="tip" tabIndex={0} aria-label={text}
+      onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}>
       <HelpCircle size={13} />
-      <span className="tip-bubble" role="tooltip">{text}</span>
+      {open && createPortal(<span ref={bubble} className="tip-bubble" role="tooltip">{text}</span>, document.body)}
     </span>
   );
 }

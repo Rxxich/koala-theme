@@ -4,6 +4,7 @@
 // стилями клиента, поэтому из неё получается почти пустой CSS. Пользователь меняет то, что хочет.
 // styledBase() - аккуратная основа для шаблонов конструктора (стекло, тени, анимации).
 
+import { mix } from './color';
 import type { Background, DeepPartial, GradientStop, MeshBlob, Palette, Scheme, ThemeConfig } from './types';
 
 /** Стандартная палитра клиента (assets/main.css: :root и .dark), переведённая из OKLCH в HEX */
@@ -66,6 +67,15 @@ export function makeBackground(over: Partial<Background> = {}): Background {
   };
 }
 
+/** Заготовки градиента карточек - точки цвета из палитры схемы */
+export const CARD_GRADIENTS = {
+  lighter: { label: 'Светлее сверху', stops: (p: Palette) => [{ color: mix(p.card, p.foreground, 0.12), pos: 0 }, { color: p.card, pos: 100 }] },
+  accent: { label: 'Акцент', stops: (p: Palette) => [{ color: mix(p.card, p.primary, 0.35), pos: 0 }, { color: p.card, pos: 70 }] },
+  power: { label: 'Цвета кнопки', stops: (p: Palette) => [{ color: mix(p.card, p.powerOnStart, 0.35), pos: 0 }, { color: mix(p.card, p.powerOnEnd, 0.2), pos: 100 }] },
+  aurora: { label: 'Сияние', stops: (p: Palette) => [{ color: mix(p.card, p.primary, 0.3), pos: 0 }, { color: p.card, pos: 50 }, { color: mix(p.card, p.powerOnStart, 0.3), pos: 100 }] }
+} satisfies Record<string, { label: string; stops: (p: Palette) => GradientStop[] }>;
+export type CardGradientPreset = keyof typeof CARD_GRADIENTS;
+
 /** Тема "как в Koala Clash" - стартовая точка конструктора */
 export function defaultConfig(): ThemeConfig {
   return {
@@ -82,7 +92,9 @@ export function defaultConfig(): ThemeConfig {
     map: { show: true, opacity: 65, grayscale: 0, hue: 0, brightness: 100, tintPrimary: false, blurPages: true },
     surfaces: {
       custom: false, fill: 'glass', grain: 0, opacity: 50, blur: 24, saturate: 100, borderWidth: 1, borderOpacity: 100, radius: 0.625,
-      gradient: false, highlight: false, borderColor: 'auto', borderCustom: '#7c8cff', sidebar: 'app', navActive: 'app', navColor: 'auto', navCustom: '#7c8cff',
+      gradient: false, gradientKind: 'soft', gradientAngle: 180, gradientX: 50, gradientY: 0,
+      gradientStops: { light: CARD_GRADIENTS.lighter.stops(APP_PALETTE.light), dark: CARD_GRADIENTS.lighter.stops(APP_PALETTE.dark) },
+      highlight: false, borderColor: 'auto', borderCustom: '#7c8cff', sidebar: 'app', navActive: 'app', navColor: 'auto', navCustom: '#7c8cff',
       selected: 'app', selectedHover: 'none', selectedColor: 'auto', selectedCustom: '#7c8cff', hover: 'app', groupHover: 'app', hoverColor: 'auto', hoverCustom: '#7c8cff',
       profileSelected: 'app', profileSelectedHover: 'none', profileHover: 'app', profileSwitch: 'app', profileColor: 'auto', profileCustom: '#7c8cff',
       iconPlate: 'app', iconColor: 'auto', iconCustom: '#7c8cff', iconShape: 'app', iconPad: 5, iconHover: false, buttons: 'app', buttonsColor: 'auto', buttonsCustom: '#7c8cff'
@@ -93,12 +105,14 @@ export function defaultConfig(): ThemeConfig {
     },
     shadows: {
       preset: 'app', intensity: 100, color: 'auto', customColor: '#000000', angle: 90, distance: 100, blur: 100, spread: 0,
-      hardOffset: 4, hover: 140, cards: true, popups: true, buttons: false
+      hardOffset: 4, hover: 140, cards: true, popups: true, buttons: false, power: false
     },
     power: {
       style: 'app', size: 100, animate: true, speed: 1, sphereDot: 1.5,
       glow: 0, glowSize: 170, glowBlur: 24, glowColor: 'power', glowCustom: '#7c8cff', glowOff: false, glowPulse: false,
-      shape: 'circle', fill: 'app', fillOpacity: 50, ringWidth: 2,
+      shape: 'circle', corner: 34, stretch: 100, fill: 'app', fillOpacity: 50, fillAngle: 145, ringWidth: 2,
+      ringColor: 'app', ringCustom: '#7c8cff', outerRing: 0, outerGap: 6, volume: 'none', drop: 0, glassShine: 100,
+      toggleLook: 'classic', toggleIcon: true, toggleGlow: true, dayScene: 'clouds', dayOn: true,
       hover: 'app', idle: 'none', icon: 'app', iconCustom: '#ffffff', iconSize: 100
     },
     motion: {
@@ -183,11 +197,16 @@ export function sanitizeConfig(raw: unknown): ThemeConfig {
   merged.fonts.imports = merged.fonts.imports.filter((x) => typeof x === 'string');
   // Конфиги первой версии: поверхности всегда были свои
   if (isObj(raw.surfaces) && raw.surfaces.custom === undefined) merged.surfaces.custom = true;
+  // Скругление углов раньше было постоянным: у квадрата 20%, у сквиркла 34%
+  if (isObj(raw.power) && raw.power.corner === undefined && merged.power.shape === 'square') merged.power.corner = 20;
   for (const s of ['light', 'dark'] as const) {
     const bg = merged.background[s];
     bg.stops = bg.stops.filter(isStop);
     if (bg.stops.length < 2) bg.stops = makeBackground().stops;
     bg.blobs = bg.blobs.filter(isBlob);
+    const gs = merged.surfaces.gradientStops;
+    gs[s] = gs[s].filter(isStop);
+    if (gs[s].length < 2) gs[s] = base.surfaces.gradientStops[s];
   }
   return merged;
 }

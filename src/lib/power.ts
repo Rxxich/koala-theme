@@ -30,6 +30,23 @@ const ERR = `${B}${ERR_HAS}`;
 /** Выключено и не подключается (покой) */
 const IDLE = `${B}:not(${ON_HAS}):not(${LOAD_HAS})`;
 
+/** Стили, у которых круг не перекрашивается самим стилем: им доступны цвет рамки, внешнее кольцо и объём */
+export const POWER_PLAIN: readonly string[] = ['app', 'glow', 'pulse', 'ring'];
+/** Стили, которые можно растянуть в ширину (у орбиты и шаров рисунок рассчитан на круг) */
+export const POWER_STRETCH: readonly string[] = ['app', 'glow', 'pulse', 'ring', 'glass', 'neon', 'minimal', 'radar', 'liquid', 'portal'];
+/** Тумблеры: своя форма дорожки, форма и заливка круга к ним не применяются */
+export const POWER_TOGGLES: readonly string[] = ['toggle', 'daynight'];
+
+/** Объём круга - внутренние тени */
+const VOLUME: Record<ThemeConfig['power']['volume'], string[]> = {
+  none: [],
+  convex: ['inset 0 2px 2px rgba(255, 255, 255, 0.35)', 'inset 0 -10px 18px rgba(0, 0, 0, 0.28)'],
+  concave: ['inset 0 8px 16px rgba(0, 0, 0, 0.38)', 'inset 0 -2px 2px rgba(255, 255, 255, 0.2)'],
+  gloss: ['inset 0 1px 1px rgba(255, 255, 255, 0.55)']
+};
+/** Глянец - светлая шапка сверху, отдельным верхним слоем фона */
+const GLOSS = 'radial-gradient(120% 75% at 50% 0%, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08) 58%, transparent 60%)';
+
 /** Стили, которые движутся всё время, и те, что только при подключении и подключено */
 const MOVING_ALWAYS = ['liquid', 'plasma', 'portal'];
 const MOVING_ON = ['pulse', 'ring', 'neon', 'network', 'globe', 'dots', 'sphere', 'rocket', 'orbit', 'radar', 'equalizer', 'heartbeat'];
@@ -45,6 +62,9 @@ function movingWhen(pw: ThemeConfig['power']): string | null {
 
 type Decl = string | false | null | undefined | 0;
 type RuleFn = (selector: string | string[], decls: Decl[]) => string;
+
+/** Стекло карточек из «Поверхностей» (glassLook в генераторе): зерно, заливка, фильтр, цвет рамки */
+export interface GlassLook { grain: string; fill: string; filter: string; stroke: string }
 
 /** Орбита: полуоси эллипса, запас под спутник (px) и радиус круга кнопки, который загораживает дальнюю половину */
 const ORBIT = { a: 92, b: 26, pad: 8, r: 64 };
@@ -84,6 +104,31 @@ function ecgSvg(color: string, flat: boolean): string {
   return svgUrl(`<svg xmlns="http://www.w3.org/2000/svg" width="56" height="40" viewBox="0 0 56 40"><path d="${d}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/></svg>`);
 }
 
+/* «День и ночь»: картинки на дорожку 152×74. Цвета природные и от палитры не зависят */
+/** Облака. Маленькие облачка в небе - на той стороне, где днём нет солнца (dx - сдвиг влево) */
+const dnClouds = (dx: number) => svgUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 74">
+  <g fill="#ffffff" opacity="0.9" transform="translate(${-dx} 0)"><circle cx="102" cy="19" r="6"/><circle cx="110" cy="15" r="8"/><circle cx="119" cy="19" r="6"/><rect x="102" y="19" width="17" height="6" rx="3"/></g>
+  <g fill="#ffffff" opacity="0.75" transform="translate(${-dx} 0)"><circle cx="128" cy="33" r="4"/><circle cx="134" cy="30" r="6"/><circle cx="140" cy="33" r="4"/><rect x="128" y="33" width="12" height="4" rx="2"/></g>
+  <g fill="#d5ebfd"><circle cx="18" cy="68" r="15"/><circle cx="42" cy="61" r="14"/><circle cx="66" cy="65" r="13"/><circle cx="92" cy="57" r="15"/><circle cx="118" cy="61" r="14"/><circle cx="142" cy="54" r="16"/><rect y="62" width="152" height="12"/></g>
+  <g fill="#ffffff"><circle cx="6" cy="74" r="12"/><circle cx="30" cy="70" r="13"/><circle cx="55" cy="72" r="12"/><circle cx="79" cy="67" r="14"/><circle cx="105" cy="70" r="12"/><circle cx="128" cy="65" r="14"/><circle cx="151" cy="67" r="12"/><rect y="70" width="152" height="4"/></g>
+</svg>`);
+const DN_HILLS = svgUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 74">
+  <path d="M0 52 22 38 40 48 62 30 86 46 108 34 130 44 152 36V74H0z" fill="#a9d8a3"/>
+  <path d="M0 60Q30 44 62 56T124 52T152 50V74H0z" fill="#78c272"/>
+  <path d="M68 74Q78 65 98 63Q116 61 124 56Q114 65 101 68Q88 72 86 74z" fill="#d9f2ff"/>
+  <path d="M0 66Q26 57 54 65Q68 69 74 74H0zM102 74Q118 61 152 59V74z" fill="#4fa94b"/>
+  <g fill="#2f7a36"><path d="M118 66l4-12 4 12zM126 64l4-14 4 14zM135 63l4-11 4 11zM143 62l4-13 4 13zM12 68l3-10 3 10zM19 69l3-8 3 8z"/></g>
+</svg>`);
+const DN_STARS = (() => {
+  const dots = [[20, 14], [48, 9], [70, 24], [96, 12], [122, 22], [141, 11], [34, 33], [84, 37], [110, 41], [58, 45], [12, 40], [146, 30], [77, 6]];
+  const sparks = [[60, 15, 3], [104, 28, 2.6], [132, 38, 2.2], [27, 24, 2.4], [88, 22, 1.8]];
+  const spark = ([x, y, r]: number[]) => { const k = r * 0.28; return `<path d="M${x} ${y - r}L${x + k} ${y - k}L${x + r} ${y}L${x + k} ${y + k}L${x} ${y + r}L${x - k} ${y + k}L${x - r} ${y}L${x - k} ${y - k}z"/>`; };
+  return svgUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 74"><g fill="#ffffff">${dots.map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 ? 0.8 : 1.1}" opacity="${i % 2 ? 0.6 : 0.9}"/>`).join('')}${sparks.map(spark).join('')}</g></svg>`);
+})();
+/** Ореол вокруг солнца или луны: светлые кольца и свечение */
+const dnHalo = (night: boolean) => [7, 15, 24].map((r, i) => `0 0 0 ${r}px rgba(255, 255, 255, ${((night ? [0.07, 0.05, 0.03] : [0.15, 0.09, 0.05])[i])})`)
+  .concat('0 4px 10px rgba(0, 0, 0, 0.3)', `0 0 22px ${night ? 'rgba(200, 214, 255, 0.45)' : 'rgba(255, 210, 60, 0.75)'}`).join(', ');
+
 /** Схемы, для которых нужно "запечь" цвета в картинки */
 function bakeScopes(cfg: ThemeConfig): { scheme: Scheme; sel: string }[] {
   if (cfg.mode === 'dark') return [{ scheme: 'dark', sel: 'html:root' }];
@@ -92,38 +137,106 @@ function bakeScopes(cfg: ThemeConfig): { scheme: Scheme; sel: string }[] {
 }
 const scoped = (sel: string, part: string) => part.replace(':root', sel);
 
-export function powerRules(cfg: ThemeConfig, rule: RuleFn): string {
+export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook): string {
   const pw = cfg.power;
   const dur = (s: number) => `${Math.round((s / Math.max(0.2, pw.speed)) * 100) / 100}s`;
   const anim = pw.animate;
   const st = pw.style;
   let out = '';
-
-  /* ---------- Общие настройки ---------- */
   // Шары всегда круглые и заливаются по-своему
   const ball = st === 'sphere' || st === 'network' || st === 'globe' || st === 'dots' || st === 'plasma';
-  const radius = pw.shape === 'circle' ? '50%' : pw.shape === 'squircle' ? '34%' : '20%';
-  if (st !== 'app' || pw.glow > 0 || pw.shape !== 'circle') out += rule(B, ['isolation: isolate', `--kt-pw-r: ${radius}`]);
-  if (pw.size !== 100 && st !== 'sphere') out += rule(C, [`zoom: ${pw.size / 100}`]);
-  if (pw.shape !== 'circle' && st !== 'toggle' && !ball) out += rule(C, ['border-radius: var(--kt-pw-r) !important']);
-  if (pw.ringWidth !== 2 && !ball) out += rule(C, [`border-width: ${pw.ringWidth}px !important`]);
 
-  // Заливка круга
-  if (pw.fill !== 'app' && !ball) {
-    const a = pw.fillOpacity;
-    const g = (state: 'off' | 'on') => {
-      const s = `var(--gradient-start-power-${state})`, e = `var(--gradient-end-power-${state})`;
-      const m = (c: string) => `color-mix(in srgb, ${c} ${a}%, transparent)`;
-      switch (pw.fill) {
-        case 'radial': return `radial-gradient(circle at 30% 30%, ${m(s)}, ${m(e)})`;
-        case 'linear': return `linear-gradient(145deg, ${m(s)}, ${m(e)})`;
-        case 'conic': return `conic-gradient(from 200deg, ${m(s)}, ${m(e)}, ${m(s)})`;
-        case 'solid': return m(e);
-        default: return 'transparent';
+  // Тень из раздела «Тени» («Где показывать» → «Кнопка подключения»). Стили задают кругу свои тени,
+  // поэтому она дописывается в конец каждого объявления box-shadow самого круга - в покое, при
+  // подключении и при ошибке. Шарам не нужна: у них своё свечение
+  const pwShadow = cfg.shadows.preset !== 'app' && cfg.shadows.power && !ball;
+  const circle = [C, `${ON} > div`, `${ERR} > div`];
+  const rule: RuleFn = (selector, decls) => baseRule(selector, pwShadow && [selector].flat().every((x) => circle.includes(x))
+    ? decls.map((d) => typeof d === 'string' && d.startsWith('box-shadow:') ? d.replace(/( !important)?$/, ', var(--kt-pw-sh)$1') : d)
+    : decls);
+  // Блик по кромке («Поверхности» → «Карточки и плитки») у стеклянных кнопок - один, свой. В тени
+  // карточек он уже есть, поэтому кнопке - тень без блика (shadow-bare), иначе блик получался двойным
+  const hl = cfg.surfaces.highlight;
+  if (pwShadow) {
+    out += rule(B, [`--kt-pw-sh: var(${hl ? '--kt-shadow-bare' : '--kt-shadow-card'})`]);
+    if (pw.hover !== 'none') out += rule(`${B}:hover:not(:disabled)`, [`--kt-pw-sh: var(${hl ? '--kt-shadow-bare-hover' : '--kt-shadow-hover'})`]);
+    // Для стилей без своих теней у круга. Без !important: свои тени стилей ниже его перекрывают
+    out += baseRule(C, ['box-shadow: var(--kt-pw-sh)']);
+  }
+
+  /* ---------- Общие настройки ---------- */
+  const toggle = POWER_TOGGLES.includes(st);
+  const plain = POWER_PLAIN.includes(st);
+  // Ширина: круг шире 100% становится капсулой. Скругление - в px от высоты круга (128px): в % у
+  // растянутой кнопки углы вышли бы овальными
+  const wide = pw.stretch > 100 && POWER_STRETCH.includes(st);
+  const radius = pw.shape === 'circle' ? (wide ? '64px' : '50%') : `${Math.round(1.28 * pw.corner * 10) / 10}px`;
+  if (st !== 'app' || pw.glow > 0 || pw.shape !== 'circle' || wide) out += rule(B, ['isolation: isolate', `--kt-pw-r: ${radius}`]);
+  if (pw.size !== 100 && st !== 'sphere') out += rule(C, [`zoom: ${pw.size / 100}`]);
+  if ((pw.shape !== 'circle' || wide) && !toggle && !ball) out += rule(C, ['border-radius: var(--kt-pw-r) !important']);
+  if (wide) out += rule(C, [`width: ${Math.round(1.28 * pw.stretch)}px !important`]);
+  if (pw.ringWidth !== 2 && !ball && st !== 'daynight') out += rule(C, [`border-width: ${pw.ringWidth}px !important`]);
+
+  // Заливка круга. Направление: у линейной - угол, у конической - начало, у радиальной - откуда
+  // падает свет (145° - как раньше, свет слева сверху)
+  const ang = pw.fillAngle;
+  const light = ang === 145 ? '30% 30%'
+    : `${Math.round(50 - 28 * Math.sin((ang * Math.PI) / 180))}% ${Math.round(50 + 28 * Math.cos((ang * Math.PI) / 180))}%`;
+  const fillOf = (state: 'off' | 'on') => {
+    const s = `var(--gradient-start-power-${state})`, e = `var(--gradient-end-power-${state})`;
+    // У «Стекла» плотность заливки - непрозрачность стекла карточек из «Поверхностей»
+    const m = (c: string) => `color-mix(in srgb, ${c} ${st === 'glass' ? cfg.surfaces.opacity : pw.fillOpacity}%, transparent)`;
+    switch (pw.fill) {
+      case 'radial': return `radial-gradient(circle at ${light}, ${m(s)}, ${m(e)})`;
+      case 'linear': return `linear-gradient(${ang}deg, ${m(s)}, ${m(e)})`;
+      case 'conic': return `conic-gradient(from ${ang + 55}deg, ${m(s)}, ${m(e)}, ${m(s)})`;
+      case 'solid': return `linear-gradient(${m(e)}, ${m(e)})`;
+      // Как в клиенте (bg-radial-[at_30%_45%] from-…/60 to-…/60, у выключенной - /50): нужна, когда
+      // поверх или вокруг заливки рисуется ещё слой - глянец или градиентная рамка
+      case 'app': {
+        const k = state === 'on' ? 60 : 50;
+        return `radial-gradient(at 30% 45% in oklab, color-mix(in oklab, ${s} ${k}%, transparent), color-mix(in oklab, ${e} ${k}%, transparent))`;
       }
-    };
-    out += rule(C, [`background: ${g('off')} !important`]);
-    out += rule(`${ON} > div`, [`background: ${g('on')} !important`]);
+      default: return 'linear-gradient(transparent, transparent)';
+    }
+  };
+  // Слой фона - на весь круг вместе с рамкой (border-box). По умолчанию картинка фона растягивается
+  // только внутри рамки и повторяется: под полупрозрачной рамкой сверху выглядывал тёмный низ
+  // градиента, а снизу - светлый верх с бликом
+  const bb = (layer: string) => `${layer} border-box`;
+  /** Фон стилей, которые красят круг сами (стекло, неон, минимал, радар, жидкость): own - их фон, а
+   *  выбранная заливка встаёт вместо него. Раньше стиль перекрывал заливку, и её настройки не работали */
+  const fillOr = (state: 'off' | 'on', own: string) => pw.fill === 'app' ? own : bb(fillOf(state));
+
+  // Градиентная рамка - фоном под прозрачной рамкой (border-box), заливка - внутри (padding-box)
+  const gradRing = plain && pw.ringColor === 'gradient';
+  const gloss = plain && pw.volume === 'gloss';
+  // Тумблерам - нет: у них свой фон дорожки, а правило подключённого состояния весомее их правил и
+  // подменяло дорожку заливкой (стекло и небо «Дня и ночи» пропадали при подключении)
+  if (!ball && !toggle && (pw.fill !== 'app' || gradRing || gloss)) {
+    const bg = (state: 'off' | 'on') => [gloss && bb(GLOSS), gradRing ? `${fillOf(state)} padding-box` : bb(fillOf(state)),
+      gradRing && `linear-gradient(${ang}deg, var(--gradient-start-power-${state}), var(--gradient-end-power-${state})) border-box`].filter(Boolean).join(', ');
+    out += rule(C, [`background: ${bg('off')} !important`, gradRing && 'border-color: transparent !important']);
+    out += rule(`${ON} > div`, [`background: ${bg('on')} !important`]);
+  }
+
+  if (plain) {
+    // Цвет рамки - подменой переменных клиента у кнопки: ими же рисуют кольца «Пульса» и «Кольца»
+    const rc = pw.ringColor === 'primary' ? 'var(--primary)' : pw.ringColor === 'foreground' ? 'var(--foreground)' : pw.ringColor === 'custom' ? pw.ringCustom : null;
+    if (rc) out += rule(B, [`--stroke-power-on: ${rc}`, `--stroke-power-off: color-mix(in srgb, ${rc} 55%, transparent)`]);
+    // Внешнее кольцо - outline: он повторяет скругление круга и не занимает места
+    if (pw.outerRing > 0) {
+      out += rule(C, [`outline: ${pw.outerRing}px solid color-mix(in srgb, var(--stroke-power-off) 80%, transparent)`, `outline-offset: ${pw.outerGap}px`]);
+      out += rule(`${ON} > div`, ['outline-color: var(--stroke-power-on)']);
+      out += rule(`${ERR} > div`, ['outline-color: var(--destructive)']);
+    }
+    // Тени круга одним списком: кольцо стиля «Свечение», объём, тень под кнопкой
+    const drop = pw.drop > 0 ? [`0 ${Math.round(4 + pw.drop * 0.14)}px ${Math.round(8 + pw.drop * 0.3)}px rgba(0, 0, 0, ${(pw.drop * 0.005).toFixed(2)})`] : [];
+    const own = [...VOLUME[pw.volume], ...drop];
+    const off = st === 'glow' ? ['0 0 0 6px color-mix(in srgb, var(--stroke-power-off) 14%, transparent)', ...own] : own;
+    const on = st === 'glow' ? ['0 0 0 8px color-mix(in srgb, var(--stroke-power-on) 18%, transparent)', '0 0 30px color-mix(in srgb, var(--gradient-end-power-on) 45%, transparent)', ...own] : own;
+    if (off.length) out += rule(C, [`box-shadow: ${off.join(', ')} !important`]);
+    if (st === 'glow') out += rule(`${ON} > div`, [`box-shadow: ${on.join(', ')} !important`]);
   }
 
   // Подсветка позади кнопки
@@ -149,7 +262,7 @@ export function powerRules(cfg: ThemeConfig, rule: RuleFn): string {
 
   // Наведение
   const hov = `${B}:hover:not(:disabled) > div`;
-  if (pw.hover !== 'app' && st !== 'sphere') out += rule(C, ['transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease !important']);
+  if (pw.hover !== 'app' && st !== 'sphere') out += rule(C, ['transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease, outline-color 0.4s ease !important']);
   if (pw.hover === 'scale') out += rule(hov, ['transform: scale(1.07)']);
   if (pw.hover === 'lift') out += rule(hov, ['transform: translateY(-5px)']);
   if (pw.hover === 'tilt') out += rule(hov, ['transform: rotate(-8deg) scale(1.03)']);
@@ -185,8 +298,7 @@ export function powerRules(cfg: ThemeConfig, rule: RuleFn): string {
       break;
 
     case 'glow':
-      out += rule(C, ['box-shadow: 0 0 0 6px color-mix(in srgb, var(--stroke-power-off) 14%, transparent) !important']);
-      out += rule(`${ON} > div`, ['box-shadow: 0 0 0 8px color-mix(in srgb, var(--stroke-power-on) 18%, transparent), 0 0 30px color-mix(in srgb, var(--gradient-end-power-on) 45%, transparent) !important']);
+      // Кольцо и ореол - в общем списке теней круга выше, вместе с объёмом и тенью под кнопкой
       break;
 
     case 'pulse':
@@ -220,12 +332,20 @@ export function powerRules(cfg: ThemeConfig, rule: RuleFn): string {
     }
 
     case 'glass': {
-      const glass = (a: string, b: string) => `radial-gradient(120% 120% at 30% 18%, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08) 42%, transparent 70%), radial-gradient(circle at 30% 45%, color-mix(in srgb, ${a} 60%, transparent), color-mix(in srgb, ${b} 60%, transparent)) !important`;
-      out += rule(C, [`background: ${glass('var(--gradient-start-power-off)', 'var(--gradient-end-power-off)')}`, 'border: 1px solid rgba(255, 255, 255, 0.38) !important',
-        'box-shadow: inset 0 2px 1px rgba(255, 255, 255, 0.5), inset 0 -10px 22px rgba(0, 0, 0, 0.16), 0 18px 40px rgba(0, 0, 0, 0.25) !important',
-        'backdrop-filter: blur(16px) saturate(170%) !important']);
-      out += rule(`${ON} > div`, [`background: ${glass('var(--gradient-start-power-on)', 'var(--gradient-end-power-on)')}`,
-        'box-shadow: inset 0 2px 1px rgba(255, 255, 255, 0.55), inset 0 -10px 22px rgba(0, 0, 0, 0.12), 0 18px 40px rgba(0, 0, 0, 0.2) !important']);
+      // Стекло карточек из «Поверхностей»: непрозрачность (плотность любой заливки), размытие,
+      // насыщенность, шероховатость, цвет и заметность рамки, блик по кромке. Сверху - большой блик
+      // шара (размер - ползунком, 0 - без него), под ним зерно и заливка: цветов кнопки, своя или -
+      // при «Прозрачной» - стекло цвета карточек, как у стеклянного тумблера
+      const k = pw.glassShine / 100;
+      const op = cfg.surfaces.opacity;
+      const shine = k > 0 ? `${bb(`radial-gradient(${Math.round(120 * k)}% ${Math.round(120 * k)}% at 30% 18%, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08) 42%, transparent 70%)`)}, ` : '';
+      const ball3d = (state: 'off' | 'on') => `${shine}${glass.grain}${pw.fill === 'none' ? bb(glass.fill) : fillOr(state,
+        bb(`radial-gradient(circle at 30% 45%, color-mix(in srgb, var(--gradient-start-power-${state}) ${op}%, transparent), color-mix(in srgb, var(--gradient-end-power-${state}) ${op}%, transparent))`))} !important`;
+      const shadows = (shade: number, drop: number) => `box-shadow: ${[hl && 'var(--kt-highlight)', `inset 0 -10px 22px rgba(0, 0, 0, ${shade})`,
+        !pwShadow && `0 18px 40px rgba(0, 0, 0, ${drop})`].filter(Boolean).join(', ')} !important`;
+      out += rule(C, [`background: ${ball3d('off')}`, `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, shadows(0.16, 0.25),
+        `backdrop-filter: ${glass.filter} !important`]);
+      out += rule(`${ON} > div`, [`background: ${ball3d('on')}`, shadows(0.12, 0.2)]);
       break;
     }
 
@@ -233,7 +353,8 @@ export function powerRules(cfg: ThemeConfig, rule: RuleFn): string {
       out += rule(B, ['--kt-pw: var(--stroke-power-off)']);
       out += rule([ON, LOAD], ['--kt-pw: var(--gradient-start-power-on)']);
       out += rule(ERR, ['--kt-pw: var(--destructive)']);
-      out += rule(C, ['background: color-mix(in srgb, var(--background) 82%, transparent) !important', `border: ${Math.max(1, pw.ringWidth)}px solid var(--kt-pw) !important`,
+      if (pw.fill !== 'app') out += rule(`${ON} > div`, [`background: ${bb(fillOf('on'))} !important`]);
+      out += rule(C, [`background: ${fillOr('off', 'color-mix(in srgb, var(--background) 82%, transparent)')} !important`, `border: ${Math.max(1, pw.ringWidth)}px solid var(--kt-pw) !important`,
         `box-shadow: 0 0 6px var(--kt-pw), 0 0 ${Math.round(26 * g + 8)}px color-mix(in srgb, var(--kt-pw) 70%, transparent), inset 0 0 18px color-mix(in srgb, var(--kt-pw) 45%, transparent) !important`]);
       out += rule(ICONS, ['filter: drop-shadow(0 0 6px var(--kt-pw))']);
       if (anim) out += rule(`${ON} > div`, [`animation: kt-neon ${dur(4)} linear infinite`]);
@@ -241,8 +362,8 @@ export function powerRules(cfg: ThemeConfig, rule: RuleFn): string {
       break;
 
     case 'minimal':
-      out += rule(C, ['background: var(--card) !important', `border: ${Math.max(1, pw.ringWidth - 0.5)}px solid var(--stroke) !important`, 'box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important', 'backdrop-filter: none !important']);
-      out += rule(`${ON} > div`, ['background: color-mix(in srgb, var(--primary) 12%, var(--card)) !important', 'border-color: var(--primary) !important', 'box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary) 14%, transparent) !important']);
+      out += rule(C, [`background: ${fillOr('off', 'var(--card)')} !important`, `border: ${Math.max(1, pw.ringWidth - 0.5)}px solid var(--stroke) !important`, 'box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important', 'backdrop-filter: none !important']);
+      out += rule(`${ON} > div`, [`background: ${fillOr('on', 'color-mix(in srgb, var(--primary) 12%, var(--card))')} !important`, 'border-color: var(--primary) !important', 'box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary) 14%, transparent) !important']);
       if (pw.icon === 'app') out += lightIconFix(cfg, rule);
       break;
 
@@ -376,9 +497,11 @@ export function powerRules(cfg: ThemeConfig, rule: RuleFn): string {
       out += rule(B, ['--kt-rd: var(--stroke-power-off)']);
       out += rule([ON, LOAD], ['--kt-rd: var(--gradient-start-power-on)']);
       out += rule(ERR, ['--kt-rd: var(--destructive)']);
+      // Сетка и круги радара - поверх экрана: своей заливки (если выбрана) или тёмно-зелёного
+      const screen = (state: 'off' | 'on') => `linear-gradient(90deg, transparent calc(50% - 0.5px), color-mix(in srgb, var(--kt-rd) 28%, transparent) calc(50% - 0.5px) calc(50% + 0.5px), transparent calc(50% + 0.5px)), linear-gradient(0deg, transparent calc(50% - 0.5px), color-mix(in srgb, var(--kt-rd) 28%, transparent) calc(50% - 0.5px) calc(50% + 0.5px), transparent calc(50% + 0.5px)), repeating-radial-gradient(circle, transparent 0 15px, color-mix(in srgb, var(--kt-rd) 26%, transparent) 15px 16px), ${fillOr(state, 'radial-gradient(circle, color-mix(in srgb, var(--kt-rd) 16%, #05110d), #020806 75%)')} !important`;
       out += rule(C, ['overflow: hidden', 'position: relative', 'border-color: color-mix(in srgb, var(--kt-rd) 70%, transparent) !important',
-        'background: linear-gradient(90deg, transparent calc(50% - 0.5px), color-mix(in srgb, var(--kt-rd) 28%, transparent) calc(50% - 0.5px) calc(50% + 0.5px), transparent calc(50% + 0.5px)), linear-gradient(0deg, transparent calc(50% - 0.5px), color-mix(in srgb, var(--kt-rd) 28%, transparent) calc(50% - 0.5px) calc(50% + 0.5px), transparent calc(50% + 0.5px)), repeating-radial-gradient(circle, transparent 0 15px, color-mix(in srgb, var(--kt-rd) 26%, transparent) 15px 16px), radial-gradient(circle, color-mix(in srgb, var(--kt-rd) 16%, #05110d), #020806 75%) !important',
-        'backdrop-filter: none !important']);
+        `background: ${screen('off')}`, 'backdrop-filter: none !important']);
+      if (pw.fill !== 'app') out += rule(`${ON} > div`, [`background: ${screen('on')}`]);
       out += rule(`${C}::before`, ['content: ""', 'position: absolute', 'inset: 0', 'border-radius: inherit', 'pointer-events: none', 'opacity: 0',
         'background: conic-gradient(from 0deg, transparent 0deg, transparent 270deg, color-mix(in srgb, var(--kt-rd) 75%, transparent) 360deg)', 'transition: opacity 0.5s ease']);
       out += rule([`${ON} > div::before`, `${LOAD} > div::before`], ['opacity: 1', anim && `animation: kt-spin ${dur(2.4)} linear infinite`]);
@@ -390,7 +513,8 @@ export function powerRules(cfg: ThemeConfig, rule: RuleFn): string {
     }
 
     case 'liquid': {
-      out += rule(C, ['overflow: hidden', 'position: relative', 'background: color-mix(in srgb, var(--card) 45%, transparent) !important']);
+      out += rule(C, ['overflow: hidden', 'position: relative', `background: ${fillOr('off', 'color-mix(in srgb, var(--card) 45%, transparent)')} !important`]);
+      if (pw.fill !== 'app') out += rule(`${ON} > div`, [`background: ${bb(fillOf('on'))} !important`]);
       const wave = (alpha: number, r: string) => ['content: ""', 'position: absolute', 'left: 50%', 'width: 230%', 'aspect-ratio: 1', `border-radius: ${r}`, 'pointer-events: none',
         `background: linear-gradient(180deg, color-mix(in srgb, var(--kt-lq-a) ${alpha}%, transparent), color-mix(in srgb, var(--kt-lq-b) ${alpha}%, transparent) 30%)`,
         'top: var(--kt-lq)', 'transform: translateX(-50%) rotate(0deg)', 'transition: top 1.4s cubic-bezier(0.4, 0, 0.2, 1)'];
@@ -461,23 +585,89 @@ export function powerRules(cfg: ThemeConfig, rule: RuleFn): string {
     }
 
     case 'toggle': {
-      out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important',
-        'background: linear-gradient(135deg, var(--gradient-start-power-off), var(--gradient-end-power-off)) !important',
-        'box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.25) !important']);
-      out += rule(`${ON} > div`, ['background: linear-gradient(135deg, var(--gradient-start-power-on), var(--gradient-end-power-on)) !important']);
-      out += rule(I, ['width: 58px !important', 'height: 58px !important', 'border-radius: 50%', 'background: radial-gradient(circle at 35% 28%, #ffffff, #e4e7ee)',
-        'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.08)',
-        'transform: translateX(-39px)', 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
+      const glassy = pw.toggleLook === 'glass';
+      if (glassy) {
+        // Дорожка - стекло карточек из «Поверхностей» (заливка, зерно, размытие, цвет рамки), толщина
+        // рамки - своя. Ручка - светящийся шар цвета кнопки; свечение растекается по стеклу
+        out += rule(B, ['--kt-tg-a: var(--gradient-start-power-off)', '--kt-tg-b: var(--gradient-end-power-off)']);
+        out += rule([ON, LOAD], ['--kt-tg-a: var(--gradient-start-power-on)', '--kt-tg-b: var(--gradient-end-power-on)']);
+        out += rule(ERR, ['--kt-tg-a: var(--destructive)', '--kt-tg-b: color-mix(in srgb, var(--destructive) 70%, black)']);
+        out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important', 'overflow: hidden',
+          `background: ${glass.grain}${glass.fill} !important`,
+          `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, `backdrop-filter: ${glass.filter} !important`,
+          // Блик сверху - только «Блик по верхней кромке» карточек; своя тень - если не включена тень из «Теней»
+          `box-shadow: ${[hl && 'var(--kt-highlight)', 'inset 0 -8px 16px rgba(0, 0, 0, 0.1)', !pwShadow && '0 10px 24px rgba(0, 0, 0, 0.18)'].filter(Boolean).join(', ')} !important`]);
+        out += rule(I, ['width: 58px !important', 'height: 58px !important', 'border-radius: 50%',
+          'background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--kt-tg-a) 45%, white), var(--kt-tg-a) 55%, var(--kt-tg-b))',
+          // Без свечения остаются блик сверху и обычная тень, как у классической ручки
+          `box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.6), ${pw.toggleGlow
+            ? '0 0 16px 4px color-mix(in srgb, var(--kt-tg-a) 70%, transparent), 0 0 46px 16px color-mix(in srgb, var(--kt-tg-b) 40%, transparent)'
+            : '0 4px 12px rgba(0, 0, 0, 0.3)'}`,
+          'transform: translateX(-39px)', 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
+      } else {
+        out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important',
+          'background: linear-gradient(135deg, var(--gradient-start-power-off), var(--gradient-end-power-off)) !important',
+          'box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.25) !important']);
+        out += rule(`${ON} > div`, ['background: linear-gradient(135deg, var(--gradient-start-power-on), var(--gradient-end-power-on)) !important']);
+        out += rule(I, ['width: 58px !important', 'height: 58px !important', 'border-radius: 50%', 'background: radial-gradient(circle at 35% 28%, #ffffff, #e4e7ee)',
+          'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.08)',
+          'transform: translateX(-39px)', 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
+      }
       out += rule(`${ON} > div > div`, ['transform: translateX(39px)']);
       out += rule(`${LOAD} > div > div`, ['transform: translateX(0)']);
       out += rule(ICONS, ['inset: 22% !important', 'width: 56% !important', 'height: 56% !important']);
+      // Без значка на ручке остаются только спиннер подключения и знак ошибки
+      if (!pw.toggleIcon) out += rule([`${I} > img:nth-child(2)`, `${I} > img:nth-child(3)`], ['visibility: hidden']);
       for (const { scheme, sel } of bakeScopes(cfg)) {
         const p = cfg.palette[scheme];
-        out += rule(scoped(sel, `${I} > img:nth-child(2)`), [`content: ${POWER_ICONS.pause(mix(p.powerOnEnd, '#000000', 0.15))}`]);
-        out += rule(scoped(sel, `${I} > img:nth-child(3)`), [`content: ${POWER_ICONS.power(mix(p.powerOffEnd, '#000000', 0.1))}`]);
-        out += rule(scoped(sel, `${I} > img:nth-child(4)`), [`content: ${POWER_ICONS.alert(p.destructive)}`]);
-        out += rule(scoped(sel, `${I} > svg`), [`color: ${p.powerOffEnd} !important`]);
+        out += rule(scoped(sel, `${I} > img:nth-child(2)`), [`content: ${POWER_ICONS.pause(glassy ? '#ffffff' : mix(p.powerOnEnd, '#000000', 0.15))}`]);
+        out += rule(scoped(sel, `${I} > img:nth-child(3)`), [`content: ${POWER_ICONS.power(glassy ? '#ffffff' : mix(p.powerOffEnd, '#000000', 0.1))}`]);
+        out += rule(scoped(sel, `${I} > img:nth-child(4)`), [`content: ${POWER_ICONS.alert(glassy ? '#ffffff' : p.destructive)}`]);
+        out += rule(scoped(sel, `${I} > svg`), [`color: ${glassy ? '#ffffff' : p.powerOffEnd} !important`]);
       }
+      break;
+    }
+
+    case 'daynight': {
+      // Тумблер-пейзаж. Дорожка - дневное небо, круг::before - ночное небо со звёздами (проявляется),
+      // круг::after - облака или холмы (ночью темнеют, облака опускаются). Ручка - солнце, её ::before -
+      // луна с кратерами. Всё меняется переходами, постоянной анимации нет
+      const hills = pw.dayScene === 'hills';
+      out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important',
+        'position: relative', 'overflow: hidden', 'isolation: isolate', `border: ${pw.ringWidth > 0 ? pw.ringWidth + 1 : 0}px solid #e3f2ff !important`,
+        `background: ${hills ? 'linear-gradient(180deg, #78c4f4, #d2eefd)' : 'linear-gradient(180deg, #3b98e6, #6fbdf3 55%, #a4d9fa)'} !important`,
+        'backdrop-filter: none !important', `box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.3)${pwShadow ? '' : ', 0 8px 20px rgba(0, 0, 0, 0.18)'} !important`,
+        'transition: border-color 0.7s ease, box-shadow 0.4s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important']);
+      out += rule(`${C}::before`, ['content: ""', 'position: absolute', 'inset: 0', 'z-index: 0', 'pointer-events: none',
+        `background: ${DN_STARS} center / 100% 100% no-repeat, linear-gradient(180deg, #0c1230, #1e2950 60%, #34406b)`, 'transition: opacity 0.7s ease']);
+      out += rule(`${C}::after`, ['content: ""', 'position: absolute', 'inset: 0', 'z-index: 1', 'pointer-events: none',
+        // День при подключении - солнце справа, облачка - слева, и наоборот
+        `background: ${hills ? DN_HILLS : dnClouds(pw.dayOn ? 86 : 0)} center bottom / 100% 100% no-repeat`, 'transition: filter 0.7s ease, transform 0.8s cubic-bezier(0.4, 0, 0.2, 1)']);
+      out += rule(I, ['z-index: 2', 'width: 58px !important', 'height: 58px !important', 'border-radius: 50%', 'flex-shrink: 0',
+        'background: radial-gradient(circle at 36% 30%, #fff8cf, #ffd84a 42%, #f6b40e)',
+        'transform: translateX(-39px)', 'transition: transform 0.6s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.7s ease']);
+      out += rule(`${I}::before`, ['content: ""', 'position: absolute', 'inset: 0', 'border-radius: 50%', 'pointer-events: none',
+        'background: radial-gradient(circle at 30% 34%, #a3adbf 0 10%, transparent 11%), radial-gradient(circle at 66% 58%, #a9b3c4 0 14%, transparent 15%), radial-gradient(circle at 38% 74%, #b0bac9 0 7%, transparent 8%), radial-gradient(circle at 36% 30%, #f5f7fb, #ccd3df 70%, #b7c0cf)',
+        'box-shadow: inset -5px -6px 10px rgba(0, 0, 0, 0.16)', 'transition: opacity 0.6s ease']);
+      // Что видно днём и ночью. Отключено - ночь, подключено - день (или наоборот)
+      const scene = (night: boolean): [string, Decl[]][] => [
+        ['', [`border-color: ${night ? '#56637f' : '#e3f2ff'} !important`]],
+        ['::before', [`opacity: ${night ? 1 : 0}`]],
+        ['::after', [night ? (hills ? 'filter: hue-rotate(95deg) saturate(0.75) brightness(0.42)' : 'filter: brightness(0.5) saturate(0.55)') : 'filter: none',
+          !hills && `transform: translateY(${night ? 16 : 0}%)`]],
+        [' > div', [`box-shadow: ${dnHalo(night)}`]],
+        [' > div::before', [`opacity: ${night ? 1 : 0}`]]
+      ];
+      for (const [part, decls] of scene(pw.dayOn)) out += rule(`${C}${part}`, decls);
+      for (const [part, decls] of scene(!pw.dayOn)) out += rule(`${ON} > div${part}`, decls);
+      out += rule(`${ON} > div > div`, ['transform: translateX(39px)']);
+      out += rule(`${LOAD} > div > div`, ['transform: translateX(0)']);
+      out += rule(`${ERR} > div`, ['border-color: var(--destructive) !important']);
+      // Значки питания и паузы не нужны - видно по солнцу и луне. Спиннер и знак ошибки - на ручке
+      out += rule([`${I} > img:nth-child(2)`, `${I} > img:nth-child(3)`], ['visibility: hidden']);
+      out += rule(ICONS, ['inset: 22% !important', 'width: 56% !important', 'height: 56% !important']);
+      out += rule(`${I} > svg`, ['color: #24324f !important']);
+      out += rule(`${I} > img:nth-child(4)`, [`content: ${POWER_ICONS.alert('#d63b3b')}`]);
       break;
     }
   }

@@ -4,10 +4,13 @@ import { useState } from 'react';
 import { useEditScheme, useStore } from '../../state/store';
 import { readableOn, rgba } from '../../lib/color';
 import { shadowSet } from '../../lib/shadows';
-import type { ButtonStyle, CardFill, Divider, DividerEffect, DividerStyle,HoverStyle, IconPlate, IconShape, NavActive, Palette, ProfileSwitch, SelectedHover, SelectedStyle, ShadowPreset, SidebarStyle, StyleColor, Surfaces } from '../../lib/types';
+import { cardGradientCss } from '../../lib/generator';
+import { CARD_GRADIENTS, defaultConfig, type CardGradientPreset } from '../../lib/defaults';
+import { GradientEditor } from '../GradientEditor';
+import type { ButtonStyle, CardFill, CardGradient, ThemeConfig, Divider, DividerEffect, DividerStyle,HoverStyle, IconPlate, IconShape, NavActive, Palette, ProfileSwitch, SelectedHover, SelectedStyle, ShadowPreset, SidebarStyle, StyleColor, Surfaces } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
-import { Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
-import { PanelHead, useCfg } from './common';
+import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
+import { PanelHead, SchemeSwitch, useCfg } from './common';
 
 const SIDEBAR: { value: SidebarStyle; label: string }[] = [
   { value: 'app', label: 'Как в клиенте' }, { value: 'cards', label: 'Как карточки' }, { value: 'glass', label: 'Стекло' }, { value: 'solid', label: 'Сплошная' }, { value: 'outline', label: 'Контур' }, { value: 'transparent', label: 'Без фона' }
@@ -75,7 +78,8 @@ export function SurfacesPanel() {
   const { config, set, update } = useCfg();
   const setUi = useStore((st) => st.set);
   const s = config.surfaces;
-  const p = config.palette[useEditScheme()];
+  const scheme = useEditScheme();
+  const p = config.palette[scheme];
   /** Настройки профилей - и превью переходит на страницу профилей, где их видно */
   const setProfile = <K extends 'profileSelected' | 'profileSelectedHover' | 'profileHover' | 'profileSwitch' | 'profileColor' | 'profileCustom'>(k: K, v: Surfaces[K]) => {
     set('surfaces', k, v);
@@ -145,14 +149,16 @@ export function SurfacesPanel() {
           )}
           {(glass || s.fill === 'solid' || !s.custom) && (
             <>
-              <Toggle label="Лёгкий градиент" hint="Карточка чуть светлее сверху - объём без теней" checked={s.gradient} onChange={(v) => setCard('gradient', v)} />
+              <Toggle label="Градиент" hint="Заливка карточек и плиток градиентом. Действует и на боковую панель «Как карточки» и «Стекло»" checked={s.gradient} onChange={(v) => setCard('gradient', v)} />
+              {s.gradient && <CardGradientBlock />}
               <Toggle label="Блик по верхней кромке" hint="Светлая линия сверху, как у стекла. Работает при любом стиле теней, кроме «Неоморфизма» - у него свой объём" checked={s.highlight} onChange={(v) => setCard('highlight', v)} />
             </>
           )}
         </div>
         <Slider label="Скругление" hint="От этого значения считаются все радиусы: кнопки, поля, карточки. 0 - острые углы" value={s.radius} min={0} max={1.75} step={0.025} unit="rem" onChange={(v) => set('surfaces', 'radius', v)} />
         <div className="radius-demo">
-          {[0.6, 1, 1.4].map((k) => <span key={k} style={{ borderRadius: `calc(${s.radius}rem * ${k})`, background: rgba(p.card, Math.max(0.3, s.opacity / 100)), borderColor: s.custom ? stroke : p.stroke, borderWidth: s.borderWidth }} />)}
+          {[0.6, 1, 1.4].map((k) => <span key={k} style={{ borderRadius: `calc(${s.radius}rem * ${k})`, borderColor: s.custom ? stroke : p.stroke, borderWidth: s.borderWidth,
+            background: s.custom && s.gradient && s.gradientKind !== 'soft' ? cardGradientCss(s, s.gradientStops[scheme], Math.max(30, s.fill === 'solid' ? 100 : s.opacity)) : rgba(p.card, Math.max(0.3, s.opacity / 100)) }} />)}
         </div>
       </Group>
 
@@ -258,6 +264,59 @@ export function SurfacesPanel() {
           onChange={(v) => set('surfaces', 'buttonsColor', v)} onCustom={(v) => set('surfaces', 'buttonsCustom', v)} />
       </Group>
     </>
+  );
+}
+
+/* ---------- Градиент карточек ---------- */
+
+const CARD_GRADIENT_KINDS: { value: CardGradient; label: string }[] = [
+  { value: 'soft', label: 'Лёгкий' }, { value: 'linear', label: 'Линейный' }, { value: 'radial', label: 'Радиальный' }, { value: 'conic', label: 'Конический' }
+];
+
+/** Свой градиент карточек: точки цвета, как у фона окна. Точки у светлой и тёмной схемы свои */
+function CardGradientBlock() {
+  const { config, update } = useCfg();
+  const s = config.surfaces;
+  const scheme = useEditScheme();
+  const p = config.palette[scheme];
+  // Как и остальные настройки карточек, любая правка градиента включает свои поверхности
+  const edit = (fn: (c: ThemeConfig) => void, key?: string) => update((c) => { fn(c); c.surfaces.custom = true; }, key);
+  const put = <K extends 'gradientAngle' | 'gradientX' | 'gradientY'>(k: K, v: Surfaces[K]) => edit((c) => { c.surfaces[k] = v; }, `surfaces.${k}`);
+  const fromPalette = (c: ThemeConfig, id: CardGradientPreset) => ({ light: CARD_GRADIENTS[id].stops(c.palette.light), dark: CARD_GRADIENTS[id].stops(c.palette.dark) });
+  const pickKind = (v: CardGradient) => edit((c) => {
+    // Первый переход на свой градиент: точки - из палитры темы, а не стандартной палитры клиента
+    if (c.surfaces.gradientKind === 'soft' && v !== 'soft' && JSON.stringify(c.surfaces.gradientStops) === JSON.stringify(defaultConfig().surfaces.gradientStops)) {
+      c.surfaces.gradientStops = fromPalette(c, 'lighter');
+    }
+    c.surfaces.gradientKind = v;
+  });
+  const own = s.gradientKind !== 'soft';
+  return (
+    <div className="card-grad">
+      <Segmented<CardGradient> wrap size="sm" value={s.gradientKind} onChange={pickKind} options={CARD_GRADIENT_KINDS} />
+      {!own && <p className="note">Карточка чуть светлее сверху - объём без теней. Свои цвета и положения - в линейном, радиальном и коническом.</p>}
+      {own && (
+        <>
+          <div className="btn-row">
+            {(Object.keys(CARD_GRADIENTS) as CardGradientPreset[]).map((id) => (
+              <Button key={id} size="sm" variant="soft" title="Цвета из палитры - для светлой и тёмной схемы сразу"
+                onClick={() => edit((c) => { c.surfaces.gradientStops = fromPalette(c, id); })}>{CARD_GRADIENTS[id].label}</Button>
+            ))}
+          </div>
+          {config.mode === 'both' && <SchemeSwitch note="Цвета для схемы" />}
+          <GradientEditor stops={s.gradientStops[scheme]} onChange={(stops) => edit((c) => { c.surfaces.gradientStops[scheme] = stops; }, 'surfaces.gradientStops')}
+            swatches={[p.card, p.primary, p.powerOnStart, p.powerOnEnd, p.foreground, p.background, p.accent]} />
+          <p className="note">Прозрачность точек - от непрозрачности карточек выше.</p>
+          {s.gradientKind !== 'radial' && <Slider label="Угол" value={s.gradientAngle} min={0} max={360} unit="°" onChange={(v) => put('gradientAngle', v)} />}
+          {s.gradientKind !== 'linear' && (
+            <>
+              <Slider label="Центр по горизонтали" value={s.gradientX} min={0} max={100} unit="%" onChange={(v) => put('gradientX', v)} />
+              <Slider label="Центр по вертикали" value={s.gradientY} min={0} max={100} unit="%" onChange={(v) => put('gradientY', v)} />
+            </>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -398,6 +457,8 @@ export function ShadowsPanel() {
           <Toggle label="Карточки и плитки" checked={s.cards} onChange={(v) => set('shadows', 'cards', v)} />
           <Toggle label="Окна, меню, уведомления" checked={s.popups} onChange={(v) => set('shadows', 'popups', v)} />
           <Toggle label="Кнопки" checked={s.buttons} onChange={(v) => set('shadows', 'buttons', v)} />
+          <Toggle label="Кнопка подключения" hint="Тень карточек под кнопкой на главной, при наведении - тень наведения. У шаров (сфера, сеть, глобус, звёздный шар, плазма) своя подсветка - им тень не добавляется"
+            checked={s.power} onChange={(v) => set('shadows', 'power', v)} />
         </Group>
       )}
       <p className="note">Тень текста настраивается в разделе «Шрифты».</p>

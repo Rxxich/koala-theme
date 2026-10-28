@@ -140,6 +140,8 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 .toggle-row:hover .row-label { color: var(--text); }
 
 .note { margin: 2px 0 0; color: var(--text-3); font-size: 12px; }
+/* Настройки градиента карточек - вложенный блок под переключателем */
+.card-grad { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--line); }
 .crash { display: flex; flex-direction: column; gap: 10px; margin: 16px; padding: 16px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent); background: color-mix(in srgb, var(--bad) 8%, var(--panel-2)); }
 .note-bad { color: var(--bad); }
 .btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -147,14 +149,17 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 /* Подсказка "?" */
 .tip { position: relative; display: inline-flex; color: var(--text-3); cursor: help; }
 .tip:hover, .tip:focus { color: var(--text); }
+/* Пузырь - в body (см. Tip в ui.tsx), поверх панелей, сцены, окон и всплывающих меню */
 .tip-bubble {
-  position: absolute; left: -12px; bottom: calc(100% + 8px); transform: translateY(4px);
+  position: fixed; left: -9999px; top: 0; z-index: 1300;
   width: max-content; max-width: 240px; padding: 8px 10px; border-radius: 8px;
   background: #2a3040; color: var(--text); font-size: 12px; line-height: 1.4; font-weight: 400;
   text-transform: none; letter-spacing: 0; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  opacity: 0; pointer-events: none; transition: opacity 0.15s, transform 0.15s; z-index: 50; white-space: normal;
+  pointer-events: none; white-space: normal; animation: tip-in 0.15s var(--ease);
 }
-.tip:hover .tip-bubble, .tip:focus .tip-bubble { opacity: 1; transform: none; }
+.tip-bubble.below { animation-name: tip-in-below; }
+@keyframes tip-in { from { opacity: 0; transform: translateY(4px); } }
+@keyframes tip-in-below { from { opacity: 0; transform: translateY(-4px); } }
 
 /* =================== Кнопки =================== */
 
@@ -814,6 +819,26 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 .orb-toggle i { width: 26px; height: 26px; border: 0; border-radius: 50%; background: radial-gradient(circle at 35% 28%, #fff, #e4e7ee); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); animation: orb-toggle 2.4s ease-in-out infinite; }
 .orb-toggle i::after { display: none; }
 @keyframes orb-toggle { 0%, 40% { transform: translateX(0); } 50%, 90% { transform: translateX(32px); } }
+/* «День и ночь»: слева ночь и луна, справа день и солнце */
+.orb-daynight {
+  width: 64px; height: 32px; margin: 15px 0 9px; border-radius: 99px; overflow: hidden; justify-items: start; padding: 0 3px; border: 2px solid #e3f2ff;
+  background: radial-gradient(circle at 66% 125%, #fff 0 9px, transparent 9.5px), radial-gradient(circle at 90% 118%, #fff 0 8px, transparent 8.5px), linear-gradient(180deg, #3b98e6, #a4d9fa);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+.orb-daynight::before {
+  content: ''; position: absolute; inset: 0; animation: orb-dn-night 2.4s ease-in-out infinite;
+  background: radial-gradient(circle at 62% 30%, #fff 0 0.8px, transparent 1.3px), radial-gradient(circle at 80% 62%, #fff 0 0.7px, transparent 1.1px), radial-gradient(circle at 46% 70%, #fff 0 0.7px, transparent 1.1px), linear-gradient(180deg, #0c1230, #34406b);
+}
+.orb-daynight i {
+  width: 24px; height: 24px; border: 0; border-radius: 50%; background: radial-gradient(circle at 36% 30%, #fff8cf, #ffd84a 42%, #f6b40e);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.14), 0 0 10px rgba(255, 210, 60, 0.7); animation: orb-dn-knob 2.4s ease-in-out infinite;
+}
+.orb-daynight i::after {
+  left: 0; top: 0; width: 100%; height: 100%; margin: 0; border-radius: 50%; animation: orb-dn-night 2.4s ease-in-out infinite;
+  background: radial-gradient(circle at 30% 34%, #a3adbf 0 10%, transparent 11%), radial-gradient(circle at 66% 58%, #a9b3c4 0 14%, transparent 15%), radial-gradient(circle at 36% 30%, #f5f7fb, #c3cbd8);
+}
+@keyframes orb-dn-knob { 0%, 40% { transform: translateX(0); } 50%, 90% { transform: translateX(30px); } }
+@keyframes orb-dn-night { 0%, 40%, 100% { opacity: 1; } 50%, 90% { opacity: 0; } }
 
 /* Демо эффектов нажатия: тот же приём, что в теме - :active сбрасывает слой, переход проигрывает эффект */
 .fx-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
