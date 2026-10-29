@@ -1,7 +1,8 @@
 // Разделы "Поверхности" и "Тени".
 
 import { useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Info } from 'lucide-react';
+import { svgBackdrop } from '../../lib/env';
 import { useEditScheme, useStore } from '../../state/store';
 import { readableOn, rgba } from '../../lib/color';
 import { shadowSet } from '../../lib/shadows';
@@ -77,6 +78,17 @@ const BUTTONS: { value: ButtonStyle; label: string }[] = [
   { value: 'app', label: 'Сплошные' }, { value: 'glossy', label: 'Объёмные' }, { value: 'power', label: 'Градиент кнопки' }, { value: 'glow', label: 'Свечение' }, { value: 'outline', label: 'Контурные' }, { value: 'pill', label: 'Капсулы' },
   { value: 'pushable', label: 'Клавиша' }, { value: 'brutal', label: 'Брутализм' }, { value: 'liquid', label: 'Жидкое стекло' }
 ];
+
+/** Сайт открыт не в Chromium: превью не покажет преломление, хотя в Koala Clash оно будет */
+function NoRefractionNote() {
+  if (svgBackdrop) return null;
+  return (
+    <div className="csp-note">
+      <Info size={14} />
+      <span>Этот браузер не рисует преломление: SVG-фильтры в стекле умеет только Chromium. В Koala Clash (он на Chromium) жидкое стекло работает, а здесь превью показывает обычное. Чтобы увидеть преломление, откройте сайт в Chrome, Edge или Яндекс Браузере.</span>
+    </div>
+  );
+}
 
 /** Стекло под жидкое: размытие 4px, непрозрачность до 30%, насыщенность от 150% - как у жидкого стекла Apple */
 function thinGlass(s: Surfaces) {
@@ -164,6 +176,7 @@ export function SurfacesPanel() {
           {liquid && (
             <>
               <p className="note">Фон под карточками изгибается у краёв, как под толстой линзой. Лучше всего видно на картинке или узоре фона, когда стекло почти прозрачное. Действует и на стеклянную боковую панель и кнопку подключения «Стекло».</p>
+              <NoRefractionNote />
               <div className="csp-note warn">
                 <AlertTriangle size={14} />
                 <span>Жидкое стекло нагружает видеокарту сильнее обычного. Пока ничего не двигается, оно ничего не стоит, но при прокрутке списка серверов и любой анимации стекло каждой карточки пересчитывается заново в каждом кадре. Сильное размытие (больше 4px) добавляет нагрузки: на экранах 144-180 Гц прокрутка начинает подтормаживать, а на слабом компьютере (встроенная графика ноутбука) может тормозить и на обычном экране. Если интерфейс стал медленнее - уменьшите размытие или вернитесь к обычному «Стеклу».</span>
@@ -285,6 +298,7 @@ export function SurfacesPanel() {
         </Row>
         {s.navActive === 'liquid' && (
           <>
+            <NoRefractionNote />
             <Slider label="Скругление пункта" hint="Пункт меню высотой 32px: от 16px - круг или капсула. Преломление берёт силу и кромку из «Жидкого стекла» карточек, только слабее"
               value={s.navRadius} min={0} max={16} unit="px" onChange={(v) => set('surfaces', 'navRadius', v)} />
             <Slider label="Непрозрачность пункта" hint="Насколько плотно пункт залит цветом акцента. 0 - чистое стекло: остаются только блики и тонкая кромка"
@@ -309,6 +323,7 @@ export function SurfacesPanel() {
         </div>
         {s.buttons === 'liquid' && (
           <>
+            <NoRefractionNote />
             <Slider label="Скругление кнопок" hint="У всех кнопок с текстом, как у «Капсул». Кнопки высотой 36px: от 18px - капсула. Преломление берёт силу и кромку из «Жидкого стекла» карточек, только слабее"
               value={s.buttonsRadius} min={0} max={18} unit="px" onChange={(v) => set('surfaces', 'buttonsRadius', v)} />
             <Slider label="Непрозрачность кнопок" hint="Насколько плотно кнопки залиты цветом акцента. Ниже 45% текст на них - цвета текста темы: сквозь кнопку уже виден фон карточки, а не акцент"

@@ -16,6 +16,7 @@ import { PaletteWindow } from './PaletteWindow';
 import { cx } from './ui';
 import { downloadText } from '../lib/share';
 import { readLocal, writeLocal } from '../lib/storage';
+import { svgBackdrop } from '../lib/env';
 
 interface KTApi {
   setCSS: (css: string) => void;
@@ -59,6 +60,12 @@ const POWER: { id: PowerState; label: string; icon: typeof Power }[] = [
 ];
 
 const themeCache = new Map<string, string>();
+
+/**
+ * Превью в Firefox и Safari: фильтр преломления там не рисуется. Пустые переменные убирают его из
+ * backdrop-filter, и от жидкого стекла остаётся обычное - только в превью, в скачанной теме их нет
+ */
+const NO_REFRACTION = '\n/* Превью сайта: браузер не рисует SVG-фильтры в backdrop-filter */\nhtml:root {\n    --kt-liquid: ;\n    --kt-liquid-sm: ;\n}\n';
 
 export function Stage() {
   const config = useStore((s) => s.config);
@@ -106,7 +113,10 @@ export function Stage() {
     });
   }, [kt]);
 
-  useEffect(() => { kt?.setCSS(viewing ? viewCss ?? '' : css); }, [kt, css, viewing, viewCss]);
+  useEffect(() => {
+    const shown = viewing ? viewCss ?? '' : css;
+    kt?.setCSS(svgBackdrop ? shown : shown + NO_REFRACTION);
+  }, [kt, css, viewing, viewCss]);
   useEffect(() => { if (kt && kt.getState().dark !== dark) kt.setDark(dark); }, [kt, dark]);
   useEffect(() => { if (kt && kt.getState().page !== page) kt.go(page); }, [kt, page]);
   useEffect(() => { if (kt && kt.getState().power !== power) kt.setPower(power); }, [kt, power]);
