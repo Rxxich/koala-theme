@@ -16,7 +16,7 @@ import { powerKeyframes, powerRules, type GlassLook } from './power';
 import { particleSet, patternLayer } from './backdrop';
 import { clickRules, funRules, PROXY_SEL } from './effects';
 import { dividerRules } from './dividers';
-import type { Background, GradientStop, IconPlate, Palette, Scheme, SelectedStyle, StyleColor, ThemeConfig } from './types';
+import type { Background, BgAnimation, GradientStop, IconPlate, LiquidSmooth, Palette, Scheme, SelectedStyle, StyleColor, ThemeConfig } from './types';
 
 const P = ':root';
 const WRAP = `${P} [data-slot="sidebar-wrapper"]`;
@@ -141,6 +141,13 @@ function backgroundLayer(bg: Background, flowing = false): string | null {
   }
 }
 
+/**
+ * Анимация фона, которая на самом деле попадает в CSS: только у градиентов и меша. У картинки группа
+ * «Анимация фона» в панели скрыта, но анимация, оставшаяся от выбранного раньше градиента, выводилась
+ * и крутилась незаметно: фон перерисовывался каждый кадр, а с ним и всё стекло над ним
+ */
+export const bgAnimation = (bg: Background): BgAnimation => ['linear', 'radial', 'conic', 'mesh'].includes(bg.kind) ? bg.animation : 'none';
+
 /** CSS-фон для миниатюр в редакторе */
 export function bgPreview(bg: Partial<Background>, fallback: string): string {
   const full = { ...defaultBg, ...bg } as Background;
@@ -166,7 +173,7 @@ function backgroundRules(cfg: ThemeConfig, scheme: Scheme, scope: string, kfs: R
   // Тема одной палитры, фон "как в клиенте": в "чужом" режиме клиент красит обёртку в цвет своей схемы
   else if (cfg.mode !== 'both') out += rule(w, [`background: ${APP_WRAPPER[scheme]} !important`]);
 
-  const anim = bg.animation;
+  const anim = bgAnimation(bg);
   const layer = backgroundLayer(bg, anim === 'flow');
   if (layer) {
     const isImage = bg.kind === 'image';
@@ -338,25 +345,82 @@ export const liquidOn = (s: ThemeConfig['surfaces']) => s.custom && s.fill === '
 /** Жидкое стекло у активного пункта панели и основных кнопок - свой фильтр, слабее и уже */
 const liquidSmall = (s: ThemeConfig['surfaces']) => s.navActive === 'liquid' || s.buttons === 'liquid';
 
+/** Функция ошибок (Абрамовиц и Стиган 7.1.26, погрешность до 1.5e-7) */
+function erf(x: number): number {
+  const t = 1 / (1 + 0.3275911 * Math.abs(x));
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return x < 0 ? -y : y;
+}
+
 /**
  * Жидкое стекло: SVG-фильтр для backdrop-filter, фон под стеклом изгибается у краёв, как под линзой.
- * Карта сдвигов строится в самом фильтре, без картинки, и подходит блоку любого размера: прямоугольник
- * ровно по блоку размывается, а разность его копий, сдвинутых на σ в разные стороны, даёт наклон у
- * края - по x в красный канал, по y в зелёный. В середине блока наклона нет (0.5 - без сдвига), у края
- * фон берётся ближе к середине. Радужности (три сдвига для красного, зелёного и синего) нет: видеокарте
- * было втрое тяжелее, и прокрутка на экране 180 Гц падала до 60 кадров/с
+ * Карта сдвигов строится в самом фильтре, без картинки, и подходит блоку любого размера. По каждой оси
+ * две заливки: красная сдвинута на s от дальнего края, зелёная начинается в s от ближнего (подобласть
+ * в пикселях от угла блока, так на проход дешевле), обе размываются вдоль оси. После размытия цвет
+ * делится на прозрачность, которая у края блока падает так же, поэтому у своего края заливка даёт
+ * ровно 1, а у чужого плавно спадает. Разность каналов - сдвиг: у края наибольший и к середине плавно
+ * уходит в ноль. Раньше сдвигались копии уже размытого прямоугольника, и та, что у края читала пустоту
+ * за блоком, обрывала сдвиг скачком - вдоль кромки шли резкие полосы.
+ * Фон берётся ближе к середине: наружу брать нельзя, за краем блока Chromium отражает фон зеркально,
+ * и линии ломаются углом. Чтобы фон не складывался гармошкой, сдвиг меняется не быстрее 0.8 px на px:
+ * при сильном преломлении кромка сама становится шире.
+ * feDisplacementMap в Chromium берёт ближайший пиксель без сглаживания, и тонкие линии фона под стеклом
+ * рвутся лесенкой. Сглаживание: 'soft' - размытие на полпикселя после сдвига, почти бесплатно, но мягчает
+ * всё стекло; 'exact' - карта сдвигается на ±¼ пикселя и выборки усредняются, середина стекла остаётся
+ * чёткой. Радужность (rainbow, %) - три сдвига: красный канал сильнее, синий слабее, каналы собираются
+ * непрозрачными, а прозрачность берётся у зелёного. С ней точное сглаживание берёт по две выборки на канал.
+ * Замер на 14 карточках 380×88 с фоном, меняющимся каждый кадр, экран 180 Гц: обычное и мягкое - 180
+ * кадров/с, точное - 85, радужность - 85, радужность со сглаживанием - 45 (двенадцать выборок давали 20)
  */
-export function liquidUri(strength: number, edge: number): string {
+export function liquidUri(strength: number, edge: number, smooth: LiquidSmooth = 'off', rainbow = 0): string {
   const r1 = (x: number) => Math.round(x * 10) / 10;
-  const sd = r1(Math.max(1, edge / 2.5));
-  const out = `<feDisplacementMap in='SourceGraphic' in2='m' scale='${r1(strength * 2)}' xChannelSelector='R' yChannelSelector='G'/>`;
+  const sd = r1(Math.max(1, edge / 2.5, strength * 0.55));
+  const s = Math.max(1, Math.round(sd));
+  // У края разность каналов равна erf(s/σ/√2) - растягиваем её до полного сдвига
+  const k = Math.round(500 / erf(s / sd / Math.SQRT2)) / 1000;
+  const axis = (dx: number, dy: number, row: string) => `<feOffset in='f' dx='${-dx}' dy='${-dy}' result='p'/>`
+    + `<feFlood flood-color='lime' x='${dx}' y='${dy}' width='99999' height='99999'/><feComposite in2='p' operator='arithmetic' k2='1' k3='1'/>`
+    + `<feGaussianBlur stdDeviation='${dx ? sd : 0} ${dy ? sd : 0}'/><feColorMatrix values='${row}'`;
   const svg = `<svg xmlns='http://www.w3.org/2000/svg'><filter id='lg' x='0' y='0' width='1' height='1' color-interpolation-filters='sRGB'>`
-    + `<feFlood flood-color='white'/><feGaussianBlur stdDeviation='${sd}' result='a'/>`
-    + `<feOffset in='a' dx='-${sd}' result='l'/><feOffset in='a' dx='${sd}' result='r'/><feOffset in='a' dy='-${sd}' result='t'/><feOffset in='a' dy='${sd}' result='b'/>`
-    + `<feComposite in='l' in2='r' operator='arithmetic' k2='0.73' k3='-0.73' k4='0.5'/><feColorMatrix values='0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1' result='x'/>`
-    + `<feComposite in='t' in2='b' operator='arithmetic' k2='0.73' k3='-0.73' k4='0.5'/><feColorMatrix values='0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 1'/>`
-    + `<feComposite in2='x' operator='arithmetic' k2='1' k3='1' result='m'/>${out}</filter></svg>`;
+    + `<feFlood flood-color='red' result='f'/>`
+    + `${axis(s, 0, `${k} -${k} 0 0 0.5 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1`)} result='x'/>`
+    + `${axis(0, s, `0 0 0 0 0 ${k} -${k} 0 0 0.5 0 0 0 0 0 0 0 0 0 1`)}/>`
+    + `<feComposite in2='x' operator='arithmetic' k2='1' k3='1' result='m'/>`
+    + `${refraction(r1(strength * 2), smooth, rainbow)}</filter></svg>`;
   return `url("data:image/svg+xml,${svg.replace(/</g, '%3C').replace(/>/g, '%3E')}#lg")`;
+}
+
+/** Каналы для радужности: только красный, только зелёный, только синий; прозрачность - 1 */
+const CHANNEL = ['1 0 0 0 0 0 0 0 0 0 0 0 0 0 0', '0 0 0 0 0 0 1 0 0 0 0 0 0 0 0', '0 0 0 0 0 0 0 0 0 0 0 0 1 0 0'].map((m) => `${m} 0 0 0 0 1`);
+
+/** Сколько выборок фона на точку стекла: для предупреждения о нагрузке в панели */
+export const liquidSamples = (smooth: LiquidSmooth, rainbow: number) => (rainbow > 0 ? 3 : 1) * (smooth !== 'exact' ? 1 : rainbow > 0 ? 2 : 4);
+
+/** Сдвиг фона по карте m из liquidUri: одна выборка или несколько, один канал или три */
+function refraction(scale: number, smooth: LiquidSmooth, rainbow: number): string {
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+  const disp = (map: string, sc: number, res: string) =>
+    `<feDisplacementMap in='SourceGraphic' in2='${map}' scale='${sc}' xChannelSelector='R' yChannelSelector='G' result='${res}'/>`;
+  const avg = (a: string, b: string, res: string) => `<feComposite in='${a}' in2='${b}' operator='arithmetic' k2='0.5' k3='0.5' result='${res}'/>`;
+  // ¼ пикселя в единицах карты, но не меньше одного шага из 255. С радужностью - две выборки по диагонали
+  const lv = Math.round(Math.max(1, Math.round(63.75 / scale)) / 255 * 1e4) / 1e4;
+  const taps = smooth !== 'exact' ? [] : rainbow > 0 ? [[lv, lv], [-lv, -lv]] : [[lv, lv], [lv, -lv], [-lv, lv], [-lv, -lv]];
+  const jitter = taps.map(([x, y], i) => `<feColorMatrix in='m' values='1 0 0 0 ${x} 0 1 0 0 ${y} 0 0 1 0 0 0 0 0 1 0' result='j${i}'/>`).join('');
+  /** Фон, сдвинутый с масштабом sc, в результат res */
+  const shifted = (sc: number, res: string) => {
+    if (!taps.length) return disp('m', sc, res);
+    const each = taps.map((_, i) => disp(`j${i}`, sc, `${res}${i}`)).join('');
+    return taps.length === 2 ? each + avg(`${res}0`, `${res}1`, res)
+      : each + avg(`${res}0`, `${res}1`, `${res}a`) + avg(`${res}2`, `${res}3`, `${res}b`) + avg(`${res}a`, `${res}b`, res);
+  };
+  const a = (rainbow / 100) * 0.3;
+  const out = rainbow <= 0 ? shifted(scale, 'o')
+    : shifted(r1(scale * (1 + a)), 'sr') + shifted(scale, 'sg') + shifted(r1(scale * (1 - a)), 'sb')
+      + `<feColorMatrix in='sr' values='${CHANNEL[0]}' result='cr'/><feColorMatrix in='sg' values='${CHANNEL[1]}' result='cg'/><feColorMatrix in='sb' values='${CHANNEL[2]}'/>`
+      + `<feComposite in2='cr' operator='arithmetic' k2='1' k3='1'/><feComposite in2='cg' operator='arithmetic' k2='1' k3='1'/><feComposite in2='sg' operator='in' result='o'/>`;
+  // Мягкое: крайний пиксель после размытия прозрачен на 16% - под рамкой не видно. Наложить его поверх
+  // резкого стоило бы 20% кадров: второе чтение результата o заставляет держать его в памяти
+  return jitter + out + (smooth === 'soft' ? `<feGaussianBlur stdDeviation='0.5'/>` : '');
 }
 
 /**
@@ -1009,7 +1073,7 @@ function baseKeyframes(cfg: ThemeConfig): Record<string, string> {
     'pop-fade': 'from { opacity: 0; }'
   };
   // Ключевые кадры - только известных анимаций: неизвестное имя из повреждённого конфига роняло сборку CSS
-  for (const a of new Set([cfg.background.light.animation, cfg.background.dark.animation])) if (KF[`bg-${a}`]) kf[`bg-${a}`] = KF[`bg-${a}`];
+  for (const a of new Set([bgAnimation(cfg.background.light), bgAnimation(cfg.background.dark)])) if (KF[`bg-${a}`]) kf[`bg-${a}`] = KF[`bg-${a}`];
   if (cfg.motion.entrance !== 'none') {
     if (KF[`in-${cfg.motion.entrance}`]) kf[`in-${cfg.motion.entrance}`] = KF[`in-${cfg.motion.entrance}`];
     kf.fresh = 'from { --kt-fresh: 1; } to { --kt-fresh: 0; }';
@@ -1216,9 +1280,9 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
     `--kt-dur: ${Math.round(220 * m.speed)}ms`,
     `--kt-dur-slow: ${Math.round(440 * m.speed)}ms`,
     // Фильтр жидкого стекла - один на все стеклянные поверхности (карточки, панель, кнопка подключения)
-    liquidOn(su) && `--kt-liquid: ${liquidUri(su.liquidStrength, su.liquidEdge)}`,
+    liquidOn(su) && `--kt-liquid: ${liquidUri(su.liquidStrength, su.liquidEdge, su.liquidSmooth, su.liquidRainbow)}`,
     // Активному пункту панели и кнопкам - слабее и уже: кромка в 20px изогнула бы кнопку высотой 36px целиком
-    liquidSmall(su) && `--kt-liquid-sm: ${liquidUri(Math.max(3, su.liquidStrength * 0.35), Math.max(6, su.liquidEdge * 0.4))}`
+    liquidSmall(su) && `--kt-liquid-sm: ${liquidUri(Math.max(3, su.liquidStrength * 0.35), Math.max(6, su.liquidEdge * 0.4), su.liquidSmooth, su.liquidRainbow)}`
   ]);
   css += section(++n, 'Настройки', `Скругление углов, кривые и длительности анимаций${liquidOn(su) || liquidSmall(su) ? ', фильтры жидкого стекла' : ''}`, settings);
 
@@ -1245,7 +1309,7 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
   css += section(++n, 'Разное', 'Подсветка по пингу, реакция фона на подключение, бегущая рамка, «дыхание» выбранного', fun.css);
 
   const props = [...new Set([...click.props, ...fun.props, ...(m.entrance !== 'none' ? ['--kt-fresh'] : []), ...(rowsFixed(cfg) ? ['--kt-row-k'] : []),
-    ...(cfg.background.light.animation === 'flow' || cfg.background.dark.animation === 'flow' ? ['--kt-flow'] : [])])];
+    ...(bgAnimation(cfg.background.light) === 'flow' || bgAnimation(cfg.background.dark) === 'flow' ? ['--kt-flow'] : [])])];
   const propsCss = props.map((p) => `@property ${p} {\n    ${PROPS[p].replace(/; /g, ';\n    ')}\n}\n`).join('');
   const allKf = { ...baseKeyframes(cfg), ...powerKeyframes(cfg), ...fun.keyframes, ...div.keyframes, ...kfs };
   css += section(++n, 'Анимации', 'Переходы, появление карточек, эффект нажатия, ключевые кадры', propsCss + motionRules(cfg) + click.css + kfCss(allKf));

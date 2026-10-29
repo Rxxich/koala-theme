@@ -97,6 +97,9 @@ export type CardGradient = 'soft' | 'linear' | 'radial' | 'conic';
 /** Заготовки градиента карточек (lib/defaults.ts, CARD_GRADIENTS) */
 export type CardGradientPreset = 'lighter' | 'deep' | 'accent' | 'corner' | 'halo' | 'power' | 'duo' | 'aurora';
 
+/** Сглаживание жидкого стекла (lib/generator.ts, liquidUri) */
+export type LiquidSmooth = 'off' | 'soft' | 'exact';
+
 export interface Surfaces {
   /** false - карточки как в клиенте, правила фона/стекла/рамок не генерируются */
   custom: boolean;
@@ -110,6 +113,10 @@ export interface Surfaces {
   liquidStrength: number;
   /** Ширина полосы у края, где фон изгибается, px */
   liquidEdge: number;
+  /** Сглаживание преломления: 'soft' - размытие на полпикселя, 'exact' - несколько выборок фона на пиксель */
+  liquidSmooth: LiquidSmooth;
+  /** Радужность у кромки: красный канал сдвигается сильнее, синий слабее, %. 0 - выключена */
+  liquidRainbow: number;
   opacity: number;
   blur: number;
   saturate: number;
