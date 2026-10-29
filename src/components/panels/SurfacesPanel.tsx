@@ -78,9 +78,17 @@ const BUTTONS: { value: ButtonStyle; label: string }[] = [
   { value: 'pushable', label: 'Клавиша' }, { value: 'brutal', label: 'Брутализм' }, { value: 'liquid', label: 'Жидкое стекло' }
 ];
 
+/** Стекло под жидкое: размытие 4px, непрозрачность до 30%, насыщенность от 150% - как у жидкого стекла Apple */
+function thinGlass(s: Surfaces) {
+  s.blur = 4;
+  s.opacity = Math.min(s.opacity, 30);
+  s.saturate = Math.max(s.saturate, 150);
+}
+
 export function SurfacesPanel() {
   const { config, set, update } = useCfg();
   const setUi = useStore((st) => st.set);
+  const notify = useStore((st) => st.notify);
   const s = config.surfaces;
   const scheme = useEditScheme();
   const p = config.palette[scheme];
@@ -130,12 +138,18 @@ export function SurfacesPanel() {
       <PanelHead title="Поверхности" text="Карточки, плитки главной, боковая панель и всплывающие окна: прозрачность, стекло, рамки, скругления." />
 
       <Group title="Карточки и плитки" hint="Варианты фона - те же, что у боковой панели. Чтобы панель всегда совпадала с карточками, выберите у неё «Как карточки»">
-        <Segmented<FillChoice> wrap size="sm" value={fill} options={CARD_FILL} onChange={(v) => update((c) => {
-          c.surfaces.custom = v !== 'app';
-          if (v === 'app') return;
-          c.surfaces.fill = v === 'liquid' ? 'glass' : v;
-          c.surfaces.liquid = v === 'liquid';
-        })} />
+        <Segmented<FillChoice> wrap size="sm" value={fill} options={CARD_FILL} onChange={(v) => {
+          // Густое стекло (по умолчанию размытие 24px) прячет преломление целиком - при выборе жидкого делаем его прозрачнее
+          const thick = v === 'liquid' && !liquid && (s.blur > 8 || s.opacity > 40);
+          update((c) => {
+            c.surfaces.custom = v !== 'app';
+            if (v === 'app') return;
+            c.surfaces.fill = v === 'liquid' ? 'glass' : v;
+            c.surfaces.liquid = v === 'liquid';
+            if (thick) thinGlass(c.surfaces);
+          });
+          if (thick) notify('Стекло стало прозрачнее: размытие 4px, непрозрачность до 30% - иначе преломления не видно. Ctrl+Z - вернуть');
+        }} />
         {!s.custom && <p className="note">Сейчас карточки выглядят как в Koala Clash. Подвиньте любой ползунок - включатся свои настройки (стекло).</p>}
         {s.custom && s.fill === 'transparent' && <p className="note">Карточки без фона и рамки: остаётся только текст поверх фона окна. Выбранный сервер по-прежнему выделяется.</p>}
         <div className={cx('stack', !s.custom && 'dimmed')}>
@@ -156,7 +170,7 @@ export function SurfacesPanel() {
               </div>
               {(s.blur > 8 || s.opacity > 40) && (
                 <Button size="sm" variant="soft" title="Размытие 4px, непрозрачность до 30%, насыщенность от 150% - как у жидкого стекла Apple. Сильное размытие и плотная заливка прячут преломление"
-                  onClick={() => update((c) => { c.surfaces.blur = 4; c.surfaces.opacity = Math.min(c.surfaces.opacity, 30); c.surfaces.saturate = Math.max(c.surfaces.saturate, 150); })}>Сделать стекло прозрачнее</Button>
+                  onClick={() => update((c) => thinGlass(c.surfaces))}>Сделать стекло прозрачнее</Button>
               )}
               <Slider label="Преломление" hint="Насколько далеко сдвигается фон у самого края. Если сдвиг больше половины карточки, фон у края отражается, как в капле" value={s.liquidStrength} min={2} max={40} unit="px" onChange={(v) => setCard('liquidStrength', v)} />
               <Slider label="Ширина кромки" hint="Полоса у края, где фон изгибается: узкая - чёткая грань, широкая - плавная линза" value={s.liquidEdge} min={6} max={50} unit="px" onChange={(v) => setCard('liquidEdge', v)} />
