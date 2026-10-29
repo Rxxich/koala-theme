@@ -10,13 +10,13 @@
 
 import { mix, readableOn, rgba, rgbToHsl, parseColor } from './color';
 import { fontStack, isGoogleFontsUrl, isMonoFont } from './fonts';
-import { APP_WRAPPER, isAppPalette } from './defaults';
-import { highlightShadow, shadowReach, shadowSet, textShadowCss, textShadowReach, TOP_ROOM } from './shadows';
+import { APP_WRAPPER, cardStops, isAppPalette, type CardGradientShape } from './defaults';
+import { hasHighlight, highlightShadow, shadowReach, shadowSet, textShadowCss, textShadowReach, TOP_ROOM } from './shadows';
 import { powerKeyframes, powerRules, type GlassLook } from './power';
 import { particleSet, patternLayer } from './backdrop';
 import { clickRules, funRules, PROXY_SEL } from './effects';
 import { dividerRules } from './dividers';
-import type { Background, GradientStop, IconPlate, Scheme, SelectedStyle, StyleColor, ThemeConfig } from './types';
+import type { Background, GradientStop, IconPlate, Palette, Scheme, SelectedStyle, StyleColor, ThemeConfig } from './types';
 
 const P = ':root';
 const WRAP = `${P} [data-slot="sidebar-wrapper"]`;
@@ -259,8 +259,8 @@ function mapRules(cfg: ThemeConfig): string {
 /* ---------- Палитра ---------- */
 
 /** Свой градиент карточек (не «Лёгкий»): точки цвета схемы с прозрачностью заливки alpha, % */
-export function cardGradientCss(s: ThemeConfig['surfaces'], stops: GradientStop[], alpha: number): string {
-  const list = [...stops].sort((a, b) => a.pos - b.pos).map((x) => `${cm(x.color, alpha)} ${pct(x.pos)}`).join(', ');
+export function cardGradientCss(s: CardGradientShape, stops: GradientStop[], alpha: number): string {
+  const list = [...stops].sort((a, b) => a.pos - b.pos).map((x) => `${alpha >= 100 ? x.color : cm(x.color, alpha)} ${pct(x.pos)}`).join(', ');
   const at = `at ${pct(s.gradientX)} ${pct(s.gradientY)}`;
   if (s.gradientKind === 'radial') return `radial-gradient(ellipse ${at}, ${list})`;
   if (s.gradientKind === 'conic') return `conic-gradient(from ${s.gradientAngle}deg ${at}, ${list})`;
@@ -268,9 +268,17 @@ export function cardGradientCss(s: ThemeConfig['surfaces'], stops: GradientStop[
 }
 const ownGradient = (s: ThemeConfig['surfaces']) => s.custom && s.gradient && s.gradientKind !== 'soft';
 
+/** Заливка карточки в превью на сайте: свой градиент, «Лёгкий» или цвет карточек палитры */
+export function cardPreview(s: ThemeConfig['surfaces'], p: Palette, scheme: Scheme, alpha: number): string {
+  if (!s.custom || !s.gradient) return rgba(p.card, alpha / 100);
+  if (s.gradientKind === 'soft') return `linear-gradient(180deg, ${rgba(mix(p.card, p.foreground, 0.06), alpha / 100)}, ${rgba(p.card, alpha / 100)})`;
+  return cardGradientCss(s, cardStops(s, p, scheme), alpha);
+}
+
 function paletteRules(cfg: ThemeConfig, scheme: Scheme, scope: string): string {
   const p = cfg.palette[scheme];
-  const sh = shadowSet(cfg.shadows, scheme, p, cfg.surfaces.highlight);
+  const sh = shadowSet(cfg.shadows, scheme, p, cfg.surfaces.highlight, cfg.surfaces.highlightBottom);
+  const hl = hasHighlight(cfg.surfaces);
   // Стандартная палитра клиента в двухрежимной теме - переменные не трогаем, клиент задаёт их сам
   const isDefault = cfg.mode === 'both' && isAppPalette(p, scheme);
   const onPower = readableOn(mix(p.powerOnStart, p.powerOnEnd, 0.5));
@@ -305,14 +313,14 @@ function paletteRules(cfg: ThemeConfig, scheme: Scheme, scope: string): string {
     cfg.surfaces.buttons === 'power' && t('on-power', onPower),
     // Блик по кромке - отдельной переменной: им рисуют карточки при тенях клиента (с тенями темы он
     // входит в тень карточек) и стеклянные кнопки подключения при любых тенях
-    cfg.surfaces.highlight && t('highlight', highlightShadow(scheme)),
+    hl && t('highlight', highlightShadow(scheme, cfg.surfaces.highlight, cfg.surfaces.highlightBottom)),
     sh && t('shadow-card', sh.card), sh && t('shadow-hover', sh.hover), sh && t('shadow-pop', sh.pop), sh && t('shadow-btn', sh.button),
     // Тень кнопки подключения - без блика: у кнопки он свой, иначе получался двойной
-    sh && cfg.shadows.power && cfg.surfaces.highlight && t('shadow-bare', sh.bare),
-    sh && cfg.shadows.power && cfg.surfaces.highlight && t('shadow-bare-hover', sh.bareHover),
+    sh && cfg.shadows.power && hl && t('shadow-bare', sh.bare),
+    sh && cfg.shadows.power && hl && t('shadow-bare-hover', sh.bareHover),
     // Свой градиент карточек: цвета у каждой схемы свои. glass-grad - для стеклянной панели и окошка режима
-    ownGradient(cfg.surfaces) && t('card-grad', cardGradientCss(cfg.surfaces, cfg.surfaces.gradientStops[scheme], cardAlpha(cfg.surfaces))),
-    ownGradient(cfg.surfaces) && t('glass-grad', cardGradientCss(cfg.surfaces, cfg.surfaces.gradientStops[scheme], cfg.surfaces.opacity))
+    ownGradient(cfg.surfaces) && t('card-grad', cardGradientCss(cfg.surfaces, cardStops(cfg.surfaces, p, scheme), cardAlpha(cfg.surfaces))),
+    ownGradient(cfg.surfaces) && t('glass-grad', cardGradientCss(cfg.surfaces, cardStops(cfg.surfaces, p, scheme), cfg.surfaces.opacity))
   ].filter(Boolean) as string[];
   return rule(scope, [...vars, own.length ? '/* Переменные темы */' : false, ...own]);
 }
@@ -325,6 +333,32 @@ export const cardAlpha = (s: ThemeConfig['surfaces']) => s.fill === 'solid' ? 10
 /** «Лёгкий» градиент карточек: чуть светлее сверху */
 const shade = (a: number, b: number) => `linear-gradient(180deg, ${cm('color-mix(in oklab, var(--card) 94%, var(--foreground))', a)}, ${cm('var(--card)', b)})`;
 
+/** Жидкое стекло - только у стеклянных карточек со своими настройками */
+export const liquidOn = (s: ThemeConfig['surfaces']) => s.custom && s.fill === 'glass' && s.liquid;
+/** Жидкое стекло у активного пункта панели и основных кнопок - свой фильтр, слабее и уже */
+const liquidSmall = (s: ThemeConfig['surfaces']) => s.navActive === 'liquid' || s.buttons === 'liquid';
+
+/**
+ * Жидкое стекло: SVG-фильтр для backdrop-filter, фон под стеклом изгибается у краёв, как под линзой.
+ * Карта сдвигов строится в самом фильтре, без картинки, и подходит блоку любого размера: прямоугольник
+ * ровно по блоку размывается, а разность его копий, сдвинутых на σ в разные стороны, даёт наклон у
+ * края - по x в красный канал, по y в зелёный. В середине блока наклона нет (0.5 - без сдвига), у края
+ * фон берётся ближе к середине. Радужности (три сдвига для красного, зелёного и синего) нет: видеокарте
+ * было втрое тяжелее, и прокрутка на экране 180 Гц падала до 60 кадров/с
+ */
+export function liquidUri(strength: number, edge: number): string {
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+  const sd = r1(Math.max(1, edge / 2.5));
+  const out = `<feDisplacementMap in='SourceGraphic' in2='m' scale='${r1(strength * 2)}' xChannelSelector='R' yChannelSelector='G'/>`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg'><filter id='lg' x='0' y='0' width='1' height='1' color-interpolation-filters='sRGB'>`
+    + `<feFlood flood-color='white'/><feGaussianBlur stdDeviation='${sd}' result='a'/>`
+    + `<feOffset in='a' dx='-${sd}' result='l'/><feOffset in='a' dx='${sd}' result='r'/><feOffset in='a' dy='-${sd}' result='t'/><feOffset in='a' dy='${sd}' result='b'/>`
+    + `<feComposite in='l' in2='r' operator='arithmetic' k2='0.73' k3='-0.73' k4='0.5'/><feColorMatrix values='0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1' result='x'/>`
+    + `<feComposite in='t' in2='b' operator='arithmetic' k2='0.73' k3='-0.73' k4='0.5'/><feColorMatrix values='0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 1'/>`
+    + `<feComposite in2='x' operator='arithmetic' k2='1' k3='1' result='m'/>${out}</filter></svg>`;
+  return `url("data:image/svg+xml,${svg.replace(/</g, '%3C').replace(/>/g, '%3E')}#lg")`;
+}
+
 /**
  * Стекло по ползункам «Карточки и плитки» - даже если сами карточки другие (сплошные, контур).
  * Им же рисуются стеклянная боковая панель, окошко режима и тумблер «Стекло»
@@ -334,9 +368,13 @@ function glassLook(s: ThemeConfig['surfaces']): GlassLook {
   // Шероховатость стекла - зерно отдельным верхним слоем фона: матовое стекло вместо гладкого
   const grain = s.grain > 0 ? `${noiseUri(s.grain * 0.45)} 0 0 / 180px 180px, ` : '';
   const stroke = pickColor(s.borderColor, s.borderCustom) ?? 'var(--stroke)';
+  // Преломление - последним. Фильтр url() отдаёт картинку ровно по блоку, и размытие после него
+  // затягивало прозрачность из-за края: стекло становилось полупрозрачным, сквозь него проступал резкий
+  // фон, и чем сильнее размытие, тем заметнее. Размытие клиента у края фон отражает и прозрачности не даёт
+  const blur = s.blur > 0 ? `blur(${s.blur}px) saturate(${s.saturate}%)` : '';
   return {
     grain, fill,
-    filter: s.blur > 0 ? `blur(${s.blur}px) saturate(${s.saturate}%)` : 'none',
+    filter: [blur, liquidOn(s) && 'var(--kt-liquid)'].filter(Boolean).join(' ') || 'none',
     stroke: s.borderOpacity >= 100 ? stroke : cm(stroke, s.borderOpacity)
   };
 }
@@ -414,7 +452,7 @@ function surfaceRules(cfg: ThemeConfig): string {
     // тенью клиента (shadow-sm), которая иначе оставалась при «Без тени»
     if (cfg.shadows.buttons) out += rule([`${P} [data-slot="button"]:is([data-variant="default"], [data-variant="outline"], [data-variant="destructive"], [data-variant="secondary"])`,
       `${P} [data-slot="tabs-trigger"][data-state="active"]`, `${P} [data-slot="sidebar-footer"] button[class*="from-gradient-start-power-on/15"]`], ['box-shadow: var(--kt-shadow-btn) !important']);
-  } else if (s.highlight) {
+  } else if (hasHighlight(s)) {
     // Блик по кромке при тенях «Как в клиенте»: раньше он рисовался только вместе с тенями темы и при
     // тенях клиента молча пропадал. У карточек он идёт одним списком с их тенью клиента (shadow-sm)
     out += rule([`${P} ${CARD_BASE}`, `${P} [data-slot="accordion"]`], [`box-shadow: var(--kt-highlight), ${APP_SHADOW_SM} !important`]);
@@ -472,10 +510,13 @@ function surfaceRules(cfg: ThemeConfig): string {
     // Список прокси (GroupedVirtuoso) прокручивается сам и срезал верх первой группы ещё раз, по своему
     // краю. Расширяем его вверх, а слой со списком и липкую шапку текущей группы опускаем на место:
     // клиент ставит им top: 0 инлайн-стилем. Шапка при прокрутке липнет там же, где группа стоит в покое.
+    // Слой со списком растянут на всю высоту (height: 100%) - укорачиваем его на тот же отступ, иначе он
+    // торчал за низ, и полоса прокрутки была всегда, даже у свёрнутых групп.
     // Только у прокси: списки правил, логов и подключений стоят под панелью поиска и накрыли бы её
     const VS = `${P} [class~="h-[calc(100vh-58px)]"] > [data-virtuoso-scroller]`;
     out += rule(VS, [`margin-top: -${roomT}px`, `height: calc(100% + ${roomT}px) !important`]);
     out += rule(`${VS} > :is([data-viewport-type], div:has(> [data-testid="virtuoso-top-item-list"]))`, [`top: ${roomT}px !important`]);
+    out += rule(`${VS} > [data-viewport-type]`, [`height: calc(100% - ${roomT}px) !important`]);
     out += rule(`${VS}::-webkit-scrollbar-track`, [`margin-top: ${roomT}px`]);
   }
 
@@ -484,7 +525,7 @@ function surfaceRules(cfg: ThemeConfig): string {
   // Тень панели - как у карточек: тенью темы, а при тенях «Как в клиенте» - бликом поверх своей тени
   // клиента (shadow-sm). Раньше блик у панели был только вместе с тенями темы
   const sbShadow = sh ? cfg.shadows.cards && 'box-shadow: var(--kt-shadow-card) !important'
-    : s.highlight && `box-shadow: var(--kt-highlight), ${APP_SHADOW_SM} !important`;
+    : hasHighlight(s) && `box-shadow: var(--kt-highlight), ${APP_SHADOW_SM} !important`;
   // "Как карточки": тот же фон, рамка и стекло, что у карточек (если у карточек свои настройки)
   if (s.sidebar === 'cards' && s.custom) out += rule(sbSel, [`background: ${grain}${fill} !important`, `border-color: ${border} !important`, `border-width: ${bw}px !important`, `backdrop-filter: ${blur} !important`,
     (s.fill === 'glass' || s.fill === 'solid') && sbShadow || 'box-shadow: none !important']);
@@ -539,6 +580,12 @@ function surfaceRules(cfg: ThemeConfig): string {
     // В свёрнутой панели от пункта остаётся иконка - точка уходит в угол, чтобы не лечь на неё
     out += rule(`${P} [data-slot="sidebar"][data-state="collapsed"] [data-slot="sidebar-menu-button"][data-active="true"]::before`, ['right: 2px', 'top: 2px', 'width: 5px', 'height: 5px', 'margin-top: 0']);
   }
+  // Жидкое стекло: капля с бликами сверху и снизу, фон под ней преломляется у краёв. Подложка - тоном
+  // акцента, иначе на светлой панели белая капля не видна
+  if (s.navActive === 'liquid') out += rule(nav, [`border-radius: ${s.navRadius}px !important`, 'color: var(--primary) !important',
+    `background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03)), ${cm('var(--primary)', s.navOpacity)} !important`,
+    'backdrop-filter: blur(2px) saturate(180%) var(--kt-liquid-sm) !important',
+    `box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px ${cm('var(--foreground)', 10)}, 0 4px 14px rgba(0, 0, 0, 0.18) !important`]);
   // Свой цвет активного пункта. Стили на акценте и цвете кнопки перекрашивают их переменные, у рамки
   // клиента (и «Увеличения» с ней) это цвет рамки, у инверсии - заливка
   const nc = pickColor(s.navColor, s.navCustom);
@@ -766,6 +813,17 @@ function surfaceRules(cfg: ThemeConfig): string {
   if (s.buttons === 'glossy' || s.buttons === 'power') out += rule(btnHov, ['filter: brightness(1.12) saturate(1.08)']);
   if (s.buttons === 'outline') out += rule(btnHov, [`background: ${cm('var(--primary)', 12)} !important`]);
   if (s.buttons === 'pill') out += rule(`${P} [data-slot="button"]:not([data-size^="icon"])`, ['border-radius: 999px !important']);
+  // Жидкое стекло: полупрозрачная заливка акцентом, блики сверху и снизу, фон под кнопкой преломляется.
+  // Скругление - у всех кнопок с текстом, как у «Капсул», иначе соседние кнопки окна были бы разными.
+  // Почти прозрачной кнопке - цвет текста темы: сквозь неё виден фон карточки, а не акцент
+  if (s.buttons === 'liquid') {
+    const glassBtn = (k: number) => `linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.04) 55%), ${cm('var(--primary)', k)} !important`;
+    out += rule(btn, [`background: ${glassBtn(s.buttonsOpacity)}`, 'border: 0 !important', 'backdrop-filter: blur(3px) saturate(180%) var(--kt-liquid-sm) !important',
+      s.buttonsOpacity < 45 && 'color: var(--foreground) !important',
+      `box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px ${cm('var(--primary)', 60)}, 0 4px 14px ${cm('var(--primary)', 25)} !important`]);
+    out += rule(btnHov, [`background: ${glassBtn(Math.min(100, s.buttonsOpacity + 12))}`]);
+    out += rule(`${P} [data-slot="button"]:not([data-size^="icon"])`, [`border-radius: ${s.buttonsRadius}px !important`]);
+  }
   // Объёмная клавиша: снизу торец, при нажатии кнопка опускается на него
   if (s.buttons === 'pushable') {
     out += rule(btn, ['box-shadow: 0 4px 0 color-mix(in oklab, var(--primary) 55%, black) !important', 'translate: 0 -2px', 'transition: translate 0.12s ease, box-shadow 0.12s ease !important']);
@@ -1148,6 +1206,7 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
   }
 
   const easing = m.easing === 'app' ? 'smooth' : m.easing;
+  const su = cfg.surfaces;
   const settings = rule(P, [
     Math.abs(cfg.surfaces.radius - 0.625) > 0.001 && `--radius: ${cfg.surfaces.radius}rem !important`,
     `--kt-ease: ${EASE[easing]}`,
@@ -1155,9 +1214,13 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
     `--kt-spring: ${EASE.spring}`,
     `--kt-dur-fast: ${Math.round(140 * m.speed)}ms`,
     `--kt-dur: ${Math.round(220 * m.speed)}ms`,
-    `--kt-dur-slow: ${Math.round(440 * m.speed)}ms`
+    `--kt-dur-slow: ${Math.round(440 * m.speed)}ms`,
+    // Фильтр жидкого стекла - один на все стеклянные поверхности (карточки, панель, кнопка подключения)
+    liquidOn(su) && `--kt-liquid: ${liquidUri(su.liquidStrength, su.liquidEdge)}`,
+    // Активному пункту панели и кнопкам - слабее и уже: кромка в 20px изогнула бы кнопку высотой 36px целиком
+    liquidSmall(su) && `--kt-liquid-sm: ${liquidUri(Math.max(3, su.liquidStrength * 0.35), Math.max(6, su.liquidEdge * 0.4))}`
   ]);
-  css += section(++n, 'Настройки', 'Скругление углов, кривые и длительности анимаций', settings);
+  css += section(++n, 'Настройки', `Скругление углов, кривые и длительности анимаций${liquidOn(su) || liquidSmall(su) ? ', фильтры жидкого стекла' : ''}`, settings);
 
   for (const { scheme, sel } of schemeScopes(cfg.mode)) {
     css += section(++n, `Палитра: ${scheme === 'dark' ? 'тёмная' : 'светлая'}`, cfg.mode === 'both' ? `Действует, когда в клиенте выбрана ${scheme === 'dark' ? 'тёмная' : 'светлая'} тема` : 'Действует в обоих режимах клиента', paletteRules(cfg, scheme, sel));

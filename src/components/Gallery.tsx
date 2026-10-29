@@ -39,7 +39,9 @@ function configThumb(cfg: ThemeConfig, scheme: 'light' | 'dark') {
 }
 
 function GalleryCard({ t }: { t: GalleryTheme }) {
-  const { viewing, set, replace } = useStore();
+  const viewing = useStore((s) => s.viewing);
+  const set = useStore((s) => s.set);
+  const replace = useStore((s) => s.replace);
   const notify = useStore((s) => s.notify);
   const download = async () => {
     try {

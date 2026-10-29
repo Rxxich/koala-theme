@@ -1,7 +1,7 @@
 // Раздел "Палитра": генератор гармоничных палитр, готовые палитры, основные цвета схемы.
 
-import { useState } from 'react';
-import { Palette as PaletteIcon, Dices, Wand2, AlertTriangle, CheckCircle2, Sparkles, RotateCcw } from 'lucide-react';
+import { memo, useCallback, useState } from 'react';
+import { Palette as PaletteIcon, Dices, Wand2, AlertTriangle, CheckCircle2, Sparkles, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { useStore, useEditScheme } from '../../state/store';
 import { PALETTES, paletteBackground, swatchStrip, type PalettePreset } from '../../data/palettes';
 import { APP_PALETTE, makeBackground } from '../../lib/defaults';
@@ -11,11 +11,30 @@ import type { Mode, PaletteKey, Scheme } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Button, Group, Row, Segmented, Select, Slider, Toggle, cx } from '../ui';
 import { PanelHead, SchemeSwitch, useCfg } from './common';
+import { CardGradientTiles } from './CardGradients';
 
 /** Миниатюра фона палитры */
 function PaletteBg({ pp, scheme }: { pp: PalettePreset; scheme: Scheme }) {
   return <i style={{ background: bgPreview(paletteBackground(pp, scheme), pp[scheme].background) }} />;
 }
+
+/** Сетка готовых палитр. memo - чтобы не перерисовывать 34 карточки при каждом движении цвета */
+const PaletteGrid = memo(function PaletteGrid({ activeId, onPick }: { activeId?: string; onPick: (pp: PalettePreset) => void }) {
+  return (
+    <div className="palette-grid">
+      {PALETTES.map((pp) => (
+        <button key={pp.id} type="button" className={cx('palette-card', activeId === pp.id && 'active')} onClick={() => onPick(pp)}>
+          <span className="palette-bg">{(['light', 'dark'] as Scheme[]).map((s) => <PaletteBg key={s} pp={pp} scheme={s} />)}</span>
+          <span className="palette-strips">
+            <span className="strip">{swatchStrip(pp.light).map((c, i) => <i key={i} style={{ background: c }} />)}</span>
+            <span className="strip">{swatchStrip(pp.dark).map((c, i) => <i key={i} style={{ background: c }} />)}</span>
+          </span>
+          <span className="palette-name">{pp.name}</span>
+        </button>
+      ))}
+    </div>
+  );
+});
 
 const KEY_COLORS: { key: PaletteKey; label: string; hint: string }[] = [
   { key: 'background', label: 'Фон', hint: 'Основной фон окна' },
@@ -33,6 +52,13 @@ export function PalettePanel() {
   const notify = useStore((s) => s.notify);
   const paletteOpen = useStore((s) => s.paletteOpen);
   const p = config.palette[scheme];
+  const s = config.surfaces;
+  const ownGrad = s.custom && s.gradient && s.gradientKind !== 'soft';
+  // В «Поверхностях» - сразу к градиенту карточек: он в середине раздела, под ползунками стекла
+  const toSurfaces = () => {
+    set({ section: 'surfaces' });
+    requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById('card-gradient')?.scrollIntoView({ block: 'center', behavior: 'smooth' })));
+  };
   const issues = contrastIssues(p);
   const current = PALETTES.find((x) => x.light.primary === config.palette.light.primary && x.dark.primary === config.palette.dark.primary && x.dark.background === config.palette.dark.background);
 
@@ -49,7 +75,7 @@ export function PalettePanel() {
   };
   // Готовые палитры: по желанию вместе с фоном к ним. Узор, зерно, виньетка и размытие фона сохраняются
   const [withBg, setWithBg] = useState(false);
-  const applyPreset = (pp: PalettePreset) => update((c) => {
+  const applyPreset = useCallback((pp: PalettePreset) => update((c) => {
     c.palette.light = { ...pp.light }; c.palette.dark = { ...pp.dark };
     if (!withBg) return;
     for (const s of ['light', 'dark'] as Scheme[]) {
@@ -57,7 +83,7 @@ export function PalettePanel() {
       c.background[s] = makeBackground({ pattern: cur.pattern, patternOpacity: cur.patternOpacity, patternScale: cur.patternScale, noise: cur.noise, vignette: cur.vignette,
         blurPages: cur.blurPages, blurPagesAmount: cur.blurPagesAmount, ...paletteBackground(pp, s) });
     }
-  });
+  }), [update, withBg]);
   const genRandom = () => apply(generatePalettes({ harmony: harmony === 'auto' ? undefined : harmony, vivid: vivid / 100, tint: tint === null ? undefined : tint / 100 }));
   const genFromSeed = () => {
     const r = palettesFromColor(seed, harmony === 'auto' ? undefined : harmony);
@@ -102,18 +128,7 @@ export function PalettePanel() {
       <Group title="Готовые палитры" hint="Меняют цвета, а с «Вместе с фоном» - ещё и фон обеих схем. Шрифты и эффекты остаются как были">
         <Toggle label="Вместе с фоном" hint="Над палитрой - её фон: светлый и тёмный. Это перетекающие градиенты на CSS: пятна медленно плывут. У десяти палитр фон подобран отдельно, у остальных собран из их цветов"
           checked={withBg} onChange={setWithBg} />
-        <div className="palette-grid">
-          {PALETTES.map((pp) => (
-            <button key={pp.id} type="button" className={cx('palette-card', current?.id === pp.id && 'active')} onClick={() => applyPreset(pp)}>
-              <span className="palette-bg">{(['light', 'dark'] as Scheme[]).map((s) => <PaletteBg key={s} pp={pp} scheme={s} />)}</span>
-              <span className="palette-strips">
-                <span className="strip">{swatchStrip(pp.light).map((c, i) => <i key={i} style={{ background: c }} />)}</span>
-                <span className="strip">{swatchStrip(pp.dark).map((c, i) => <i key={i} style={{ background: c }} />)}</span>
-              </span>
-              <span className="palette-name">{pp.name}</span>
-            </button>
-          ))}
-        </div>
+        <PaletteGrid activeId={current?.id} onPick={applyPreset} />
         <div className="btn-row">
           <Button variant="soft" icon={<Wand2 size={15} />} onClick={() => {
             update((c) => { c.palette.light = rederive('light', c.palette.light); c.palette.dark = rederive('dark', c.palette.dark); });
@@ -135,6 +150,20 @@ export function PalettePanel() {
           {issues.length ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
           {issues.length ? <span>{issues.map((i) => `${i.label}: ${i.ratio.toFixed(1)}:1`).join(' · ')} - текст будет плохо читаться</span> : <span>Контраст текста в порядке</span>}
         </div>
+      </Group>
+
+      <Group title="Градиент карточек" hint="Карточки серверов, плитки главной, профили и боковая панель «Как карточки» и «Стекло». Заготовки берут цвета из палитры и меняются вместе с ней: с готовой палитрой, генератором и правкой цветов выше">
+        <CardGradientTiles full onOwn={toSurfaces} />
+        {!s.custom && <p className="note">Сейчас карточки как в Koala Clash. Градиент включит свои настройки карточек - стекло из раздела «Поверхности».</p>}
+        {s.custom && s.gradient && s.fill === 'glass' && s.opacity < 30 && (
+          <div className="csp-note warn">
+            <AlertTriangle size={14} />
+            <span>Стекло карточек почти прозрачное ({s.opacity}%), и градиент на нём едва заметен: прозрачность точек берётся от непрозрачности карточек.
+              <button type="button" className="link-btn" onClick={() => update((c) => { c.surfaces.opacity = 45; })}>Сделать карточки плотнее (45%)</button></span>
+          </div>
+        )}
+        {ownGrad && s.gradientKind !== 'radial' && <Slider label="Угол" value={s.gradientAngle} min={0} max={360} unit="°" onChange={(v) => update((c) => { c.surfaces.gradientAngle = v; }, 'surfaces.gradientAngle')} />}
+        <button type="button" className="link-btn" onClick={toSurfaces}><SlidersHorizontal size={12} />свои точки цвета, центр и прозрачность - в «Поверхностях»</button>
       </Group>
     </>
   );

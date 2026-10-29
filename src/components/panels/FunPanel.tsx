@@ -31,16 +31,28 @@ export function FunPanel() {
         <div className="ping-grid" style={vars}>
           {PING.map((o) => (
             <Choice key={o.value} active={f.ping === o.value} onClick={() => set('fun', 'ping', o.value)}>
-              <span className={cx('ping-demo', `pd-${o.value}`)}><i style={{ '--k': 'var(--ok)' } as React.CSSProperties} /><i style={{ '--k': 'var(--mid)' } as React.CSSProperties} /><i style={{ '--k': 'var(--bad)' } as React.CSSProperties} /></span>
+              <span className={cx('ping-demo', `pd-${o.value}`, o.value === 'dot' && f.pingDotInPlace && 'pd-place')}>
+                <i style={{ '--k': 'var(--ok)' } as React.CSSProperties} /><i style={{ '--k': 'var(--mid)' } as React.CSSProperties} /><i style={{ '--k': 'var(--bad)' } as React.CSSProperties} />
+              </span>
               <span>{o.label}</span>
             </Choice>
           ))}
         </div>
-        {f.ping !== 'none' && (
+        {f.ping === 'dot' && (
+          <>
+            <Toggle label="Точка на месте пинга" hint="Точка встаёт вместо цифр задержки, на кнопку проверки. При наведении на неё видны цифры, нажатие по-прежнему перепроверяет сервер"
+              checked={f.pingDotInPlace} onChange={(v) => set('fun', 'pingDotInPlace', v)} />
+            <Slider label="Размер точки" value={f.pingDotSize} min={4} max={14} unit="px" onChange={(v) => set('fun', 'pingDotSize', v)} />
+          </>
+        )}
+        {f.ping !== 'none' && !(f.ping === 'dot' && f.pingDotInPlace) && (
           <Toggle label="Скрыть цифры пинга" hint="О задержке говорит цвет карточки. Цифры появляются при наведении на кнопку проверки, нажатие по-прежнему перепроверяет сервер" checked={f.pingHide} onChange={(v) => set('fun', 'pingHide', v)} />
         )}
-        {f.ping !== 'none' && f.pingHide && (
-          <Toggle label="Не показывать и при наведении" hint="Цифр не будет совсем, только цвет карточки, и место пинга не подсвечивается при наведении. Нажатие туда по-прежнему перепроверяет сервер, во время проверки крутится значок загрузки" checked={f.pingHideHover} onChange={(v) => set('fun', 'pingHideHover', v)} />
+        {f.ping !== 'none' && (f.pingHide || (f.ping === 'dot' && f.pingDotInPlace)) && (
+          <Toggle label={f.ping === 'dot' && f.pingDotInPlace ? 'Цифры не показывать и при наведении' : 'Не показывать и при наведении'}
+            hint={f.ping === 'dot' && f.pingDotInPlace ? 'Точка остаётся и при наведении на кнопку проверки. Нажатие по-прежнему перепроверяет сервер, во время проверки крутится значок загрузки'
+              : 'Цифр не будет совсем, только цвет карточки, и место пинга не подсвечивается при наведении. Нажатие туда по-прежнему перепроверяет сервер, во время проверки крутится значок загрузки'}
+            checked={f.pingHideHover} onChange={(v) => set('fun', 'pingHideHover', v)} />
         )}
       </Group>
 

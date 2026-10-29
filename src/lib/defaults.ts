@@ -5,7 +5,7 @@
 // styledBase() - аккуратная основа для шаблонов конструктора (стекло, тени, анимации).
 
 import { mix } from './color';
-import type { Background, DeepPartial, GradientStop, MeshBlob, Palette, Scheme, ThemeConfig } from './types';
+import type { Background, CardGradientPreset, DeepPartial, GradientStop, MeshBlob, Palette, Scheme, Surfaces, ThemeConfig } from './types';
 
 /** Стандартная палитра клиента (assets/main.css: :root и .dark), переведённая из OKLCH в HEX */
 export const APP_PALETTE: Record<Scheme, Palette> = {
@@ -67,14 +67,39 @@ export function makeBackground(over: Partial<Background> = {}): Background {
   };
 }
 
-/** Заготовки градиента карточек - точки цвета из палитры схемы */
-export const CARD_GRADIENTS = {
-  lighter: { label: 'Светлее сверху', stops: (p: Palette) => [{ color: mix(p.card, p.foreground, 0.12), pos: 0 }, { color: p.card, pos: 100 }] },
-  accent: { label: 'Акцент', stops: (p: Palette) => [{ color: mix(p.card, p.primary, 0.35), pos: 0 }, { color: p.card, pos: 70 }] },
-  power: { label: 'Цвета кнопки', stops: (p: Palette) => [{ color: mix(p.card, p.powerOnStart, 0.35), pos: 0 }, { color: mix(p.card, p.powerOnEnd, 0.2), pos: 100 }] },
-  aurora: { label: 'Сияние', stops: (p: Palette) => [{ color: mix(p.card, p.primary, 0.3), pos: 0 }, { color: p.card, pos: 50 }, { color: mix(p.card, p.powerOnStart, 0.3), pos: 100 }] }
-} satisfies Record<string, { label: string; stops: (p: Palette) => GradientStop[] }>;
-export type CardGradientPreset = keyof typeof CARD_GRADIENTS;
+/** Форма градиента карточек - то, что ставит заготовка вместе с точками */
+export type CardGradientShape = Pick<Surfaces, 'gradientKind' | 'gradientAngle' | 'gradientX' | 'gradientY'>;
+const linear = (angle: number): CardGradientShape => ({ gradientKind: 'linear', gradientAngle: angle, gradientX: 50, gradientY: 0 });
+const radial = (x: number, y: number): CardGradientShape => ({ gradientKind: 'radial', gradientAngle: 180, gradientX: x, gradientY: y });
+
+/** Заготовки градиента карточек: точки цвета - из палитры схемы, поэтому меняются вместе с ней */
+export const CARD_GRADIENTS: Record<CardGradientPreset, { label: string; shape: CardGradientShape; stops: (p: Palette) => GradientStop[] }> = {
+  lighter: { label: 'Светлее сверху', shape: linear(180), stops: (p) => [{ color: mix(p.card, p.foreground, 0.12), pos: 0 }, { color: p.card, pos: 100 }] },
+  deep: { label: 'Глубже книзу', shape: linear(180), stops: (p) => [{ color: p.card, pos: 0 }, { color: mix(p.card, p.background, 0.7), pos: 100 }] },
+  accent: { label: 'Акцент', shape: linear(160), stops: (p) => [{ color: mix(p.card, p.primary, 0.45), pos: 0 }, { color: p.card, pos: 75 }] },
+  corner: { label: 'Свет из угла', shape: radial(0, 0), stops: (p) => [{ color: mix(p.card, p.primary, 0.5), pos: 0 }, { color: p.card, pos: 60 }] },
+  halo: { label: 'Ореол', shape: radial(50, 0), stops: (p) => [{ color: mix(p.card, p.powerOnStart, 0.45), pos: 0 }, { color: p.card, pos: 70 }] },
+  power: { label: 'Цвета кнопки', shape: linear(135), stops: (p) => [{ color: mix(p.card, p.powerOnStart, 0.45), pos: 0 }, { color: mix(p.card, p.powerOnEnd, 0.28), pos: 100 }] },
+  duo: { label: 'Два цвета', shape: linear(120), stops: (p) => [{ color: mix(p.card, p.primary, 0.38), pos: 0 }, { color: mix(p.card, p.powerOnEnd, 0.38), pos: 100 }] },
+  aurora: { label: 'Сияние', shape: linear(120), stops: (p) => [{ color: mix(p.card, p.primary, 0.38), pos: 0 }, { color: p.card, pos: 50 }, { color: mix(p.card, p.powerOnStart, 0.38), pos: 100 }] }
+};
+
+/** Точки градиента карточек для схемы: у заготовки - от текущей палитры, иначе свои */
+export const cardStops = (s: Surfaces, p: Palette, scheme: Scheme): GradientStop[] =>
+  s.gradientPreset ? CARD_GRADIENTS[s.gradientPreset].stops(p) : s.gradientStops[scheme];
+
+/** Включить заготовку градиента: её форма и точки, которые дальше следуют за палитрой */
+export function applyCardGradient(s: Surfaces, id: CardGradientPreset) {
+  Object.assign(s, CARD_GRADIENTS[id].shape, { gradient: true, gradientPreset: id });
+}
+
+/** Отвязать градиент от заготовки перед правкой точек: точки обеих схем фиксируются такими, какие они сейчас */
+export function detachCardGradient(c: ThemeConfig) {
+  const s = c.surfaces;
+  if (!s.gradientPreset) return;
+  s.gradientStops = { light: cardStops(s, c.palette.light, 'light'), dark: cardStops(s, c.palette.dark, 'dark') };
+  s.gradientPreset = '';
+}
 
 /** Тема "как в Koala Clash" - стартовая точка конструктора */
 export function defaultConfig(): ThemeConfig {
@@ -91,13 +116,13 @@ export function defaultConfig(): ThemeConfig {
     },
     map: { show: true, opacity: 65, grayscale: 0, hue: 0, brightness: 100, tintPrimary: false, blurPages: true },
     surfaces: {
-      custom: false, fill: 'glass', grain: 0, opacity: 50, blur: 24, saturate: 100, borderWidth: 1, borderOpacity: 100, radius: 0.625,
+      custom: false, fill: 'glass', grain: 0, liquid: false, liquidStrength: 18, liquidEdge: 20,opacity: 50, blur: 24, saturate: 100, borderWidth: 1, borderOpacity: 100, radius: 0.625,
       gradient: false, gradientKind: 'soft', gradientAngle: 180, gradientX: 50, gradientY: 0,
-      gradientStops: { light: CARD_GRADIENTS.lighter.stops(APP_PALETTE.light), dark: CARD_GRADIENTS.lighter.stops(APP_PALETTE.dark) },
-      highlight: false, borderColor: 'auto', borderCustom: '#7c8cff', sidebar: 'app', navActive: 'app', navColor: 'auto', navCustom: '#7c8cff',
+      gradientStops: { light: CARD_GRADIENTS.lighter.stops(APP_PALETTE.light), dark: CARD_GRADIENTS.lighter.stops(APP_PALETTE.dark) }, gradientPreset: '',
+      highlight: false, highlightBottom: false, borderColor: 'auto', borderCustom: '#7c8cff', sidebar: 'app', navActive: 'app', navRadius: 12, navOpacity: 14, navColor: 'auto', navCustom: '#7c8cff',
       selected: 'app', selectedHover: 'none', selectedColor: 'auto', selectedCustom: '#7c8cff', hover: 'app', groupHover: 'app', hoverColor: 'auto', hoverCustom: '#7c8cff',
       profileSelected: 'app', profileSelectedHover: 'none', profileHover: 'app', profileSwitch: 'app', profileColor: 'auto', profileCustom: '#7c8cff',
-      iconPlate: 'app', iconColor: 'auto', iconCustom: '#7c8cff', iconShape: 'app', iconPad: 5, iconHover: false, buttons: 'app', buttonsColor: 'auto', buttonsCustom: '#7c8cff'
+      iconPlate: 'app', iconColor: 'auto', iconCustom: '#7c8cff', iconShape: 'app', iconPad: 5, iconHover: false, buttons: 'app', buttonsRadius: 14, buttonsOpacity: 72, buttonsColor: 'auto', buttonsCustom: '#7c8cff'
     },
     dividers: {
       h: { style: 'app', color: 'auto', custom: '#7c8cff', opacity: 100, size: 1, length: 100, effect: 'none' },
@@ -132,7 +157,7 @@ export function defaultConfig(): ThemeConfig {
     },
     extras: { scrollbar: 'app', selection: false, tooltip: 'app', title: 'app', focusRing: false, statusColor: false, customCss: '' },
     fun: {
-      ping: 'none', pingHide: false, pingHideHover: false, reactive: false, reactiveStrength: 60, runningBorder: false, breathing: false,
+      ping: 'none', pingDotInPlace: false, pingDotSize: 6,pingHide: false, pingHideHover: false, reactive: false, reactiveStrength: 60, runningBorder: false, breathing: false,
       particles: 'none', particlesOver: false, particlesDensity: 100, particlesSpeed: 100, particlesOpacity: 70,
       particlesColor: 'auto', particlesCustom: '#ffffff'
     }
@@ -208,5 +233,6 @@ export function sanitizeConfig(raw: unknown): ThemeConfig {
     gs[s] = gs[s].filter(isStop);
     if (gs[s].length < 2) gs[s] = base.surfaces.gradientStops[s];
   }
+  if (!Object.hasOwn(CARD_GRADIENTS, merged.surfaces.gradientPreset)) merged.surfaces.gradientPreset = '';
   return merged;
 }

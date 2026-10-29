@@ -14,6 +14,7 @@
 
 import particleSphere from '../snippets/particle-sphere.css?raw';
 import { mix } from './color';
+import { hasHighlight } from './shadows';
 import { sphereImage } from './sphere';
 import type { Palette, Scheme, ThemeConfig } from './types';
 
@@ -156,7 +157,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
     : decls);
   // Блик по кромке («Поверхности» → «Карточки и плитки») у стеклянных кнопок - один, свой. В тени
   // карточек он уже есть, поэтому кнопке - тень без блика (shadow-bare), иначе блик получался двойным
-  const hl = cfg.surfaces.highlight;
+  const hl = hasHighlight(cfg.surfaces);
   if (pwShadow) {
     out += rule(B, [`--kt-pw-sh: var(${hl ? '--kt-shadow-bare' : '--kt-shadow-card'})`]);
     if (pw.hover !== 'none') out += rule(`${B}:hover:not(:disabled)`, [`--kt-pw-sh: var(${hl ? '--kt-shadow-bare-hover' : '--kt-shadow-hover'})`]);
@@ -595,7 +596,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important', 'overflow: hidden',
           `background: ${glass.grain}${glass.fill} !important`,
           `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, `backdrop-filter: ${glass.filter} !important`,
-          // Блик сверху - только «Блик по верхней кромке» карточек; своя тень - если не включена тень из «Теней»
+          // Блики - только «Блики по кромке» карточек (сверху и снизу); своя тень - если не включена тень из «Теней»
           `box-shadow: ${[hl && 'var(--kt-highlight)', 'inset 0 -8px 16px rgba(0, 0, 0, 0.1)', !pwShadow && '0 10px 24px rgba(0, 0, 0, 0.18)'].filter(Boolean).join(', ')} !important`]);
         out += rule(I, ['width: 58px !important', 'height: 58px !important', 'border-radius: 50%',
           'background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--kt-tg-a) 45%, white), var(--kt-tg-a) 55%, var(--kt-tg-b))',

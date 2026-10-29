@@ -92,10 +92,18 @@ export function shadowReach(s: Shadows, hover: boolean): { left: number; top: nu
   return { left, top };
 }
 
-/** Блик по верхней кромке карточек. В тёмной схеме при 6% его не было видно на прозрачных карточках поверх фона */
-export const highlightShadow = (scheme: Scheme) => scheme === 'dark' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.18)' : 'inset 0 1px 0 rgba(255, 255, 255, 0.7)';
+/**
+ * Блики по кромке карточек: сверху и снизу. Нижний слабее - это свет, прошедший сквозь толщу стекла.
+ * В тёмной схеме при 6% верхнего не было видно на прозрачных карточках поверх фона
+ */
+export function highlightShadow(scheme: Scheme, top = true, bottom = false): string {
+  const dark = scheme === 'dark';
+  return [top && `inset 0 1px 0 rgba(255, 255, 255, ${dark ? 0.18 : 0.7})`, bottom && `inset 0 -1px 0 rgba(255, 255, 255, ${dark ? 0.12 : 0.5})`].filter(Boolean).join(', ');
+}
+/** Есть хоть один блик по кромке */
+export const hasHighlight = (s: { highlight: boolean; highlightBottom: boolean }) => s.highlight || s.highlightBottom;
 
-export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: boolean): ShadowSet | null {
+export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: boolean, highlightBottom = false): ShadowSet | null {
   if (s.preset === 'app') return null;
   const dark = scheme === 'dark';
   const k = s.intensity / 100;
@@ -122,7 +130,7 @@ export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: b
     const r = (v: number) => Math.round(v * 10) / 10;
     return `${l.inset ? 'inset ' : ''}${r(x)}px ${r(y)}px ${r(blur)}px ${r(spread)}px ${color(l, mul)}`;
   });
-  const hi = highlight && s.preset !== 'neumorph' ? [highlightShadow(scheme)] : [];
+  const hi = (highlight || highlightBottom) && s.preset !== 'neumorph' ? [highlightShadow(scheme, highlight, highlightBottom)] : [];
   const join = (xs: string[]) => xs.join(', ') || 'none';
   const set = layersOf(s);
   const h = s.hover / 100;

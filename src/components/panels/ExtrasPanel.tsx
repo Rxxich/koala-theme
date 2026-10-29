@@ -60,18 +60,27 @@ export function CodePanel() {
   const deferred = useDeferredValue(config);
   const css = useMemo(() => generateCSS(deferred, { embedConfig: false }), [deferred]);
   const [q, setQ] = useState('');
+  const [hit, setHit] = useState(-1);
   const html = useMemo(() => highlightCss(css), [css]);
   const lines = css.split('\n').length;
   const kb = (new Blob([css]).size / 1024).toFixed(1);
   const sections = useMemo(() => [...css.matchAll(/^ {3}(\d+)\. (.+)$/gm)].map((m) => ({ n: m[1], title: m[2] })), [css]);
+  // Все вхождения запроса: Enter - к следующему, Shift+Enter - к предыдущему
+  const hits = useMemo(() => {
+    if (!q) return [];
+    const low = css.toLowerCase(), needle = q.toLowerCase(), out: number[] = [];
+    for (let i = low.indexOf(needle); i >= 0 && out.length < 999; i = low.indexOf(needle, i + needle.length)) out.push(i);
+    return out;
+  }, [css, q]);
 
-  const jump = (title: string) => {
-    const el = document.querySelector('.code-view');
-    const idx = css.indexOf(title);
+  /** Прокрутить код к символу idx: строка - по высоте строки самого блока */
+  const scrollTo = (idx: number) => {
+    const el = document.querySelector<HTMLElement>('.code-view');
     if (!el || idx < 0) return;
     const line = css.slice(0, idx).split('\n').length;
-    el.scrollTop = (line - 3) * 18.2;
+    el.scrollTop = (line - 3) * (parseFloat(getComputedStyle(el).lineHeight) || 18.2);
   };
+  const jump = (title: string) => scrollTo(css.indexOf(title));
 
   return (
     <>
@@ -88,11 +97,13 @@ export function CodePanel() {
       </div>
       <div className="code-search">
         <Search size={13} />
-        <input value={q} placeholder="Найти в коде" onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => {
-          if (e.key !== 'Enter' || !q) return;
-          const idx = css.toLowerCase().indexOf(q.toLowerCase());
-          if (idx >= 0) { const el = document.querySelector('.code-view'); if (el) el.scrollTop = (css.slice(0, idx).split('\n').length - 3) * 18.2; }
+        <input value={q} placeholder="Найти в коде: Enter - следующее" onChange={(e) => { setQ(e.target.value); setHit(-1); }} onKeyDown={(e) => {
+          if (e.key !== 'Enter' || !hits.length) return;
+          const n = hit < 0 ? 0 : (hit + (e.shiftKey ? -1 : 1) + hits.length) % hits.length;
+          setHit(n);
+          scrollTo(hits[n]);
         }} />
+        {q && <small className="code-hits">{hits.length ? `${hit < 0 ? '-' : hit + 1} из ${hits.length}` : 'нет'}</small>}
       </div>
       <pre className="code-view" dangerouslySetInnerHTML={{ __html: html }} />
     </>

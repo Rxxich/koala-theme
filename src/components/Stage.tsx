@@ -6,6 +6,7 @@ import {
   Moon, Sun, Power, Loader, AlertTriangle, PanelLeft, MessageSquare, MousePointer2, Bell, SquareStack,
   RotateCcw, Maximize2, ScanLine, Palette as PaletteIcon, X, Download, Wand2, Home, Users, Server, Cable, ListChecks, ScrollText, Settings
 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { generateCSS } from '../lib/generator';
 import { mix, rgba } from '../lib/color';
 import { useStore, type PowerState, type PreviewPage } from '../state/store';
@@ -61,7 +62,9 @@ const themeCache = new Map<string, string>();
 
 export function Stage() {
   const config = useStore((s) => s.config);
-  const { dark, page, power, sidebar, viewing, paletteOpen, tab } = useStore();
+  const { dark, page, power, sidebar, viewing, paletteOpen, tab } = useStore(useShallow((s) => ({
+    dark: s.dark, page: s.page, power: s.power, sidebar: s.sidebar, viewing: s.viewing, paletteOpen: s.paletteOpen, tab: s.tab
+  })));
   const set = useStore((s) => s.set);
   const replace = useStore((s) => s.replace);
   const frame = useRef<HTMLIFrameElement>(null);

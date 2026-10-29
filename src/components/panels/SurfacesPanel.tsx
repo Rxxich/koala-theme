@@ -1,12 +1,14 @@
 // Разделы "Поверхности" и "Тени".
 
 import { useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { useEditScheme, useStore } from '../../state/store';
 import { readableOn, rgba } from '../../lib/color';
 import { shadowSet } from '../../lib/shadows';
-import { cardGradientCss } from '../../lib/generator';
-import { CARD_GRADIENTS, defaultConfig, type CardGradientPreset } from '../../lib/defaults';
+import { cardPreview, liquidOn } from '../../lib/generator';
+import { cardStops, defaultConfig, detachCardGradient } from '../../lib/defaults';
 import { GradientEditor } from '../GradientEditor';
+import { CardGradientTiles } from './CardGradients';
 import type { ButtonStyle, CardFill, CardGradient, ThemeConfig, Divider, DividerEffect, DividerStyle,HoverStyle, IconPlate, IconShape, NavActive, Palette, ProfileSwitch, SelectedHover, SelectedStyle, ShadowPreset, SidebarStyle, StyleColor, Surfaces } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
@@ -15,13 +17,15 @@ import { PanelHead, SchemeSwitch, useCfg } from './common';
 const SIDEBAR: { value: SidebarStyle; label: string }[] = [
   { value: 'app', label: 'Как в клиенте' }, { value: 'cards', label: 'Как карточки' }, { value: 'glass', label: 'Стекло' }, { value: 'solid', label: 'Сплошная' }, { value: 'outline', label: 'Контур' }, { value: 'transparent', label: 'Без фона' }
 ];
-/** Фон карточек: 'app' - как в клиенте (свои настройки выключены) */
-const CARD_FILL: { value: CardFill | 'app'; label: string }[] = [
-  { value: 'app', label: 'Как в клиенте' }, { value: 'glass', label: 'Стекло' }, { value: 'solid', label: 'Сплошные' }, { value: 'outline', label: 'Контур' }, { value: 'transparent', label: 'Без фона' }
+/** Фон карточек: 'app' - как в клиенте (свои настройки выключены), 'liquid' - стекло с преломлением */
+type FillChoice = CardFill | 'app' | 'liquid';
+const CARD_FILL: { value: FillChoice; label: string }[] = [
+  { value: 'app', label: 'Как в клиенте' }, { value: 'glass', label: 'Стекло' }, { value: 'liquid', label: 'Жидкое стекло' }, { value: 'solid', label: 'Сплошные' }, { value: 'outline', label: 'Контур' }, { value: 'transparent', label: 'Без фона' }
 ];
 const NAV: { value: NavActive; label: string }[] = [
   { value: 'app', label: 'Рамка' }, { value: 'fill', label: 'Заливка' }, { value: 'gradient', label: 'Градиент' }, { value: 'bar', label: 'Полоска' }, { value: 'glow', label: 'Свечение' }, { value: 'solid', label: 'Инверсия' },
-  { value: 'scale', label: 'Увеличение' }, { value: 'capsule', label: 'Капсула' }, { value: 'neon', label: 'Неон' }, { value: 'underline', label: 'Подчёркивание' }, { value: 'dot', label: 'Точка' }
+  { value: 'scale', label: 'Увеличение' }, { value: 'capsule', label: 'Капсула' }, { value: 'neon', label: 'Неон' }, { value: 'underline', label: 'Подчёркивание' }, { value: 'dot', label: 'Точка' },
+  { value: 'liquid', label: 'Жидкое стекло' }
 ];
 const SELECTED: { value: SelectedStyle; label: string }[] = [
   { value: 'app', label: 'Как в клиенте' }, { value: 'tint', label: 'Тонировка' }, { value: 'gradient', label: 'Градиент' }, { value: 'glow', label: 'Свечение' },
@@ -71,7 +75,7 @@ const SHAPES: { value: IconShape; label: string }[] = [
 const SHAPE_R: Record<IconShape, string> = { app: '6px', squircle: '32%', circle: '50%', square: '0' };
 const BUTTONS: { value: ButtonStyle; label: string }[] = [
   { value: 'app', label: 'Сплошные' }, { value: 'glossy', label: 'Объёмные' }, { value: 'power', label: 'Градиент кнопки' }, { value: 'glow', label: 'Свечение' }, { value: 'outline', label: 'Контурные' }, { value: 'pill', label: 'Капсулы' },
-  { value: 'pushable', label: 'Клавиша' }, { value: 'brutal', label: 'Брутализм' }
+  { value: 'pushable', label: 'Клавиша' }, { value: 'brutal', label: 'Брутализм' }, { value: 'liquid', label: 'Жидкое стекло' }
 ];
 
 export function SurfacesPanel() {
@@ -86,9 +90,10 @@ export function SurfacesPanel() {
     setUi({ page: 'profiles' });
   };
   /** Любая настройка карточек включает "свои поверхности" */
-  const setCard = <K extends 'opacity' | 'blur' | 'saturate' | 'grain' | 'borderWidth' | 'borderOpacity' | 'gradient' | 'highlight' | 'borderColor' | 'borderCustom'>(k: K, v: (typeof s)[K]) =>
+  const setCard = <K extends 'opacity' | 'blur' | 'saturate' | 'grain' | 'liquidStrength' | 'liquidEdge' | 'borderWidth' | 'borderOpacity' | 'gradient' | 'highlight' | 'highlightBottom' | 'borderColor' | 'borderCustom'>(k: K, v: (typeof s)[K]) =>
     update((c) => { c.surfaces[k] = v; c.surfaces.custom = true; }, `surfaces.${k}`);
-  const fill = s.custom ? s.fill : 'app';
+  const liquid = liquidOn(s);
+  const fill: FillChoice = !s.custom ? 'app' : liquid ? 'liquid' : s.fill;
   const glass = s.fill === 'glass';
   const stroke = tones(p, s.borderColor, s.borderCustom).pick ?? p.stroke;
   const selT = tones(p, s.selectedColor, s.selectedCustom), profT = tones(p, s.profileColor, s.profileCustom);
@@ -106,7 +111,8 @@ export function SurfacesPanel() {
       case 'bar': return { ...base, background: pa(0.09), boxShadow: `inset 3px 0 0 ${t.primary}` };
       case 'power': return { ...base, background: `linear-gradient(115deg, ${rgba(t.a, 0.32)}, ${rgba(t.b, 0.14)})`, borderColor: rgba(t.pick && t.a === t.pick ? t.pick : p.powerOnStroke, 0.6) };
       case 'neon': return { ...base, background: pa(0.08), borderColor: t.primary, boxShadow: `0 0 4px ${pa(0.8)}, 0 0 12px ${pa(0.45)}, inset 0 0 8px ${pa(0.3)}` };
-      case 'brutal': return { ...base, background: pa(0.22), border: `2px solid ${p.foreground}`, boxShadow: `3px 3px 0 ${p.foreground}`, translate: '-1px -1px' };
+      // Рамка - отдельными свойствами: сокращение border вместе с borderColor из base React не любит
+      case 'brutal': return { ...base, background: pa(0.22), borderWidth: 2, borderColor: p.foreground, boxShadow: `3px 3px 0 ${p.foreground}`, translate: '-1px -1px' };
       case 'stripes': return { ...base, background: `repeating-linear-gradient(135deg, ${pa(0.16)} 0 5px, transparent 5px 10px), ${pa(0.08)}`, borderColor: pa(0.55) };
       case 'shine': return { ...base, background: `linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.18) 50%, transparent 70%), ${pa(0.12)}`, borderColor: pa(0.5) };
       case 'aurora': return { ...base, background: `linear-gradient(120deg, ${rgba(t.a, 0.34)}, ${pa(0.16)}, ${rgba(t.b, 0.34)})`, borderColor: pa(0.45) };
@@ -124,9 +130,11 @@ export function SurfacesPanel() {
       <PanelHead title="Поверхности" text="Карточки, плитки главной, боковая панель и всплывающие окна: прозрачность, стекло, рамки, скругления." />
 
       <Group title="Карточки и плитки" hint="Варианты фона - те же, что у боковой панели. Чтобы панель всегда совпадала с карточками, выберите у неё «Как карточки»">
-        <Segmented<CardFill | 'app'> wrap size="sm" value={fill} options={CARD_FILL} onChange={(v) => update((c) => {
+        <Segmented<FillChoice> wrap size="sm" value={fill} options={CARD_FILL} onChange={(v) => update((c) => {
           c.surfaces.custom = v !== 'app';
-          if (v !== 'app') c.surfaces.fill = v;
+          if (v === 'app') return;
+          c.surfaces.fill = v === 'liquid' ? 'glass' : v;
+          c.surfaces.liquid = v === 'liquid';
         })} />
         {!s.custom && <p className="note">Сейчас карточки выглядят как в Koala Clash. Подвиньте любой ползунок - включатся свои настройки (стекло).</p>}
         {s.custom && s.fill === 'transparent' && <p className="note">Карточки без фона и рамки: остаётся только текст поверх фона окна. Выбранный сервер по-прежнему выделяется.</p>}
@@ -137,6 +145,21 @@ export function SurfacesPanel() {
               <Slider label="Размытие фона" hint="Эффект матового стекла под полупрозрачными карточками. 0 - выключить" value={s.blur} min={0} max={60} unit="px" onChange={(v) => setCard('blur', v)} />
               <Slider label="Насыщенность стекла" value={s.saturate} min={50} max={250} unit="%" disabled={s.blur === 0} onChange={(v) => setCard('saturate', v)} />
               <Slider label="Шероховатость стекла" hint="Мелкое зерно поверх стекла - как у матового, пескоструйного стекла. Действует и на стеклянную боковую панель, окна и меню" value={s.grain} min={0} max={100} unit="%" onChange={(v) => setCard('grain', v)} />
+            </>
+          )}
+          {liquid && (
+            <>
+              <p className="note">Фон под карточками изгибается у краёв, как под толстой линзой. Лучше всего видно на картинке или узоре фона, когда стекло почти прозрачное. Действует и на стеклянную боковую панель и кнопку подключения «Стекло».</p>
+              <div className="csp-note warn">
+                <AlertTriangle size={14} />
+                <span>Жидкое стекло нагружает видеокарту сильнее обычного. Пока ничего не двигается, оно ничего не стоит, но при прокрутке списка серверов и любой анимации стекло каждой карточки пересчитывается заново в каждом кадре. Сильное размытие (больше 4px) добавляет нагрузки: на экранах 144-180 Гц прокрутка начинает подтормаживать, а на слабом компьютере (встроенная графика ноутбука) может тормозить и на обычном экране. Если интерфейс стал медленнее - уменьшите размытие или вернитесь к обычному «Стеклу».</span>
+              </div>
+              {(s.blur > 8 || s.opacity > 40) && (
+                <Button size="sm" variant="soft" title="Размытие 4px, непрозрачность до 30%, насыщенность от 150% - как у жидкого стекла Apple. Сильное размытие и плотная заливка прячут преломление"
+                  onClick={() => update((c) => { c.surfaces.blur = 4; c.surfaces.opacity = Math.min(c.surfaces.opacity, 30); c.surfaces.saturate = Math.max(c.surfaces.saturate, 150); })}>Сделать стекло прозрачнее</Button>
+              )}
+              <Slider label="Преломление" hint="Насколько далеко сдвигается фон у самого края. Если сдвиг больше половины карточки, фон у края отражается, как в капле" value={s.liquidStrength} min={2} max={40} unit="px" onChange={(v) => setCard('liquidStrength', v)} />
+              <Slider label="Ширина кромки" hint="Полоса у края, где фон изгибается: узкая - чёткая грань, широкая - плавная линза" value={s.liquidEdge} min={6} max={50} unit="px" onChange={(v) => setCard('liquidEdge', v)} />
             </>
           )}
           {s.fill !== 'transparent' && (
@@ -152,13 +175,14 @@ export function SurfacesPanel() {
               <Toggle label="Градиент" hint="Заливка карточек и плиток градиентом. Действует и на боковую панель «Как карточки» и «Стекло»" checked={s.gradient} onChange={(v) => setCard('gradient', v)} />
               {s.gradient && <CardGradientBlock />}
               <Toggle label="Блик по верхней кромке" hint="Светлая линия сверху, как у стекла. Работает при любом стиле теней, кроме «Неоморфизма» - у него свой объём" checked={s.highlight} onChange={(v) => setCard('highlight', v)} />
+              <Toggle label="Блик по нижней кромке" hint="Светлая линия снизу, слабее верхней - свет, прошедший сквозь толщу стекла. Вместе с верхним получается кромка жидкого стекла. Тоже не работает с «Неоморфизмом»" checked={s.highlightBottom} onChange={(v) => setCard('highlightBottom', v)} />
             </>
           )}
         </div>
         <Slider label="Скругление" hint="От этого значения считаются все радиусы: кнопки, поля, карточки. 0 - острые углы" value={s.radius} min={0} max={1.75} step={0.025} unit="rem" onChange={(v) => set('surfaces', 'radius', v)} />
         <div className="radius-demo">
           {[0.6, 1, 1.4].map((k) => <span key={k} style={{ borderRadius: `calc(${s.radius}rem * ${k})`, borderColor: s.custom ? stroke : p.stroke, borderWidth: s.borderWidth,
-            background: s.custom && s.gradient && s.gradientKind !== 'soft' ? cardGradientCss(s, s.gradientStops[scheme], Math.max(30, s.fill === 'solid' ? 100 : s.opacity)) : rgba(p.card, Math.max(0.3, s.opacity / 100)) }} />)}
+            background: cardPreview(s, p, scheme, Math.max(30, s.custom && s.fill === 'solid' ? 100 : s.opacity)) }} />)}
         </div>
       </Group>
 
@@ -239,12 +263,20 @@ export function SurfacesPanel() {
             {NAV.map((o) => (
               <button key={o.value} type="button" className={cx('nav-demo-item', `nd-${o.value}`, s.navActive === o.value && 'active')} onClick={() => set('surfaces', 'navActive', o.value)}
                 style={{ '--p': navT.primary, '--pf': navT.pf, '--fg': p.foreground, '--bg': p.background, '--ac': p.accent, '--st': navT.pick ?? p.stroke, '--a': navT.a, '--b': navT.b,
-                  '--inv': navT.pick ?? p.foreground, '--inv-fg': navT.pick ? navT.pf : p.background } as React.CSSProperties}>
+                  '--inv': navT.pick ?? p.foreground, '--inv-fg': navT.pick ? navT.pf : p.background, '--r': `${s.navRadius}px`, '--o': `${s.navOpacity}%` } as React.CSSProperties}>
                 <span className="nd-pill"><i />{o.label}</span>
               </button>
             ))}
           </div>
         </Row>
+        {s.navActive === 'liquid' && (
+          <>
+            <Slider label="Скругление пункта" hint="Пункт меню высотой 32px: от 16px - круг или капсула. Преломление берёт силу и кромку из «Жидкого стекла» карточек, только слабее"
+              value={s.navRadius} min={0} max={16} unit="px" onChange={(v) => set('surfaces', 'navRadius', v)} />
+            <Slider label="Непрозрачность пункта" hint="Насколько плотно пункт залит цветом акцента. 0 - чистое стекло: остаются только блики и тонкая кромка"
+              value={s.navOpacity} min={0} max={100} unit="%" onChange={(v) => set('surfaces', 'navOpacity', v)} />
+          </>
+        )}
         <ColorPick hint="Авто - цвета самого стиля. У «Рамки» и «Увеличения» - цвет рамки, у «Инверсии» - заливка" value={s.navColor} custom={s.navCustom}
           onChange={(v) => set('surfaces', 'navColor', v)} onCustom={(v) => set('surfaces', 'navCustom', v)} />
       </Group>
@@ -255,11 +287,20 @@ export function SurfacesPanel() {
         <div className="btn-demo">
           {BUTTONS.map((o) => (
             <button key={o.value} type="button" className={cx('btn-demo-item', s.buttons === o.value && 'active')} onClick={() => set('surfaces', 'buttons', o.value)}>
-              <span className={`bd bd-${o.value}`} style={{ '--p': btnT.primary, '--pf': btnT.pf, '--a': btnT.a, '--b': btnT.b, '--fg': p.foreground } as React.CSSProperties}>Кнопка</span>
+              <span className={`bd bd-${o.value}`} style={{ '--p': btnT.primary, '--pf': o.value === 'liquid' && s.buttonsOpacity < 45 ? p.foreground : btnT.pf, '--a': btnT.a, '--b': btnT.b,
+                '--fg': p.foreground, '--r': `${s.buttonsRadius}px`, '--o': `${s.buttonsOpacity}%` } as React.CSSProperties}>Кнопка</span>
               <small>{o.label}</small>
             </button>
           ))}
         </div>
+        {s.buttons === 'liquid' && (
+          <>
+            <Slider label="Скругление кнопок" hint="У всех кнопок с текстом, как у «Капсул». Кнопки высотой 36px: от 18px - капсула. Преломление берёт силу и кромку из «Жидкого стекла» карточек, только слабее"
+              value={s.buttonsRadius} min={0} max={18} unit="px" onChange={(v) => set('surfaces', 'buttonsRadius', v)} />
+            <Slider label="Непрозрачность кнопок" hint="Насколько плотно кнопки залиты цветом акцента. Ниже 45% текст на них - цвета текста темы: сквозь кнопку уже виден фон карточки, а не акцент"
+              value={s.buttonsOpacity} min={0} max={100} unit="%" onChange={(v) => set('surfaces', 'buttonsOpacity', v)} />
+          </>
+        )}
         <ColorPick hint="Авто - акцент палитры, у «Градиента кнопки» - цвета кнопки подключения. Текст на кнопке станет чёрным или белым - что читается лучше" value={s.buttonsColor} custom={s.buttonsCustom}
           onChange={(v) => set('surfaces', 'buttonsColor', v)} onCustom={(v) => set('surfaces', 'buttonsCustom', v)} />
       </Group>
@@ -282,29 +323,25 @@ function CardGradientBlock() {
   // Как и остальные настройки карточек, любая правка градиента включает свои поверхности
   const edit = (fn: (c: ThemeConfig) => void, key?: string) => update((c) => { fn(c); c.surfaces.custom = true; }, key);
   const put = <K extends 'gradientAngle' | 'gradientX' | 'gradientY'>(k: K, v: Surfaces[K]) => edit((c) => { c.surfaces[k] = v; }, `surfaces.${k}`);
-  const fromPalette = (c: ThemeConfig, id: CardGradientPreset) => ({ light: CARD_GRADIENTS[id].stops(c.palette.light), dark: CARD_GRADIENTS[id].stops(c.palette.dark) });
   const pickKind = (v: CardGradient) => edit((c) => {
-    // Первый переход на свой градиент: точки - из палитры темы, а не стандартной палитры клиента
-    if (c.surfaces.gradientKind === 'soft' && v !== 'soft' && JSON.stringify(c.surfaces.gradientStops) === JSON.stringify(defaultConfig().surfaces.gradientStops)) {
-      c.surfaces.gradientStops = fromPalette(c, 'lighter');
-    }
+    // Первый переход на свой градиент: точки - из палитры темы («Светлее сверху»), а не стандартной палитры клиента
+    if (c.surfaces.gradientKind === 'soft' && v !== 'soft' && !c.surfaces.gradientPreset
+      && JSON.stringify(c.surfaces.gradientStops) === JSON.stringify(defaultConfig().surfaces.gradientStops)) c.surfaces.gradientPreset = 'lighter';
     c.surfaces.gradientKind = v;
   });
   const own = s.gradientKind !== 'soft';
   return (
-    <div className="card-grad">
+    <div className="card-grad" id="card-gradient">
       <Segmented<CardGradient> wrap size="sm" value={s.gradientKind} onChange={pickKind} options={CARD_GRADIENT_KINDS} />
       {!own && <p className="note">Карточка чуть светлее сверху - объём без теней. Свои цвета и положения - в линейном, радиальном и коническом.</p>}
       {own && (
         <>
-          <div className="btn-row">
-            {(Object.keys(CARD_GRADIENTS) as CardGradientPreset[]).map((id) => (
-              <Button key={id} size="sm" variant="soft" title="Цвета из палитры - для светлой и тёмной схемы сразу"
-                onClick={() => edit((c) => { c.surfaces.gradientStops = fromPalette(c, id); })}>{CARD_GRADIENTS[id].label}</Button>
-            ))}
-          </div>
+          <CardGradientTiles />
+          <p className="note">{s.gradientPreset
+            ? 'Цвета заготовки берутся из палитры и меняются вместе с ней. Если подвинуть или перекрасить точку, градиент станет своим и от палитры отвяжется.'
+            : 'Свои точки цвета: от палитры они не зависят. Заготовка выше снова свяжет градиент с палитрой.'}</p>
           {config.mode === 'both' && <SchemeSwitch note="Цвета для схемы" />}
-          <GradientEditor stops={s.gradientStops[scheme]} onChange={(stops) => edit((c) => { c.surfaces.gradientStops[scheme] = stops; }, 'surfaces.gradientStops')}
+          <GradientEditor stops={cardStops(s, p, scheme)} onChange={(stops) => edit((c) => { detachCardGradient(c); c.surfaces.gradientStops[scheme] = stops; }, 'surfaces.gradientStops')}
             swatches={[p.card, p.primary, p.powerOnStart, p.powerOnEnd, p.foreground, p.background, p.accent]} />
           <p className="note">Прозрачность точек - от непрозрачности карточек выше.</p>
           {s.gradientKind !== 'radial' && <Slider label="Угол" value={s.gradientAngle} min={0} max={360} unit="°" onChange={(v) => put('gradientAngle', v)} />}
@@ -408,7 +445,7 @@ export function ShadowsPanel() {
       <Group title="Стиль теней">
         <div className="shadow-grid" style={{ background: p.background }}>
           {SHADOWS.map((o) => {
-            const sh = o.value === 'app' ? null : shadowSet({ ...s, preset: o.value }, scheme, p, config.surfaces.highlight);
+            const sh = o.value === 'app' ? null : shadowSet({ ...s, preset: o.value }, scheme, p, config.surfaces.highlight, config.surfaces.highlightBottom);
             return (
               <button key={o.value} type="button" className={cx('shadow-tile', s.preset === o.value && 'active')} onClick={() => set('shadows', 'preset', o.value)}>
                 <span style={{ background: p.card, boxShadow: sh?.card ?? 'none', borderColor: o.value === 'hard' || o.value === 'retro' ? p.foreground : p.stroke }} />

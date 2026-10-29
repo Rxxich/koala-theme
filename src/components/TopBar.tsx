@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import { Undo2, Redo2, Upload, Share2, Download, RotateCcw } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Tab } from '../state/store';
 import { defaultConfig } from '../lib/defaults';
 import { copyText, importText, readFile, shareUrl } from '../lib/share';
@@ -29,8 +30,9 @@ export function Logo() {
 }
 
 export function TopBar() {
-  const { tab, past, future, undo, redo, set, replace, notify } = useStore();
-  const config = useStore((s) => s.config);
+  const { tab, canUndo, canRedo, undo, redo, set, replace, notify } = useStore(useShallow((s) => ({
+    tab: s.tab, canUndo: s.past.length > 0, canRedo: s.future.length > 0, undo: s.undo, redo: s.redo, set: s.set, replace: s.replace, notify: s.notify
+  })));
   const file = useRef<HTMLInputElement>(null);
 
   const onFile = async (f: File | undefined) => {
@@ -51,13 +53,13 @@ export function TopBar() {
       </nav>
       <div className="topbar-actions">
         <div className="tb-group">
-          <button className="tb-btn" disabled={!past.length} onClick={undo} title="Отменить (Ctrl+Z)"><Undo2 size={16} /></button>
-          <button className="tb-btn" disabled={!future.length} onClick={redo} title="Повторить (Ctrl+Shift+Z)"><Redo2 size={16} /></button>
+          <button className="tb-btn" disabled={!canUndo} onClick={undo} title="Отменить (Ctrl+Z)"><Undo2 size={16} /></button>
+          <button className="tb-btn" disabled={!canRedo} onClick={redo} title="Повторить (Ctrl+Shift+Z)"><Redo2 size={16} /></button>
           <button className="tb-btn" onClick={() => replace(defaultConfig(), 'Настройки сброшены. Ctrl+Z - вернуть')} title="Начать с чистого листа"><RotateCcw size={16} /></button>
         </div>
         <input ref={file} type="file" accept=".css,.json,text/css,application/json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
         <Button variant="ghost" icon={<Upload size={15} />} onClick={() => file.current?.click()} title="Открыть тему, собранную в koala-theme (.css или .json)"><span className="hide-sm">Импорт</span></Button>
-        <Button variant="ghost" icon={<Share2 size={15} />} onClick={async () => notify((await copyText(await shareUrl(config))) ? 'Ссылка на тему скопирована' : 'Не удалось скопировать')} title="Скопировать ссылку с настройками темы"><span className="hide-sm">Поделиться</span></Button>
+        <Button variant="ghost" icon={<Share2 size={15} />} onClick={async () => notify((await copyText(await shareUrl(useStore.getState().config))) ? 'Ссылка на тему скопирована' : 'Не удалось скопировать')} title="Скопировать ссылку с настройками темы"><span className="hide-sm">Поделиться</span></Button>
         <Button variant="primary" icon={<Download size={15} />} onClick={() => set({ exportOpen: true })}>Экспорт</Button>
       </div>
     </header>

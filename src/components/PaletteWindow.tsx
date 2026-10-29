@@ -7,6 +7,7 @@ import { useStore } from '../state/store';
 import { ROLES, ROLE_GROUPS, SWATCHES, contrastIssues, generatePalettes, rederive } from '../lib/palette';
 import { PALETTES, swatchStrip } from '../data/palettes';
 import { normalize } from '../lib/color';
+import { cardPreview } from '../lib/generator';
 import { copyText } from '../lib/share';
 import type { Mode, Palette, Scheme } from '../lib/types';
 import { ColorField } from './ColorPicker';
@@ -16,10 +17,11 @@ import { readLocal, writeLocal } from '../lib/storage';
 const POS_KEY = 'koala-theme:palette-pos';
 const SCHEMES: { scheme: Scheme; label: string }[] = [{ scheme: 'light', label: 'Светлая' }, { scheme: 'dark', label: 'Тёмная' }];
 
-function Sample({ p }: { p: Palette }) {
+/** card - заливка карточек: цвет или градиент карточек темы */
+function Sample({ p, card }: { p: Palette; card: string }) {
   return (
     <div className="pw-sample" style={{ background: p.background, borderColor: p.stroke }}>
-      <span className="pw-chip" style={{ background: p.card, color: p.foreground, borderColor: p.stroke }}>Аа</span>
+      <span className="pw-chip" style={{ background: card, color: p.foreground, borderColor: p.stroke }}>Аа</span>
       <span className="pw-chip pw-chip-accent" style={{ background: p.primary, color: p.primaryForeground }}>Кнопка</span>
       <span className="pw-orb" style={{ background: `radial-gradient(circle at 30% 40%, ${p.powerOnStart}, ${p.powerOnEnd})`, borderColor: p.powerOnStroke }} />
       <span className="pw-muted" style={{ color: p.mutedForeground }}>подпись</span>
@@ -29,6 +31,7 @@ function Sample({ p }: { p: Palette }) {
 
 export function PaletteWindow({ onClose }: { onClose: () => void }) {
   const palette = useStore((s) => s.config.palette);
+  const surfaces = useStore((s) => s.config.surfaces);
   const mode = useStore((s) => s.config.mode);
   const update = useStore((s) => s.update);
   const notify = useStore((s) => s.notify);
@@ -138,7 +141,7 @@ export function PaletteWindow({ onClose }: { onClose: () => void }) {
             <div className="pw-corner" />
             {SCHEMES.map(({ scheme, label }) => (
               <div key={scheme} className={cx('pw-cell pw-headcell', unused === scheme && 'pw-unused')}>
-                <Sample p={palette[scheme]} />
+                <Sample p={palette[scheme]} card={cardPreview(surfaces, palette[scheme], scheme, 100)} />
                 <span className="pw-scheme">{label}{unused === scheme && <em>не используется</em>}</span>
               </div>
             ))}

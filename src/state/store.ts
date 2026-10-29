@@ -2,15 +2,20 @@
 
 import { create } from 'zustand';
 import { defaultConfig, sanitizeConfig } from '../lib/defaults';
+import { readLocal, writeLocal } from '../lib/storage';
 import type { Scheme, ThemeConfig } from '../lib/types';
 
 export type Tab = 'editor' | 'gallery' | 'install';
-export type Section = 'palette' | 'background' | 'surfaces' | 'shadows' | 'power' | 'motion' | 'fonts' | 'flags' | 'fun' | 'extras' | 'code';
-export type PreviewPage = 'home' | 'profiles' | 'proxies' | 'connections' | 'rules' | 'logs' | 'settings';
+const SECTIONS = ['palette', 'background', 'surfaces', 'shadows', 'power', 'motion', 'fonts', 'flags', 'fun', 'extras', 'code'] as const;
+export type Section = (typeof SECTIONS)[number];
+const PAGES = ['home', 'profiles', 'proxies', 'connections', 'rules', 'logs', 'settings'] as const;
+export type PreviewPage = (typeof PAGES)[number];
 export type PowerState = 'off' | 'loading' | 'on' | 'error';
 
 // v2: с версии, где стартовая тема - стандартный Koala Clash
 const STORAGE_KEY = 'koala-theme:config:v2';
+/** Раздел конструктора, страница и схема превью - чтобы после перезагрузки продолжить с того же места */
+const UI_KEY = 'koala-theme:ui';
 const HISTORY_LIMIT = 80;
 
 function loadSaved(): ThemeConfig {
@@ -19,6 +24,17 @@ function loadSaved(): ThemeConfig {
     if (raw) return sanitizeConfig(JSON.parse(raw));
   } catch { /* приватный режим или повреждённые данные */ }
   return defaultConfig();
+}
+
+function loadUi(): { section: Section; page: PreviewPage; dark: boolean } {
+  const ui = { section: 'palette' as Section, page: 'home' as PreviewPage, dark: true };
+  try {
+    const v = JSON.parse(readLocal(UI_KEY) || 'null');
+    if (SECTIONS.includes(v?.section)) ui.section = v.section;
+    if (PAGES.includes(v?.page)) ui.page = v.page;
+    if (typeof v?.dark === 'boolean') ui.dark = v.dark;
+  } catch { /* повреждённые данные - с начала */ }
+  return ui;
 }
 
 interface State {
@@ -59,9 +75,7 @@ export const useStore = create<State>((set, get) => ({
   lastKey: '',
 
   tab: 'editor',
-  section: 'palette',
-  dark: true,
-  page: 'home',
+  ...loadUi(),
   power: 'off',
   sidebar: false,
   paletteOpen: false,
@@ -111,6 +125,9 @@ export const useStore = create<State>((set, get) => ({
 // Автосохранение темы в браузере
 let saveTimer = 0;
 useStore.subscribe((s, prev) => {
+  if (s.section !== prev.section || s.page !== prev.page || s.dark !== prev.dark) {
+    writeLocal(UI_KEY, JSON.stringify({ section: s.section, page: s.page, dark: s.dark }));
+  }
   if (s.config === prev.config) return;
   clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {

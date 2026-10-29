@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Palette, Image, Layers, SunDim, Power, Sparkles, Type, Flag, SlidersHorizontal, Code2, Wand2 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Section } from './state/store';
 import { decodeShare, importText, readFile } from './lib/share';
 import { TopBar } from './components/TopBar';
@@ -32,7 +33,10 @@ const SECTIONS: { id: Section; label: string; icon: typeof Palette; panel: () =>
 ];
 
 export default function App() {
-  const { tab, section, exportOpen, toast, set, undo, redo, replace, notify } = useStore();
+  // Только нужные поля: без селектора App перерисовывался бы целиком при каждом движении ползунка
+  const { tab, section, exportOpen, toast, set, undo, redo, replace, notify } = useStore(useShallow((s) => ({
+    tab: s.tab, section: s.section, exportOpen: s.exportOpen, toast: s.toast, set: s.set, undo: s.undo, redo: s.redo, replace: s.replace, notify: s.notify
+  })));
   const [dragOver, setDragOver] = useState(false);
   const Panel = SECTIONS.find((s) => s.id === section)?.panel ?? PalettePanel;
 

@@ -420,6 +420,9 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 .mini-card { display: flex; flex-direction: column; gap: 4px; width: 100%; height: 34px; padding: 7px 8px; border-radius: 7px; border: 1px solid; }
 .mini-card i { display: block; width: 70%; height: 5px; border-radius: 3px; opacity: 0.8; }
 .mini-card b { display: block; width: 40%; height: 4px; border-radius: 3px; opacity: 0.6; }
+/* Заготовки градиента карточек: карточка на фоне окна палитры */
+.cg-back { display: block; width: 100%; padding: 5px; border-radius: 9px; }
+.cg-back .mini-card { height: 30px; padding: 6px 7px; }
 /* Иконки групп: подложка под картинкой провайдера (те же варианты, что в теме), размер как в клиенте */
 .gi { display: block; width: 36px; height: 36px; padding: var(--gi-pad); border-radius: var(--gi-r); overflow: hidden; transition: padding 0.2s ease, border-radius 0.2s ease; }
 .gi i { display: block; width: 100%; height: 100%;
@@ -452,6 +455,10 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 .nd-underline .nd-pill::before { content: ''; position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--a), var(--b)); }
 .nd-dot .nd-pill { background: color-mix(in srgb, var(--ac) 70%, transparent); }
 .nd-dot .nd-pill::before { content: ''; position: absolute; right: 8px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--p); box-shadow: 0 0 6px color-mix(in srgb, var(--p) 70%, transparent); }
+/* Пункт в превью ниже настоящего (28px против 32px) - скругление не больше половины высоты */
+.nd-liquid .nd-pill { border-radius: min(var(--r), 14px); color: var(--p);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03)), color-mix(in srgb, var(--p) var(--o, 14%), transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px color-mix(in srgb, var(--fg) 10%, transparent), 0 3px 10px rgba(0, 0, 0, 0.2); }
 
 .btn-demo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .btn-demo-item { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 9px 4px 6px; border-radius: 10px; border: 1px solid var(--line); }
@@ -467,6 +474,9 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 .bd-pushable { box-shadow: 0 3px 0 color-mix(in oklab, var(--p) 55%, black); translate: 0 -1px; }
 .btn-demo-item:active .bd-pushable { box-shadow: none; translate: 0 2px; }
 .bd-brutal { border: 2px solid var(--fg); box-shadow: 3px 3px 0 var(--fg); translate: -1px -1px; }
+.bd-liquid { border-radius: min(var(--r), 13px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.04) 55%), color-mix(in srgb, var(--p) var(--o, 72%), transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px color-mix(in srgb, var(--p) 60%, transparent), 0 3px 10px color-mix(in srgb, var(--p) 25%, transparent); }
 
 .shadow-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px; border-radius: 12px; }
 .shadow-tile { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 4px 6px; border-radius: 10px; border: 1px solid transparent; }
@@ -599,7 +609,8 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 .code-toc button { padding: 2px 8px; border-radius: 6px; font-size: 11px; color: var(--text-2); background: rgba(255, 255, 255, 0.04); }
 .code-toc button:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
 .code-search { display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 30px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 8px; color: var(--text-3); }
-.code-search input { flex: 1; border: 0; background: transparent; outline: none; font-size: 12px; }
+.code-search input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 12px; }
+.code-hits { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; }
 .code-view {
   margin: 0; padding: 12px; border-radius: 12px; background: #090b0f; border: 1px solid var(--line);
   font: 11.5px/18.2px var(--mono); color: #c9d1e3; white-space: pre; overflow: auto; max-height: calc(100vh - 290px); tab-size: 4;
@@ -914,6 +925,8 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 .ping-demo i { position: relative; display: block; height: 10px; border-radius: 3px; background: color-mix(in srgb, var(--c) 80%, transparent); border: 1px solid var(--st); overflow: hidden; }
 .pd-bar i::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 2px; background: var(--k); box-shadow: 0 0 4px var(--k); }
 .pd-dot i::before { content: ''; position: absolute; left: 3px; top: 2.5px; width: 4px; height: 4px; border-radius: 50%; background: var(--k); }
+/* Точка на месте пинга - справа, где у карточки цифры */
+.pd-place i::before { left: auto; right: 4px; }
 .pd-glow i { box-shadow: inset 0 0 8px -2px var(--k); }
 .pd-tint i { background: linear-gradient(90deg, color-mix(in srgb, var(--k) 35%, transparent), transparent 70%); }
 .particle-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }

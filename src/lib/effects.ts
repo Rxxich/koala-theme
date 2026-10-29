@@ -161,11 +161,31 @@ export function funRules(cfg: ThemeConfig, rule: RuleFn): { css: string; keyfram
       css += rule(`${content}::after`, [...base, 'left: var(--kt-frame, 0px)', 'top: 22%', 'bottom: 22%', 'width: 3px', 'border-radius: 0 3px 3px 0', 'background: var(--kt-ping)', 'box-shadow: 0 0 8px var(--kt-ping)']);
     }
     if (f.ping === 'glow') css += rule(sel, [...base, 'inset: 0', 'border-radius: inherit', 'box-shadow: inset 0 0 20px -6px var(--kt-ping)']);
-    if (f.ping === 'dot') css += rule(sel, [...base, 'left: 7px', 'top: 7px', 'width: 6px', 'height: 6px', 'border-radius: 50%', 'background: var(--kt-ping)', 'box-shadow: 0 0 6px var(--kt-ping)']);
+    // Точка. На месте пинга цифры гасит font-size: 0, точка - ::before самого числа, цвет - его
+    // (text-success...). Во время проверки число скрыто (invisible) вместе с точкой, крутится значок
+    // загрузки. Без анимации: в стеклянной карточке она заставляла пересчитывать стекло каждый кадр
+    const inPlace = f.ping === 'dot' && f.pingDotInPlace;
+    if (f.ping === 'dot') {
+      const d = f.pingDotSize;
+      const num = `${PX} ${DELAY}`;
+      const c = inPlace ? 'currentColor' : 'var(--kt-ping)';
+      const o = inPlace ? 0 : 7;
+      if (inPlace) {
+        css += rule(num, ['position: relative', 'display: block', `width: ${d}px`, `height: ${d}px`, 'font-size: 0 !important']);
+        // При наведении на кнопку проверки - снова цифры
+        if (!f.pingHideHover) {
+          css += rule(`${PX} [data-slot="button"]:hover ${DIGITS}`, ['width: auto', 'height: auto', 'font-size: inherit !important']);
+          css += rule(`${PX} [data-slot="button"]:hover ${DIGITS}::before`, ['display: none']);
+        }
+      }
+      css += rule(inPlace ? `${num}::before` : sel, [...base, `left: ${o}px`, `top: ${o}px`, `width: ${d}px`, `height: ${d}px`, 'border-radius: 50%',
+        `background: ${c}`, `box-shadow: 0 0 ${d}px ${c}`]);
+    }
     if (f.ping === 'tint') css += rule(sel, [...base, 'inset: 0', 'border-radius: inherit', 'background: linear-gradient(90deg, color-mix(in srgb, var(--kt-ping) 16%, transparent), transparent 65%)']);
     // Цифры прячем прозрачностью: кнопка остаётся на месте и по-прежнему запускает проверку.
-    // Значок загрузки во время проверки - отдельный элемент, он виден всегда
-    if (f.pingHide) {
+    // Значок загрузки во время проверки - отдельный элемент, он виден всегда. Точку на месте пинга не
+    // трогаем: она сама стоит вместо цифр, и прозрачность спрятала бы её
+    if (f.pingHide && !inPlace) {
       css += rule(`${PX} ${DELAY}`, ['opacity: 0', 'transition: opacity 0.2s ease']);
       if (!f.pingHideHover) css += rule(`${PX} [data-slot="button"]:hover ${DIGITS}`, ['opacity: 1']);
       // Цифр нет совсем - гасим и подсветку кнопки при наведении (ghost: hover:bg-accent/50), чтобы

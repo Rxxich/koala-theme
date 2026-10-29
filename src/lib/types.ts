@@ -79,7 +79,7 @@ export interface MapSettings {
 /** 'cards' - боковая панель повторяет фон карточек */
 export type SidebarStyle = 'app' | 'cards' | 'glass' | 'solid' | 'transparent' | 'outline';
 export type CardFill = 'glass' | 'solid' | 'outline' | 'transparent';
-export type NavActive = 'app' | 'fill' | 'gradient' | 'bar' | 'glow' | 'solid' | 'scale' | 'capsule' | 'neon' | 'underline' | 'dot';
+export type NavActive = 'app' | 'fill' | 'gradient' | 'bar' | 'glow' | 'solid' | 'scale' | 'capsule' | 'neon' | 'underline' | 'dot' | 'liquid';
 export type SelectedStyle = 'app' | 'tint' | 'gradient' | 'glow' | 'outline' | 'bar' | 'power'
   | 'neon' | 'brutal' | 'stripes' | 'shine' | 'aurora' | 'corners' | 'inset' | 'spotlight' | 'underline';
 export type HoverStyle = 'app' | 'lift' | 'glow' | 'scale' | 'border' | 'none';
@@ -88,12 +88,14 @@ export type SelectedHover = 'none' | 'brighten' | 'lift' | 'glow' | 'scale' | 's
 export type StyleColor = 'auto' | 'primary' | 'power' | 'foreground' | 'custom';
 /** Карточка, на которую щёлкнули, пока профиль переключается ('app' - тускнеет и чуть сжимается) */
 export type ProfileSwitch = 'app' | 'pulse' | 'shimmer' | 'none';
-export type ButtonStyle = 'app' | 'glossy' | 'power' | 'glow' | 'outline' | 'pill' | 'pushable' | 'brutal';
+export type ButtonStyle = 'app' | 'glossy' | 'power' | 'glow' | 'outline' | 'pill' | 'pushable' | 'brutal' | 'liquid';
 /** Подложка под картинкой группы прокси ('app' - без подложки, как в клиенте) */
 export type IconPlate = 'app' | 'soft' | 'solid' | 'tint' | 'power' | 'glass' | 'white';
 export type IconShape = 'app' | 'squircle' | 'circle' | 'square';
 /** Градиент карточек: 'soft' - лёгкий (чуть светлее сверху), остальные - свои точки цвета */
 export type CardGradient = 'soft' | 'linear' | 'radial' | 'conic';
+/** Заготовки градиента карточек (lib/defaults.ts, CARD_GRADIENTS) */
+export type CardGradientPreset = 'lighter' | 'deep' | 'accent' | 'corner' | 'halo' | 'power' | 'duo' | 'aurora';
 
 export interface Surfaces {
   /** false - карточки как в клиенте, правила фона/стекла/рамок не генерируются */
@@ -102,6 +104,12 @@ export interface Surfaces {
   fill: CardFill;
   /** Шероховатость стекла: зерно поверх полупрозрачных поверхностей, % */
   grain: number;
+  /** Жидкое стекло: фон под стеклом преломляется у краёв (SVG-фильтр в backdrop-filter). Только при fill: 'glass' */
+  liquid: boolean;
+  /** Насколько далеко сдвигается фон у самого края, px */
+  liquidStrength: number;
+  /** Ширина полосы у края, где фон изгибается, px */
+  liquidEdge: number;
   opacity: number;
   blur: number;
   saturate: number;
@@ -117,12 +125,20 @@ export interface Surfaces {
   gradientY: number;
   /** Точки цвета - для каждой схемы свои: цвета обычно берутся из её палитры */
   gradientStops: Record<Scheme, GradientStop[]>;
+  /** Заготовка, от которой берутся точки: они пересчитываются от палитры при каждой её смене. '' - свои точки gradientStops */
+  gradientPreset: CardGradientPreset | '';
   highlight: boolean;
+  /** Блик по нижней кромке - вместе с верхним в одной переменной --kt-highlight */
+  highlightBottom: boolean;
   /** Цвет рамки карточек (при custom). 'auto' - цвет рамок палитры */
   borderColor: StyleColor;
   borderCustom: string;
   sidebar: SidebarStyle;
   navActive: NavActive;
+  /** Скругление активного пункта в стиле «Жидкое стекло», px */
+  navRadius: number;
+  /** Плотность заливки акцентом у активного пункта «Жидкое стекло», % */
+  navOpacity: number;
   navColor: StyleColor;
   navCustom: string;
   selected: SelectedStyle;
@@ -153,6 +169,10 @@ export interface Surfaces {
   /** Иконка группы чуть увеличивается и наклоняется при наведении */
   iconHover: boolean;
   buttons: ButtonStyle;
+  /** Скругление кнопок в стиле «Жидкое стекло», px */
+  buttonsRadius: number;
+  /** Плотность заливки акцентом у кнопок «Жидкое стекло», % */
+  buttonsOpacity: number;
   buttonsColor: StyleColor;
   buttonsCustom: string;
 }
@@ -329,6 +349,10 @@ export type PingGlow = 'none' | 'bar' | 'glow' | 'dot' | 'tint';
 export interface Fun {
   /** Подсветка карточки сервера по задержке: зелёная, жёлтая, красная */
   ping: PingGlow;
+  /** Точка пинга - вместо цифр задержки на кнопке проверки, а не в углу карточки */
+  pingDotInPlace: boolean;
+  /** Диаметр точки пинга, px */
+  pingDotSize: number;
   /** Спрятать цифры пинга (видны при наведении на кнопку проверки) */
   pingHide: boolean;
   /** Цифры пинга не появляются и при наведении */
