@@ -423,9 +423,11 @@ function probit(p: number): number {
  * σ, размыт на σ = 0.39·radius. Линии равной «глубины» h у такого размытия скруглены, и при этом σ та, что
  * проходит по краю (h = 0.16), совпадает со скруглением блока и у прямых краёв, и на диагонали угла.
  * Маска свечения - таблица от h: у самого края вполовину (край темнее, как у толстого стекла), сильнее
- * всего на трети полосы и к rim до нуля. Сдвиг - вдоль наклона h (свёртка 3×3; ядро feConvolveMatrix
- * переворачивается), усиленного так, что по всей полосе он упирается в полный reach: копия фона ровная, а
- * не растянутая. Сразу за полосой сдвиг спадает и фон складывается, но маска там уже ноль.
+ * всего на трети полосы и к rim до нуля. Сдвиг - вдоль наклона h, усиленного так, что по всей полосе он
+ * упирается в полный reach: копия фона ровная, а не растянутая. Сразу за полосой сдвиг спадает и фон
+ * складывается, но маска там уже ноль. Наклон - разность h в σ/2 по обе стороны: шаг в px блока растёт
+ * вместе с размытием при масштабе экрана и zoom кнопки. Свёртка 3×3 брала соседние пиксели экрана, и на
+ * крупной кнопке (σ 25 px × 1.5 × 1.5) их разница - пара ступенек из 255: сдвиг дрожал, кромка рябила.
  * σ не меньше rim/2 - иначе у острых углов наклон h был бы только в паре пикселей у края.
  * Без размытия стекла включается мягкое сглаживание. Одна выборка фона - легче обычного жидкого стекла
  */
@@ -436,17 +438,21 @@ export function lightRimUri(rim: number, reach: number, shine: number, smooth: L
   const prof = (t: number) => t < 0 || t > rim ? 0 : t < fade ? 0.5 + 0.5 * t / fade : 0.5 + 0.5 * Math.cos(Math.PI * (t - fade) / (rim - fade));
   // У прямого края h = Φ((t - m)/σ): по h находим расстояние t от края, по нему - яркость полосы
   const table = Array.from({ length: 64 }, (_, i) => Math.round(prof(m + sd * probit(i / 63)) * 100) / 100).join(' ');
-  // Наклон h на внутренней границе полосы - φ(1.18)/σ ≈ 0.2/σ: с него карта упирается в 0 или 1
-  const div = Math.round(16 * 0.2 / sd * 1000) / 1000;
-  const grad = (kernel: string, keep: string) => `<feConvolveMatrix in='g' order='3' kernelMatrix='${kernel}' divisor='${div}' bias='0.5' preserveAlpha='true'/>`
-    + `<feColorMatrix values='${keep}'`;
+  // Разность h(+d) - h(-d) на внутренней границе полосы (|z| = 1.18) - с неё карта упирается в 0 или 1
+  const d = Math.max(1, Math.round(sd / 2));
+  const k = Math.round(1000 / (erf((1.18 + d / sd) / Math.SQRT2) - erf((1.18 - d / sd) / Math.SQRT2))) / 1000;
+  // h впереди - из красного канала g, позади - из зелёного gm. Пиксели из-за края блока прозрачны и
+  // читаются как h = 0: у края разность только растёт, сдвиг всё так же внутрь
+  const slope = (dx: number, dy: number, row: string) => `<feOffset in='g' dx='${-dx}' dy='${-dy}' result='p'/>`
+    + `<feOffset in='gm' dx='${dx}' dy='${dy}'/><feComposite in2='p' operator='arithmetic' k2='1' k3='1'/><feColorMatrix values='${row}'`;
   const shape = `<feFlood result='a'/><feOffset dx='-${m}' dy='-${m}' result='b'/>`
     + `<feFlood x='${m}' y='${m}' width='99999' height='99999'/><feComposite in2='b' operator='in'/>`
     + `<feGaussianBlur stdDeviation='${sd}' result='h'/>`
     + `<feComponentTransfer result='k'><feFuncA type='table' tableValues='${table}'/></feComponentTransfer>`
-    + `<feColorMatrix in='h' values='0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 1' result='g'/>`
-    + `${grad('1 0 -1 2 0 -2 1 0 -1', '1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1')} result='x'/>`
-    + `${grad('1 2 1 0 0 0 -1 -2 -1', '0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1')}/>`
+    + `<feColorMatrix in='h' values='0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1' result='g'/>`
+    + `<feColorMatrix in='h' values='0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 1' result='gm'/>`
+    + `${slope(d, 0, `${k} -${k} 0 0 0.5 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1`)} result='x'/>`
+    + `${slope(0, d, `0 0 0 0 0 ${k} -${k} 0 0 0.5 0 0 0 0 0 0 0 0 0 1`)}/>`
     + `<feComposite in2='x' operator='arithmetic' k2='1' k3='1' result='m'/>`;
   const g = r1(shine / 100);
   const lit = always
