@@ -78,7 +78,7 @@ export interface MapSettings {
 
 /** 'cards' - боковая панель повторяет фон карточек */
 export type SidebarStyle = 'app' | 'cards' | 'glass' | 'solid' | 'transparent' | 'outline';
-export type CardFill = 'glass' | 'solid' | 'outline' | 'transparent';
+export type CardFill = 'glass' | 'solid' | 'transparent';
 export type NavActive = 'app' | 'fill' | 'gradient' | 'bar' | 'glow' | 'solid' | 'scale' | 'capsule' | 'neon' | 'underline' | 'dot' | 'liquid';
 export type SelectedStyle = 'app' | 'tint' | 'gradient' | 'glow' | 'outline' | 'bar' | 'power'
   | 'neon' | 'brutal' | 'stripes' | 'shine' | 'aurora' | 'corners' | 'inset' | 'spotlight' | 'underline';
@@ -99,6 +99,10 @@ export type CardGradientPreset = 'lighter' | 'deep' | 'accent' | 'corner' | 'hal
 
 /** Сглаживание жидкого стекла (lib/generator.ts, liquidUri) */
 export type LiquidSmooth = 'off' | 'soft' | 'exact';
+/** Вид стекла карточек: обычное, жидкое, жидкое light */
+export type GlassKind = 'glass' | 'liquid' | 'light';
+/** Непрозрачность, размытие и насыщенность, которые запоминаются для каждого вида стекла. opacity < 0 - не запомнены */
+export interface GlassTone { opacity: number; blur: number; saturate: number }
 
 export interface Surfaces {
   /** false - карточки как в клиенте, правила фона/стекла/рамок не генерируются */
@@ -117,6 +121,20 @@ export interface Surfaces {
   liquidSmooth: LiquidSmooth;
   /** Радужность у кромки: красный канал сдвигается сильнее, синий слабее, %. 0 - выключена */
   liquidRainbow: number;
+  /** Жидкое стекло light: кромка светится тем, что лежит под стеклом в глубине, стекло матовое. Только при liquid */
+  liquidLight: boolean;
+  /** Ширина светящейся кромки light, px */
+  liquidRim: number;
+  /** Откуда кромка берёт свет: на сколько px ближе к середине */
+  liquidReach: number;
+  /** Яркость свечения кромки, %: 100 - как фон под стеклом */
+  liquidShine: number;
+  /** Кромка светится на любом фоне светлой рамкой. false - только там, где в глубине под стеклом ярче, чем у края */
+  liquidRimAlways: boolean;
+  /** Мягкий светлый ободок по краю стекла light */
+  liquidGlow: boolean;
+  /** Свои непрозрачность, размытие и насыщенность у каждого вида стекла: при переключении вида возвращаются */
+  glassMemory: Record<GlassKind, GlassTone>;
   opacity: number;
   blur: number;
   saturate: number;

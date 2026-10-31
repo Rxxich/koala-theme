@@ -2,7 +2,7 @@
 // размытие и разброс применяются ко всем слоям, поэтому любой стиль можно повернуть и подстроить.
 
 import { mix, rgba } from './color';
-import type { Palette, Scheme, ShadowPreset, Shadows, ThemeConfig } from './types';
+import type { Palette, Scheme, ShadowPreset, Shadows, Surfaces, ThemeConfig } from './types';
 
 /** Слой тени. dx/dy - смещение при свете сверху, c - цвет слоя */
 interface Layer { dx: number; dy: number; blur: number; spread?: number; a: number; c?: 'base' | 'white' | 'accent' | 'pa' | 'pb' | 'solid'; inset?: boolean; fixed?: boolean }
@@ -94,16 +94,20 @@ export function shadowReach(s: Shadows, hover: boolean): { left: number; top: nu
 
 /**
  * Блики по кромке карточек: сверху и снизу. Нижний слабее - это свет, прошедший сквозь толщу стекла.
- * В тёмной схеме при 6% верхнего не было видно на прозрачных карточках поверх фона
+ * В тёмной схеме при 6% верхнего не было видно на прозрачных карточках поверх фона.
+ * glow - мягкий ободок жидкого стекла light: свечение по всему краю изнутри, к середине сходит на нет
  */
-export function highlightShadow(scheme: Scheme, top = true, bottom = false): string {
+export function highlightShadow(scheme: Scheme, top = true, bottom = false, glow = false): string {
   const dark = scheme === 'dark';
-  return [top && `inset 0 1px 0 rgba(255, 255, 255, ${dark ? 0.18 : 0.7})`, bottom && `inset 0 -1px 0 rgba(255, 255, 255, ${dark ? 0.12 : 0.5})`].filter(Boolean).join(', ');
+  return [glow && `inset 0 0 12px rgba(255, 255, 255, ${dark ? 0.07 : 0.4})`, top && `inset 0 1px 0 rgba(255, 255, 255, ${dark ? 0.18 : 0.7})`,
+    bottom && `inset 0 -1px 0 rgba(255, 255, 255, ${dark ? 0.12 : 0.5})`].filter(Boolean).join(', ');
 }
+/** Мягкий ободок жидкого стекла light */
+export const rimGlow = (s: Surfaces) => s.custom && s.fill === 'glass' && s.liquid && s.liquidLight && s.liquidGlow;
 /** Есть хоть один блик по кромке */
-export const hasHighlight = (s: { highlight: boolean; highlightBottom: boolean }) => s.highlight || s.highlightBottom;
+export const hasHighlight = (s: Surfaces) => s.highlight || s.highlightBottom || rimGlow(s);
 
-export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: boolean, highlightBottom = false): ShadowSet | null {
+export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: boolean, highlightBottom = false, glow = false): ShadowSet | null {
   if (s.preset === 'app') return null;
   const dark = scheme === 'dark';
   const k = s.intensity / 100;
@@ -130,7 +134,7 @@ export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: b
     const r = (v: number) => Math.round(v * 10) / 10;
     return `${l.inset ? 'inset ' : ''}${r(x)}px ${r(y)}px ${r(blur)}px ${r(spread)}px ${color(l, mul)}`;
   });
-  const hi = (highlight || highlightBottom) && s.preset !== 'neumorph' ? [highlightShadow(scheme, highlight, highlightBottom)] : [];
+  const hi = (highlight || highlightBottom || glow) && s.preset !== 'neumorph' ? [highlightShadow(scheme, highlight, highlightBottom, glow)] : [];
   const join = (xs: string[]) => xs.join(', ') || 'none';
   const set = layersOf(s);
   const h = s.hover / 100;

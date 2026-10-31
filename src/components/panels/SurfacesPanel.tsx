@@ -10,7 +10,7 @@ import { bgAnimation, cardPreview, liquidOn, liquidSamples, schemeScopes } from 
 import { cardStops, defaultConfig, detachCardGradient } from '../../lib/defaults';
 import { GradientEditor } from '../GradientEditor';
 import { CardGradientTiles } from './CardGradients';
-import type { ButtonStyle, CardFill, CardGradient, ThemeConfig, Divider, DividerEffect, DividerStyle,HoverStyle, IconPlate, IconShape, LiquidSmooth, NavActive, Palette, ProfileSwitch, SelectedHover, SelectedStyle, ShadowPreset, SidebarStyle, StyleColor, Surfaces } from '../../lib/types';
+import type { ButtonStyle, CardFill, CardGradient, ThemeConfig, Divider, DividerEffect, DividerStyle, GlassKind, HoverStyle, IconPlate, IconShape, LiquidSmooth, NavActive, Palette, ProfileSwitch, SelectedHover, SelectedStyle, ShadowPreset, SidebarStyle, StyleColor, Surfaces } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
 import { PanelHead, SchemeSwitch, useCfg } from './common';
@@ -18,10 +18,10 @@ import { PanelHead, SchemeSwitch, useCfg } from './common';
 const SIDEBAR: { value: SidebarStyle; label: string }[] = [
   { value: 'app', label: 'Как в клиенте' }, { value: 'cards', label: 'Как карточки' }, { value: 'glass', label: 'Стекло' }, { value: 'solid', label: 'Сплошная' }, { value: 'outline', label: 'Контур' }, { value: 'transparent', label: 'Без фона' }
 ];
-/** Фон карточек: 'app' - как в клиенте (свои настройки выключены), 'liquid' - стекло с преломлением */
-type FillChoice = CardFill | 'app' | 'liquid';
+/** Фон карточек: 'app' - как в клиенте (свои настройки выключены), 'liquid' - стекло с преломлением, 'light' - матовое стекло-линза */
+type FillChoice = CardFill | 'app' | GlassKind;
 const CARD_FILL: { value: FillChoice; label: string }[] = [
-  { value: 'app', label: 'Как в клиенте' }, { value: 'glass', label: 'Стекло' }, { value: 'liquid', label: 'Жидкое стекло' }, { value: 'solid', label: 'Сплошные' }, { value: 'outline', label: 'Контур' }, { value: 'transparent', label: 'Без фона' }
+  { value: 'app', label: 'Как в клиенте' }, { value: 'glass', label: 'Стекло' }, { value: 'liquid', label: 'Жидкое стекло' }, { value: 'solid', label: 'Сплошные' }, { value: 'light', label: 'Жидкое стекло light' }, { value: 'transparent', label: 'Без фона' }
 ];
 const SMOOTH: { value: LiquidSmooth; label: string }[] = [{ value: 'off', label: 'Нет' }, { value: 'soft', label: 'Мягкое' }, { value: 'exact', label: 'Точное' }];
 const NAV: { value: NavActive; label: string }[] = [
@@ -121,6 +121,26 @@ function thinGlass(s: Surfaces) {
   s.saturate = Math.max(s.saturate, 150);
 }
 
+/** Матовое стекло под light: фон проступает мягкими цветными пятнами */
+function frostedGlass(s: Surfaces) {
+  s.blur = 10;
+  s.opacity = 40;
+  s.saturate = 120;
+}
+
+/** Вид стекла карточек; null - карточки не стеклянные или как в клиенте */
+const glassKind = (s: Surfaces): GlassKind | null => !s.custom || s.fill !== 'glass' ? null : !s.liquid ? 'glass' : s.liquidLight ? 'light' : 'liquid';
+
+/** Жидкое стекло light: матовое стекло тоже размывает фон под каждой карточкой */
+function LightLoadNote() {
+  return (
+    <div className="csp-note warn">
+      <AlertTriangle size={14} />
+      <span>Пока ничего не двигается, стекло ничего не стоит. Но при прокрутке списка серверов и любой анимации матовое стекло каждой карточки пересчитывается в каждом кадре, и дороже всего тут размытие, а не светящаяся кромка. На экранах 144-180 Гц и на встроенной графике ноутбука прокрутка может подтормаживать - тогда уменьшите размытие.</span>
+    </div>
+  );
+}
+
 export function SurfacesPanel() {
   const { config, set, update } = useCfg();
   const setUi = useStore((st) => st.set);
@@ -134,10 +154,40 @@ export function SurfacesPanel() {
     setUi({ page: 'profiles' });
   };
   /** Любая настройка карточек включает "свои поверхности" */
-  const setCard = <K extends 'opacity' | 'blur' | 'saturate' | 'grain' | 'liquidStrength' | 'liquidEdge' | 'liquidSmooth' | 'liquidRainbow' | 'borderWidth' | 'borderOpacity' | 'gradient' | 'highlight' | 'highlightBottom' | 'borderColor' | 'borderCustom'>(k: K, v: (typeof s)[K]) =>
+  const setCard = <K extends 'opacity' | 'blur' | 'saturate' | 'grain' | 'liquidStrength' | 'liquidEdge' | 'liquidSmooth' | 'liquidRainbow' | 'liquidRim' | 'liquidReach' | 'liquidShine' | 'liquidRimAlways' | 'liquidGlow'
+    | 'borderWidth' | 'borderOpacity' | 'gradient' | 'highlight' | 'highlightBottom' | 'borderColor' | 'borderCustom'>(k: K, v: (typeof s)[K]) =>
     update((c) => { c.surfaces[k] = v; c.surfaces.custom = true; }, `surfaces.${k}`);
   const liquid = liquidOn(s);
-  const fill: FillChoice = !s.custom ? 'app' : liquid ? 'liquid' : s.fill;
+  const light = liquid && s.liquidLight;
+  const fill: FillChoice = !s.custom ? 'app' : glassKind(s) ?? s.fill;
+  /**
+   * Смена фона карточек. У каждого вида стекла свои непрозрачность, размытие и насыщенность: уходя с вида,
+   * они запоминаются, а при возврате восстанавливаются - прозрачное жидкое стекло не превращается в матовое
+   * после примерки light. В первый раз light делает стекло матовым, а жидкое - прозрачнее, если оно густое
+   */
+  const pickFill = (v: FillChoice) => {
+    const from = glassKind(s);
+    const to = v === 'glass' || v === 'liquid' || v === 'light' ? v : null;
+    const memo = to && to !== from && s.glassMemory[to].opacity >= 0 ? s.glassMemory[to] : null;
+    const first = to && to !== from && !memo ? to : null;
+    // Густое стекло (по умолчанию размытие 24px) прячет преломление целиком - при выборе жидкого делаем его прозрачнее
+    const thick = first === 'liquid' && (s.blur > 8 || s.opacity > 40);
+    update((c) => {
+      const cs = c.surfaces;
+      if (from) cs.glassMemory[from] = { opacity: cs.opacity, blur: cs.blur, saturate: cs.saturate };
+      cs.custom = v !== 'app';
+      if (v === 'app') return;
+      cs.fill = to ? 'glass' : (v as CardFill);
+      cs.liquid = to === 'liquid' || to === 'light';
+      cs.liquidLight = to === 'light';
+      if (memo) Object.assign(cs, memo);
+      else if (first === 'light') frostedGlass(cs);
+      else if (thick) thinGlass(cs);
+    });
+    if (memo) notify(`Вернулись настройки этого стекла: непрозрачность ${memo.opacity}%, размытие ${memo.blur}px. Ctrl+Z - отменить`);
+    else if (first === 'light') notify('Стекло стало матовым: размытие 10px, непрозрачность 40% - так фон проступает мягкими пятнами. Ctrl+Z - вернуть');
+    else if (thick) notify('Стекло стало прозрачнее: размытие 4px, непрозрачность до 30% - иначе преломления не видно. Ctrl+Z - вернуть');
+  };
   const glass = s.fill === 'glass';
   const stroke = tones(p, s.borderColor, s.borderCustom).pick ?? p.stroke;
   const selT = tones(p, s.selectedColor, s.selectedCustom), profT = tones(p, s.profileColor, s.profileCustom);
@@ -174,18 +224,7 @@ export function SurfacesPanel() {
       <PanelHead title="Поверхности" text="Карточки, плитки главной, боковая панель и всплывающие окна: прозрачность, стекло, рамки, скругления." />
 
       <Group title="Карточки и плитки" hint="Варианты фона - те же, что у боковой панели. Чтобы панель всегда совпадала с карточками, выберите у неё «Как карточки»">
-        <Segmented<FillChoice> wrap size="sm" value={fill} options={CARD_FILL} onChange={(v) => {
-          // Густое стекло (по умолчанию размытие 24px) прячет преломление целиком - при выборе жидкого делаем его прозрачнее
-          const thick = v === 'liquid' && !liquid && (s.blur > 8 || s.opacity > 40);
-          update((c) => {
-            c.surfaces.custom = v !== 'app';
-            if (v === 'app') return;
-            c.surfaces.fill = v === 'liquid' ? 'glass' : v;
-            c.surfaces.liquid = v === 'liquid';
-            if (thick) thinGlass(c.surfaces);
-          });
-          if (thick) notify('Стекло стало прозрачнее: размытие 4px, непрозрачность до 30% - иначе преломления не видно. Ctrl+Z - вернуть');
-        }} />
+        <Segmented<FillChoice> wrap size="sm" value={fill} options={CARD_FILL} onChange={pickFill} />
         {!s.custom && <p className="note">Сейчас карточки выглядят как в Koala Clash. Подвиньте любой ползунок - включатся свои настройки (стекло).</p>}
         {s.custom && s.fill === 'transparent' && <p className="note">Карточки без фона и рамки: остаётся только текст поверх фона окна. Выбранный сервер по-прежнему выделяется.</p>}
         <div className={cx('stack', !s.custom && 'dimmed')}>
@@ -197,7 +236,20 @@ export function SurfacesPanel() {
               <Slider label="Шероховатость стекла" hint="Мелкое зерно поверх стекла - как у матового, пескоструйного стекла. Действует и на стеклянную боковую панель, окна и меню" value={s.grain} min={0} max={100} unit="%" onChange={(v) => setCard('grain', v)} />
             </>
           )}
-          {liquid && (
+          {light && (
+            <>
+              <p className="note">Кромка светится тем, что лежит под стеклом в глубине, как у толстого стекла, где свет уходит к краям: яркая картинка или узор под серединой карточки подсвечивает её края. Середина - матовое стекло. Светящаяся полоса повторяет скругление карточек (ползунок «Скругление» ниже) и форму кнопки подключения. Лучше всего видно на картинке или узоре фона. Действует и на стеклянную боковую панель и кнопку подключения «Стекло».</p>
+              <NoRefractionNote />
+              <LightLoadNote />
+              <Slider label="Ширина кромки" hint="Полоса у края, которая светится. Узкая - тонкая светящаяся грань, широкая - толстый скос стекла" value={s.liquidRim} min={3} max={20} unit="px" onChange={(v) => setCard('liquidRim', v)} />
+              <Slider label="Глубина отсвета" hint="Откуда кромка берёт свет: на сколько пикселей ближе к середине. Чем больше, тем дальше от края то, что подсвечивает кромку" value={s.liquidReach} min={6} max={60} unit="px" onChange={(v) => setCard('liquidReach', v)} />
+              <Slider label="Яркость кромки" hint="Во сколько раз усиливается свет, который подсвечивает кромку: так он пробивается сквозь заливку стекла. 100% - как есть" value={s.liquidShine} min={100} max={300} step={10} unit="%" onChange={(v) => setCard('liquidShine', v)} />
+              <Toggle label="Кромка светится всегда" hint="Выключено - кромка загорается только там, где под стеклом в глубине что-то ярче, чем у края, а на ровном фоне её не видно. Включено - светлая цветная рамка на любом фоне, даже на чёрном" checked={s.liquidRimAlways} onChange={(v) => setCard('liquidRimAlways', v)} />
+              <Toggle label="Мягкий ободок" hint="Светлое свечение по всему краю стекла изнутри. Вместе с бликами по кромке получается толстое стекло" checked={s.liquidGlow} onChange={(v) => setCard('liquidGlow', v)} />
+              <MovingBgNote config={config} />
+            </>
+          )}
+          {liquid && !light && (
             <>
               <p className="note">Фон под карточками изгибается у краёв, как под толстой линзой. Лучше всего видно на картинке или узоре фона, когда стекло почти прозрачное. Действует и на стеклянную боковую панель и кнопку подключения «Стекло».</p>
               <NoRefractionNote />
@@ -222,7 +274,7 @@ export function SurfacesPanel() {
           )}
           {s.fill !== 'transparent' && (
             <>
-              <Slider label="Толщина рамки" value={s.borderWidth} min={s.fill === 'outline' ? 1 : 0} max={3} step={0.5} unit="px" onChange={(v) => setCard('borderWidth', v)} />
+              <Slider label="Толщина рамки" value={s.borderWidth} min={0} max={3} step={0.5} unit="px" onChange={(v) => setCard('borderWidth', v)} />
               <Slider label="Заметность рамки" value={s.borderOpacity} min={0} max={100} unit="%" disabled={s.borderWidth === 0} onChange={(v) => setCard('borderOpacity', v)} />
               {s.borderWidth > 0 && <ColorPick label="Цвет рамки" hint="Авто - цвет рамок из палитры. Рамки карточек, плиток, профилей, окон и боковой панели" value={s.borderColor} custom={s.borderCustom}
                 onChange={(v) => setCard('borderColor', v)} onCustom={(v) => setCard('borderCustom', v)} />}

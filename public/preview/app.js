@@ -398,7 +398,7 @@
   /* ---------- Подключения ---------- */
   const CONNS = [
     ['chrome.exe', 'www.youtube.com:443', '🇩🇪 Германия · Франкфурт', '12.4 MB', '380 KB', true],
-    ['Telegram.exe', '149.154.167.51:443', '🇳🇱 Нидерланды · Амстердам', '2.1 MB', '96 KB', true],
+    ['Spotify.exe', 'spclient.wg.spotify.com:443', '🇳🇱 Нидерланды · Амстердам', '2.1 MB', '96 KB', true],
     ['Discord.exe', 'gateway.discord.gg:443', '🇫🇮 Финляндия · Хельсинки', '840 KB', '120 KB', true],
     ['steam.exe', 'store.steampowered.com:443', 'DIRECT', '31.7 MB', '1.2 MB', false],
     ['Code.exe', 'api.github.com:443', '🇳🇱 Нидерланды · Амстердам', '410 KB', '52 KB', true],
@@ -421,7 +421,7 @@
   /* ---------- Правила ---------- */
   const RULES = [
     ['DOMAIN-SUFFIX', 'youtube.com', '🎬 YouTube'], ['DOMAIN-SUFFIX', 'googlevideo.com', '🎬 YouTube'],
-    ['DOMAIN-KEYWORD', 'telegram', '🚀 Выбор сервера'], ['GEOSITE', 'discord', '🚀 Выбор сервера'],
+    ['DOMAIN-KEYWORD', 'spotify', '🚀 Выбор сервера'], ['GEOSITE', 'discord', '🚀 Выбор сервера'],
     ['GEOIP', 'RU', 'DIRECT'], ['DOMAIN-SUFFIX', 'gosuslugi.ru', 'DIRECT'], ['IP-CIDR', '192.168.0.0/16', 'DIRECT'],
     ['PROCESS-NAME', 'steam.exe', 'DIRECT'], ['GEOSITE', 'category-ads-all', 'REJECT'], ['MATCH', '', '🌍 Остальной трафик']
   ];
@@ -431,7 +431,7 @@
   const LOG_BADGE = { error: 'bg-destructive/15 text-destructive', warning: 'bg-warning/20 text-amber-700 dark:text-warning', info: 'bg-primary/10 text-primary', debug: 'bg-muted text-muted-foreground' };
   const LOGS = [
     ['info', '[TCP] 127.0.0.1:52144 --> www.youtube.com:443 match DomainSuffix(youtube.com) using 🎬 YouTube[🇩🇪 Германия · Франкфурт]'],
-    ['info', '[TCP] 127.0.0.1:52151 --> api.telegram.org:443 match DomainKeyword(telegram) using 🚀 Выбор сервера[🇳🇱 Нидерланды · Амстердам]'],
+    ['info', '[TCP] 127.0.0.1:52151 --> spclient.wg.spotify.com:443 match DomainKeyword(spotify) using 🚀 Выбор сервера[🇳🇱 Нидерланды · Амстердам]'],
     ['debug', '[DNS] resolve gateway.discord.gg A --> 162.159.135.232'],
     ['warning', '[Provider] proxy-providers: koala update failed, retry in 30s'],
     ['info', '[TCP] 127.0.0.1:52160 --> store.steampowered.com:443 match ProcessName(steam.exe) using DIRECT'],
@@ -651,7 +651,7 @@
     else if (act === 'delete') dialog('delete');
     else if (act === 'more') openMenu(a, [{ id: 'a', label: 'Экспорт настроек', icon: 'file' }, { id: 'b', label: 'Открыть папку', icon: 'file' }]);
     else if (act === 'refresh-profile') { a.classList.add('kt-spin'); setTimeout(() => { a.classList.remove('kt-spin'); toast('Подписка обновлена', 'success'); }, 900); }
-    else if (act === 'support') toast('Откроется чат поддержки в Telegram', 'info');
+    else if (act === 'support') toast('Откроется чат поддержки', 'info');
     else if (act === 'close-all') toast('Все подключения закрыты', 'info');
   });
   $('hdrAction').onclick = () => toast(state.page === 'proxies' ? 'Задержки обновлены' : 'Данные обновлены', 'info');

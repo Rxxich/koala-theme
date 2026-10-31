@@ -21,15 +21,15 @@ export function CardGradientTiles({ full, onOwn }: { full?: boolean; onOwn?: () 
   const own = on && s.gradientKind !== 'soft';
   // Плитки - в непрозрачности карточек, но не бледнее 70%, иначе заготовки не различить
   const alpha = Math.max(70, s.fill === 'solid' ? 100 : s.opacity);
-  // Градиент - это заливка: у карточек «Контур» и «Без фона» её нет, поэтому они становятся стеклом
+  // Градиент - это заливка: у карточек «Без фона» её нет, поэтому они становятся стеклом
   const pick = (fn: (c: ThemeConfig) => void) => {
-    const refill = s.fill === 'outline' || s.fill === 'transparent';
+    const refill = s.fill === 'transparent';
     update((c) => {
       fn(c);
       c.surfaces.custom = true;
       if (refill) { c.surfaces.fill = 'glass'; c.surfaces.liquid = false; }
     });
-    if (refill) notify('Карточки стали стеклянными: у «Контура» и «Без фона» нет заливки под градиент');
+    if (refill) notify('Карточки стали стеклянными: у «Без фона» нет заливки под градиент');
   };
   const tile = (key: string, label: string, bg: string, active: boolean, onClick: () => void, title?: string) => (
     <Choice key={key} active={active} onClick={onClick} title={title}>

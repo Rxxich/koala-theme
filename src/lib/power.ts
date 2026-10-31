@@ -65,7 +65,8 @@ type Decl = string | false | null | undefined | 0;
 type RuleFn = (selector: string | string[], decls: Decl[]) => string;
 
 /** Стекло карточек из «Поверхностей» (glassLook в генераторе): зерно, заливка, фильтр, цвет рамки */
-export interface GlassLook { grain: string; fill: string; filter: string; stroke: string }
+/** filterPower - то же стекло для кнопки подключения: у жидкого light полоса повторяет её скругление */
+export interface GlassLook { grain: string; fill: string; filter: string; filterPower: string; stroke: string }
 
 /** Орбита: полуоси эллипса, запас под спутник (px) и радиус круга кнопки, который загораживает дальнюю половину */
 const ORBIT = { a: 92, b: 26, pad: 8, r: 64 };
@@ -345,7 +346,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
       const shadows = (shade: number, drop: number) => `box-shadow: ${[hl && 'var(--kt-highlight)', `inset 0 -10px 22px rgba(0, 0, 0, ${shade})`,
         !pwShadow && `0 18px 40px rgba(0, 0, 0, ${drop})`].filter(Boolean).join(', ')} !important`;
       out += rule(C, [`background: ${ball3d('off')}`, `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, shadows(0.16, 0.25),
-        `backdrop-filter: ${glass.filter} !important`]);
+        `backdrop-filter: ${glass.filterPower} !important`]);
       out += rule(`${ON} > div`, [`background: ${ball3d('on')}`, shadows(0.12, 0.2)]);
       break;
     }
@@ -595,7 +596,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         out += rule(ERR, ['--kt-tg-a: var(--destructive)', '--kt-tg-b: color-mix(in srgb, var(--destructive) 70%, black)']);
         out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important', 'overflow: hidden',
           `background: ${glass.grain}${glass.fill} !important`,
-          `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, `backdrop-filter: ${glass.filter} !important`,
+          `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, `backdrop-filter: ${glass.filterPower} !important`,
           // Блики - только «Блики по кромке» карточек (сверху и снизу); своя тень - если не включена тень из «Теней»
           `box-shadow: ${[hl && 'var(--kt-highlight)', 'inset 0 -8px 16px rgba(0, 0, 0, 0.1)', !pwShadow && '0 10px 24px rgba(0, 0, 0, 0.18)'].filter(Boolean).join(', ')} !important`]);
         out += rule(I, ['width: 58px !important', 'height: 58px !important', 'border-radius: 50%',

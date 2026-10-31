@@ -116,7 +116,10 @@ export function defaultConfig(): ThemeConfig {
     },
     map: { show: true, opacity: 65, grayscale: 0, hue: 0, brightness: 100, tintPrimary: false, blurPages: true },
     surfaces: {
-      custom: false, fill: 'glass', grain: 0, liquid: false, liquidStrength: 18, liquidEdge: 20, liquidSmooth: 'off', liquidRainbow: 0, opacity: 50, blur: 24, saturate: 100, borderWidth: 1, borderOpacity: 100, radius: 0.625,
+      custom: false, fill: 'glass', grain: 0, liquid: false, liquidStrength: 18, liquidEdge: 20, liquidSmooth: 'off', liquidRainbow: 0,
+      liquidLight: false, liquidRim: 10, liquidReach: 30, liquidShine: 170, liquidRimAlways: false, liquidGlow: true,
+      glassMemory: { glass: { opacity: -1, blur: -1, saturate: -1 }, liquid: { opacity: -1, blur: -1, saturate: -1 }, light: { opacity: -1, blur: -1, saturate: -1 } },
+      opacity: 50, blur: 24, saturate: 100, borderWidth: 1, borderOpacity: 100, radius: 0.625,
       gradient: false, gradientKind: 'soft', gradientAngle: 180, gradientX: 50, gradientY: 0,
       gradientStops: { light: CARD_GRADIENTS.lighter.stops(APP_PALETTE.light), dark: CARD_GRADIENTS.lighter.stops(APP_PALETTE.dark) }, gradientPreset: '',
       highlight: false, highlightBottom: false, borderColor: 'auto', borderCustom: '#7c8cff', sidebar: 'app', navActive: 'app', navRadius: 12, navOpacity: 14, navColor: 'auto', navCustom: '#7c8cff',
@@ -235,5 +238,9 @@ export function sanitizeConfig(raw: unknown): ThemeConfig {
   }
   if (!Object.hasOwn(CARD_GRADIENTS, merged.surfaces.gradientPreset)) merged.surfaces.gradientPreset = '';
   if (!['off', 'soft', 'exact'].includes(merged.surfaces.liquidSmooth)) merged.surfaces.liquidSmooth = 'off';
+  // Карточки «Контур» убраны: прозрачное стекло без размытия с рамкой выглядит так же
+  const su = merged.surfaces;
+  if ((su.fill as string) === 'outline') Object.assign(su, { fill: 'glass', liquid: false, opacity: 0, blur: 0, borderWidth: Math.max(1, su.borderWidth) });
+  if (!['glass', 'solid', 'transparent'].includes(su.fill)) su.fill = 'glass';
   return merged;
 }
