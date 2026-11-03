@@ -10,10 +10,15 @@ import { bgAnimation, cardPreview, liquidOn, liquidSamples, schemeScopes } from 
 import { cardStops, defaultConfig, detachCardGradient } from '../../lib/defaults';
 import { GradientEditor } from '../GradientEditor';
 import { CardGradientTiles } from './CardGradients';
-import type { ButtonStyle, CardFill, CardGradient, ThemeConfig, Divider, DividerEffect, DividerStyle, GlassKind, HoverStyle, IconPlate, IconShape, LiquidSmooth, NavActive, Palette, ProfileSwitch, SelectedHover, SelectedStyle, ShadowPreset, SidebarStyle, StyleColor, Surfaces } from '../../lib/types';
+import type { SidebarIcons, ButtonStyle, CardFill, CardGradient, ThemeConfig, Divider, DividerEffect, DividerStyle, GlassKind, HoverStyle, IconPlate, IconShape, LiquidSmooth, NavActive, Palette, ProfileSwitch, SelectedHover, SelectedStyle, ShadowPreset, SidebarStyle, StyleColor, Surfaces } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
 import { PanelHead, SchemeSwitch, useCfg } from './common';
+import { SPOTS } from '../../lib/spots';
+import { CLIENT_PREVIEW, SIDEBAR_ICONS, SIDEBAR_ICON_SETS, sidebarIconUri } from '../../lib/sidebarIcons';
+
+/** Иконки в плитках выбора набора - те же, что в превью «Как в клиенте» */
+const ICON_PREVIEW = SIDEBAR_ICONS.filter((i) => CLIENT_PREVIEW.some((c) => c.key === i.key));
 
 const SIDEBAR: { value: SidebarStyle; label: string }[] = [
   { value: 'app', label: 'Как в клиенте' }, { value: 'cards', label: 'Как карточки' }, { value: 'glass', label: 'Стекло' }, { value: 'solid', label: 'Сплошная' }, { value: 'outline', label: 'Контур' }, { value: 'transparent', label: 'Без фона' }
@@ -223,7 +228,7 @@ export function SurfacesPanel() {
     <>
       <PanelHead title="Поверхности" text="Карточки, плитки главной, боковая панель и всплывающие окна: прозрачность, стекло, рамки, скругления." />
 
-      <Group title="Карточки и плитки" hint="Варианты фона - те же, что у боковой панели. Чтобы панель всегда совпадала с карточками, выберите у неё «Как карточки»">
+      <Group title="Карточки и плитки" spot={SPOTS.tiles} hint="Варианты фона - те же, что у боковой панели. Чтобы панель всегда совпадала с карточками, выберите у неё «Как карточки»">
         <Segmented<FillChoice> wrap size="sm" value={fill} options={CARD_FILL} onChange={pickFill} />
         {!s.custom && <p className="note">Сейчас карточки выглядят как в Koala Clash. Подвиньте любой ползунок - включатся свои настройки (стекло).</p>}
         {s.custom && s.fill === 'transparent' && <p className="note">Карточки без фона и рамки: остаётся только текст поверх фона окна. Выбранный сервер по-прежнему выделяется.</p>}
@@ -296,7 +301,7 @@ export function SurfacesPanel() {
         </div>
       </Group>
 
-      <Group title="Выбранный сервер">
+      <Group title="Выбранный сервер" spot={SPOTS.selected}>
         <div className="choice-grid">
           {SELECTED.map((o) => (
             <Choice key={o.value} active={s.selected === o.value} onClick={() => set('surfaces', 'selected', o.value)}>
@@ -312,7 +317,7 @@ export function SurfacesPanel() {
           onChange={(v) => set('surfaces', 'selectedColor', v)} onCustom={(v) => set('surfaces', 'selectedCustom', v)} />
       </Group>
 
-      <Group title="Наведение">
+      <Group title="Наведение" spot={SPOTS.proxies}>
         <Row label="Карточки серверов" stack>
           <Segmented<HoverStyle> wrap size="sm" value={s.hover} onChange={(v) => set('surfaces', 'hover', v)} options={HOVER} />
         </Row>
@@ -323,7 +328,7 @@ export function SurfacesPanel() {
           onChange={(v) => set('surfaces', 'hoverColor', v)} onCustom={(v) => set('surfaces', 'hoverCustom', v)} />
       </Group>
 
-      <Group title="Профили" hint="Карточки подписок на странице «Профили». Превью само переходит на неё">
+      <Group title="Профили" spot={SPOTS.profiles} hint="Карточки подписок на странице «Профили». Превью само переходит на неё">
         <Row label="Текущий профиль" hint="Те же стили, что у выбранного сервера" stack>
           <div className="choice-grid">
             {SELECTED.map((o) => (
@@ -347,7 +352,7 @@ export function SurfacesPanel() {
           onChange={(v) => setProfile('profileColor', v)} onCustom={(v) => setProfile('profileCustom', v)} />
       </Group>
 
-      <Group title="Иконки групп прокси" hint="Картинки, которые провайдер задаёт группам. В клиенте они без подложки">
+      <Group title="Иконки групп прокси" spot={SPOTS.groupIcons} hint="Картинки, которые провайдер задаёт группам. В клиенте они без подложки">
         <div className="choice-grid">
           {PLATES.map((o) => (
             <Choice key={o.value} active={s.iconPlate === o.value} onClick={() => set('surfaces', 'iconPlate', o.value)}>
@@ -366,8 +371,22 @@ export function SurfacesPanel() {
         <Toggle label="Оживают при наведении" hint="Иконка чуть увеличивается и наклоняется, когда курсор над группой" checked={s.iconHover} onChange={(v) => set('surfaces', 'iconHover', v)} />
       </Group>
 
-      <Group title="Боковая панель">
+      <Group title="Боковая панель" spot={SPOTS.sidebar}>
         <Row label="Фон панели" stack><Segmented<SidebarStyle> wrap size="sm" value={s.sidebar} onChange={(v) => set('surfaces', 'sidebar', v)} options={SIDEBAR} /></Row>
+        <Row label="Иконки" stack>
+          <div className="icon-sets">
+            {SIDEBAR_ICON_SETS.map((o) => (
+              <Choice key={o.value} active={s.sidebarIcons === o.value} onClick={() => set('surfaces', 'sidebarIcons', o.value)} title={o.credit ? `${o.note}. ${o.credit}` : o.note}>
+                <span className="icon-set">
+                  {o.value === 'app'
+                    ? CLIENT_PREVIEW.map((ic) => <svg key={ic.key} viewBox={ic.viewBox} aria-hidden><path d={ic.d} fill="currentColor" /></svg>)
+                    : ICON_PREVIEW.map((ic) => { const m = sidebarIconUri(o.value as Exclude<SidebarIcons, 'app'>, ic.art); return <i key={ic.key} style={{ WebkitMaskImage: m, maskImage: m }} />; })}
+                </span>
+                {o.label}
+              </Choice>
+            ))}
+          </div>
+        </Row>
         <Row label="Активный пункт" stack>
           <div className="nav-demo">
             {NAV.map((o) => (
@@ -394,7 +413,7 @@ export function SurfacesPanel() {
 
       <DividersGroup />
 
-      <Group title="Основные кнопки" hint="Кнопки «Сохранить», «Импортировать» и другие залитые акцентом">
+      <Group title="Основные кнопки" spot={SPOTS.buttons} hint="Кнопки «Сохранить», «Импортировать» и другие залитые акцентом">
         <div className="btn-demo">
           {BUTTONS.map((o) => (
             <button key={o.value} type="button" className={cx('btn-demo-item', s.buttons === o.value && 'active')} onClick={() => set('surfaces', 'buttons', o.value)}>
@@ -506,7 +525,7 @@ function DividersGroup() {
   };
 
   return (
-    <Group title="Разделители" hint="Тонкие полосы между строками настроек, под панелью правил и логов, в окнах - и вертикальные полосы между цифрами подписки и трафика на главной">
+    <Group title="Разделители" spot={SPOTS.dividers} hint="Тонкие полосы между строками настроек, под панелью правил и логов, в окнах - и вертикальные полосы между цифрами подписки и трафика на главной">
       <Row label="Какие" stack>
         <Segmented<'h' | 'v'> size="sm" value={which} onChange={pick} options={[{ value: 'h', label: 'Горизонтальные' }, { value: 'v', label: 'Вертикальные на главной' }]} />
       </Row>
@@ -554,7 +573,7 @@ export function ShadowsPanel() {
   return (
     <>
       <PanelHead title="Тени" text="Глубина интерфейса: тени карточек, окон и кнопок. Направление, дальность и цвет настраиваются для любого стиля." />
-      <Group title="Стиль теней">
+      <Group title="Стиль теней" spot={SPOTS.tiles}>
         <div className="shadow-grid" style={{ background: p.background }}>
           {SHADOWS.map((o) => {
             const sh = o.value === 'app' ? null : shadowSet({ ...s, preset: o.value }, scheme, p, config.surfaces.highlight, config.surfaces.highlightBottom);
@@ -568,7 +587,7 @@ export function ShadowsPanel() {
         </div>
       </Group>
       {tune && (
-        <Group title="Параметры">
+        <Group title="Параметры" spot={SPOTS.tiles}>
           <Slider label="Интенсивность" value={s.intensity} min={0} max={250} unit="%" onChange={(v) => set('shadows', 'intensity', v)} />
           {directional && (
             <div className="angle-row">
@@ -602,7 +621,7 @@ export function ShadowsPanel() {
         </Group>
       )}
       {s.preset !== 'app' && (
-        <Group title="Где показывать">
+        <Group title="Где показывать" spot={SPOTS.tiles}>
           <Toggle label="Карточки и плитки" checked={s.cards} onChange={(v) => set('shadows', 'cards', v)} />
           <Toggle label="Окна, меню, уведомления" checked={s.popups} onChange={(v) => set('shadows', 'popups', v)} />
           <Toggle label="Кнопки" checked={s.buttons} onChange={(v) => set('shadows', 'buttons', v)} />

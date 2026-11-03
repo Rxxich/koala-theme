@@ -122,7 +122,7 @@ export function defaultConfig(): ThemeConfig {
       opacity: 50, blur: 24, saturate: 100, borderWidth: 1, borderOpacity: 100, radius: 0.625,
       gradient: false, gradientKind: 'soft', gradientAngle: 180, gradientX: 50, gradientY: 0,
       gradientStops: { light: CARD_GRADIENTS.lighter.stops(APP_PALETTE.light), dark: CARD_GRADIENTS.lighter.stops(APP_PALETTE.dark) }, gradientPreset: '',
-      highlight: false, highlightBottom: false, borderColor: 'auto', borderCustom: '#7c8cff', sidebar: 'app', navActive: 'app', navRadius: 12, navOpacity: 14, navColor: 'auto', navCustom: '#7c8cff',
+      highlight: false, highlightBottom: false, borderColor: 'auto', borderCustom: '#7c8cff', sidebar: 'app', sidebarIcons: 'app', navActive: 'app', navRadius: 12, navOpacity: 14, navColor: 'auto', navCustom: '#7c8cff',
       selected: 'app', selectedHover: 'none', selectedColor: 'auto', selectedCustom: '#7c8cff', hover: 'app', groupHover: 'app', hoverColor: 'auto', hoverCustom: '#7c8cff',
       profileSelected: 'app', profileSelectedHover: 'none', profileHover: 'app', profileSwitch: 'app', profileColor: 'auto', profileCustom: '#7c8cff',
       iconPlate: 'app', iconColor: 'auto', iconCustom: '#7c8cff', iconShape: 'app', iconPad: 5, iconHover: false, buttons: 'app', buttonsRadius: 14, buttonsOpacity: 72, buttonsColor: 'auto', buttonsCustom: '#7c8cff'
@@ -242,5 +242,6 @@ export function sanitizeConfig(raw: unknown): ThemeConfig {
   const su = merged.surfaces;
   if ((su.fill as string) === 'outline') Object.assign(su, { fill: 'glass', liquid: false, opacity: 0, blur: 0, borderWidth: Math.max(1, su.borderWidth) });
   if (!['glass', 'solid', 'transparent'].includes(su.fill)) su.fill = 'glass';
+  if (!['app', 'duo', 'solarDuo', 'solarBroken', 'chunk'].includes(su.sidebarIcons)) su.sidebarIcons = 'app';
   return merged;
 }

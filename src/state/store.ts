@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { defaultConfig, sanitizeConfig } from '../lib/defaults';
 import { readLocal, writeLocal } from '../lib/storage';
 import type { Scheme, ThemeConfig } from '../lib/types';
+import type { Spot } from '../lib/spots';
 
 export type Tab = 'editor' | 'gallery' | 'install';
 const SECTIONS = ['palette', 'background', 'surfaces', 'shadows', 'power', 'motion', 'fonts', 'flags', 'fun', 'extras', 'code'] as const;
@@ -55,13 +56,15 @@ interface State {
   /** Просмотр готовой CSS-темы из галереи вместо темы конструктора */
   viewing: string | null;
   toast: { id: number; text: string } | null;
+  /** Кнопка «Показать в макете» в группе: какой элемент обвести. at - время нажатия, чтобы повторное срабатывало */
+  spot: (Spot & { at: number }) | null;
 
   /** Изменить конфиг. key - для склейки частых изменений (ползунки) в один шаг истории */
   update: (fn: (c: ThemeConfig) => void, key?: string) => void;
   replace: (cfg: ThemeConfig, label?: string) => void;
   undo: () => void;
   redo: () => void;
-  set: (patch: Partial<Pick<State, 'tab' | 'section' | 'dark' | 'page' | 'power' | 'sidebar' | 'paletteOpen' | 'exportOpen' | 'viewing'>>) => void;
+  set: (patch: Partial<Pick<State, 'tab' | 'section' | 'dark' | 'page' | 'power' | 'sidebar' | 'paletteOpen' | 'exportOpen' | 'viewing' | 'spot'>>) => void;
   notify: (text: string) => void;
 }
 
@@ -82,6 +85,7 @@ export const useStore = create<State>((set, get) => ({
   exportOpen: false,
   viewing: null,
   toast: null,
+  spot: null,
 
   update(fn, key = '') {
     const { config, past, lastCommit, lastKey } = get();

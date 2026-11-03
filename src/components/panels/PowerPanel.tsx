@@ -10,6 +10,7 @@ import type { ClickEffect, DayScene, Easing, Entrance, PowerFill, PowerHover, Po
 import { ColorField } from '../ColorPicker';
 import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
 import { PanelHead, useCfg } from './common';
+import { SPOTS } from '../../lib/spots';
 
 const STYLES: { value: PowerStyle; label: string; note: string; fun?: boolean }[] = [
   { value: 'app', label: 'Как в клиенте', note: 'Стандартный круг, настраиваются цвета и эффекты ниже' },
@@ -76,7 +77,7 @@ export function PowerPanel() {
           </button>
         ))}
       </div>
-      <Group title="Стиль">
+      <Group title="Стиль" spot={SPOTS.power}>
         <div className="power-grid">
           {STYLES.map((o) => (
             <Choice key={o.value} active={pw.style === o.value} onClick={() => pick(o.value)} title={o.note} className={o.fun ? 'choice-fun' : undefined}>
@@ -88,7 +89,7 @@ export function PowerPanel() {
         </div>
       </Group>
 
-      <Group title="Подсветка позади" hint="Цветное свечение под кнопкой. Работает с любым стилем, кроме сферы (у неё своё)">
+      <Group title="Подсветка позади" spot={SPOTS.power} hint="Цветное свечение под кнопкой. Работает с любым стилем, кроме сферы (у неё своё)">
         <Slider label="Сила" value={pw.glow} min={0} max={100} unit="%" onChange={(v) => set('power', 'glow', v)} />
         {pw.glow > 0 && (
           <>
@@ -105,7 +106,7 @@ export function PowerPanel() {
       </Group>
 
       {toggle && (
-        <Group title="Тумблер">
+        <Group title="Тумблер" spot={SPOTS.power}>
           {pw.style === 'toggle' && (
             <>
               <Row label="Вид"><Segmented<ToggleLook> size="sm" value={pw.toggleLook} onChange={(v) => set('power', 'toggleLook', v)} options={[{ value: 'classic', label: 'Классический' }, { value: 'glass', label: 'Стекло' }]} /></Row>
@@ -127,7 +128,7 @@ export function PowerPanel() {
         </Group>
       )}
 
-      <Group title="Форма и заливка">
+      <Group title="Форма и заливка" spot={SPOTS.power}>
         <Slider label="Размер" value={pw.size} min={70} max={150} unit="%" onChange={(v) => set('power', 'size', v)} />
         {!ball && !toggle && (
           <Row label="Форма"><Segmented<PowerShape> size="sm" value={pw.shape} options={[{ value: 'circle', label: 'Круг' }, { value: 'squircle', label: 'Сквиркл' }, { value: 'square', label: 'Квадрат' }]}
@@ -172,14 +173,14 @@ export function PowerPanel() {
       </Group>
 
       {plain && (
-        <Group title="Объём">
+        <Group title="Объём" spot={SPOTS.power}>
           <Segmented<PowerVolume> wrap size="sm" value={pw.volume} onChange={(v) => set('power', 'volume', v)} options={VOLUMES} />
           <Slider label="Тень под кнопкой" value={pw.drop} min={0} max={100} unit="%" onChange={(v) => set('power', 'drop', v)} />
         </Group>
       )}
 
       {standard && (
-        <Group title="Иконка">
+        <Group title="Иконка" spot={SPOTS.power}>
           <Segmented<PowerIcon> wrap size="sm" value={pw.icon} onChange={(v) => set('power', 'icon', v)} options={[
             { value: 'app', label: 'Белая' }, { value: 'foreground', label: 'Цвет текста' }, { value: 'primary', label: 'Акцент' }, { value: 'power', label: 'Цвет кнопки' }, { value: 'custom', label: 'Свой' }, { value: 'hide', label: 'Скрыть' }
           ]} />
@@ -188,7 +189,7 @@ export function PowerPanel() {
         </Group>
       )}
 
-      <Group title="Поведение">
+      <Group title="Поведение" spot={SPOTS.power}>
         {pw.style !== 'sphere' && (
           <>
             <Row label="Наведение" stack>
@@ -304,7 +305,7 @@ export function MotionPanel() {
         )}
       </Group>
 
-      <Group title="Появление карточек" aside={<Button size="sm" variant="soft" icon={<RotateCcw size={13} />} onClick={replay}>Проиграть</Button>}
+      <Group title="Появление карточек" spot={SPOTS.tiles} aside={<Button size="sm" variant="soft" icon={<RotateCcw size={13} />} onClick={replay}>Проиграть</Button>}
         hint="Анимация, с которой карточки появляются при переходе на страницу">
         <div className="entrance-grid">
           {ENTRANCES.map((e) => (

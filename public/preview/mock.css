@@ -32,4 +32,4 @@ html, body { height: 100%; overflow: hidden; }
 @keyframes kt-spin { to { transform: rotate(360deg); } }
 
 /* Подсветка элемента, на который указали из конструктора */
-.kt-highlight { outline: 2px dashed #ff5fa2 !important; outline-offset: 3px; transition: outline-color 200ms; }
+.kt-highlight { outline: 3px dashed #ff5fa2 !important; outline-offset: 3px; transition: outline-color 200ms; }

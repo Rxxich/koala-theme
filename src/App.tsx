@@ -18,18 +18,29 @@ import { FunPanel } from './components/panels/FunPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { cx } from './components/ui';
 
-const SECTIONS: { id: Section; label: string; icon: typeof Palette; panel: () => JSX.Element }[] = [
-  { id: 'palette', label: 'Палитра', icon: Palette, panel: PalettePanel },
-  { id: 'background', label: 'Фон', icon: Image, panel: BackgroundPanel },
-  { id: 'surfaces', label: 'Поверхности', icon: Layers, panel: SurfacesPanel },
-  { id: 'shadows', label: 'Тени', icon: SunDim, panel: ShadowsPanel },
-  { id: 'power', label: 'Кнопка', icon: Power, panel: PowerPanel },
-  { id: 'motion', label: 'Анимации', icon: Sparkles, panel: MotionPanel },
-  { id: 'fonts', label: 'Шрифты', icon: Type, panel: FontsPanel },
-  { id: 'flags', label: 'Флаги', icon: Flag, panel: FlagsPanel },
-  { id: 'fun', label: 'Разное', icon: Wand2, panel: FunPanel },
-  { id: 'extras', label: 'Детали', icon: SlidersHorizontal, panel: ExtrasPanel },
-  { id: 'code', label: 'Код', icon: Code2, panel: CodePanel }
+// Разделы рейла по смыслу: цвет, элементы окна, движение, текст, остальное. Между группами - разделитель
+const SECTIONS: { id: Section; label: string; icon: typeof Palette; panel: () => JSX.Element }[][] = [
+  [
+    { id: 'palette', label: 'Палитра', icon: Palette, panel: PalettePanel },
+    { id: 'background', label: 'Фон', icon: Image, panel: BackgroundPanel }
+  ],
+  [
+    { id: 'surfaces', label: 'Поверхности', icon: Layers, panel: SurfacesPanel },
+    { id: 'shadows', label: 'Тени', icon: SunDim, panel: ShadowsPanel },
+    { id: 'power', label: 'Кнопка', icon: Power, panel: PowerPanel }
+  ],
+  [
+    { id: 'motion', label: 'Анимации', icon: Sparkles, panel: MotionPanel },
+    { id: 'fun', label: 'Эффекты', icon: Wand2, panel: FunPanel }
+  ],
+  [
+    { id: 'fonts', label: 'Шрифты', icon: Type, panel: FontsPanel },
+    { id: 'flags', label: 'Флаги', icon: Flag, panel: FlagsPanel }
+  ],
+  [
+    { id: 'extras', label: 'Детали', icon: SlidersHorizontal, panel: ExtrasPanel },
+    { id: 'code', label: 'Код', icon: Code2, panel: CodePanel }
+  ]
 ];
 
 export default function App() {
@@ -38,7 +49,7 @@ export default function App() {
     tab: s.tab, section: s.section, exportOpen: s.exportOpen, toast: s.toast, set: s.set, undo: s.undo, redo: s.redo, replace: s.replace, notify: s.notify
   })));
   const [dragOver, setDragOver] = useState(false);
-  const Panel = SECTIONS.find((s) => s.id === section)?.panel ?? PalettePanel;
+  const Panel = SECTIONS.flat().find((s) => s.id === section)?.panel ?? PalettePanel;
 
   // Тема из ссылки "Поделиться" (#t=...)
   useEffect(() => {
@@ -79,11 +90,15 @@ export default function App() {
       <main className="workspace">
         {tab === 'editor' && (
           <nav className="rail" aria-label="Разделы конструктора">
-            {SECTIONS.map((s) => (
-              <button key={s.id} type="button" className={cx('rail-btn', section === s.id && 'active')} onClick={() => set({ section: s.id })} title={s.label}>
-                <s.icon size={18} />
-                <span>{s.label}</span>
-              </button>
+            {SECTIONS.map((group, i) => (
+              <div key={i} className="rail-group">
+                {group.map((s) => (
+                  <button key={s.id} type="button" className={cx('rail-btn', section === s.id && 'active')} onClick={() => set({ section: s.id })} title={s.label}>
+                    <s.icon size={18} />
+                    <span>{s.label}</span>
+                  </button>
+                ))}
+              </div>
             ))}
           </nav>
         )}

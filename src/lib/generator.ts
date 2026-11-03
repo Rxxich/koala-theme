@@ -16,6 +16,7 @@ import { powerKeyframes, powerRules, type GlassLook } from './power';
 import { particleSet, patternLayer } from './backdrop';
 import { clickRules, funRules, PROXY_SEL } from './effects';
 import { dividerRules } from './dividers';
+import { sidebarIconRules } from './sidebarIcons';
 import type { Background, BgAnimation, GradientStop, IconPlate, LiquidSmooth, Palette, Scheme, SelectedStyle, StyleColor, ThemeConfig } from './types';
 
 const P = ':root';
@@ -817,7 +818,7 @@ function surfaceRules(cfg: ThemeConfig): string {
   // (hover:bg-primary/15) не срабатывает - даём свою
   const selHov = `${sel}:hover`;
   const sh2 = s.selectedHover;
-  if (sh2 !== 'none') out += rule(sel, [`transition: transform var(--kt-dur) var(--kt-ease), filter var(--kt-dur) var(--kt-ease), border-color var(--kt-dur) var(--kt-ease), outline-color var(--kt-dur) var(--kt-ease), ${moveT} !important`]);
+  if (sh2 !== 'none') out += rule(sel, [`transition: transform var(--kt-dur) var(--kt-ease), filter var(--kt-dur) var(--kt-ease-fade), border-color var(--kt-dur) var(--kt-ease-fade), outline-color var(--kt-dur) var(--kt-ease-fade), ${moveT} !important`]);
   if (sh2 === 'brighten') out += rule(selHov, ['filter: brightness(1.1) saturate(1.12)']);
   if (sh2 === 'lift') out += rule(sel, LIFT_BASE) + rule(selHov, [...LIFT, 'filter: brightness(1.05)']);
   if (sh2 === 'glow') out += rule(selHov, [`filter: drop-shadow(0 0 10px ${cm('var(--primary)', 45)})`]);
@@ -903,7 +904,7 @@ function surfaceRules(cfg: ThemeConfig): string {
   const gHov = `${GROUP}:not(:has(button:hover, input:hover)):hover`, hHov = `${HOME}:hover`;
   const gBg = s.custom && hoverFill(45);
   // У кнопки на главной клиент плавно меняет только цвет
-  if (gh !== 'none') out += rule(HOME, [...LIFT_BASE, `transition: background var(--kt-dur) var(--kt-ease), border-color var(--kt-dur) var(--kt-ease), box-shadow var(--kt-dur) var(--kt-ease), ${moveT}`]);
+  if (gh !== 'none') out += rule(HOME, [...LIFT_BASE, `transition: background var(--kt-dur) var(--kt-ease-fade), border-color var(--kt-dur) var(--kt-ease-fade), box-shadow var(--kt-dur) var(--kt-ease-fade), ${moveT}`]);
   if (hAcc && gh !== 'none') out += rule([gHov, hHov], [hAcc]);
   // Подсветка: фон светлее и рамка с оттенком акцента - заметно на любой палитре, даже когда акцент близок к карточке
   if (gh === 'app') out += rule([gHov, hHov], [gBg, `border-color: color-mix(in srgb, ${hcol} 30%, var(--stroke)) !important`]);
@@ -1014,7 +1015,7 @@ function flagRules(cfg: ThemeConfig): string {
   // У значка тень входит в filter, поэтому любая замена filter должна её сохранять
   const SHADOW = 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25))';
   const withShadow = (flt: string) => (f.style === 'badge' ? [SHADOW, flt].filter(Boolean).join(' ') : flt || 'none');
-  const fade = 'transition: opacity var(--kt-dur) var(--kt-ease), filter var(--kt-dur) var(--kt-ease), box-shadow var(--kt-dur) var(--kt-ease)';
+  const fade = 'transition: opacity var(--kt-dur) var(--kt-ease-fade), filter var(--kt-dur) var(--kt-ease-fade), box-shadow var(--kt-dur) var(--kt-ease-fade)';
 
   if (f.style === 'corner' || f.style === 'watermark') {
     const water = f.style === 'watermark';
@@ -1029,7 +1030,7 @@ function flagRules(cfg: ThemeConfig): string {
       filter && `filter: ${filter}`,
       f.fade && `-webkit-mask-image: linear-gradient(to ${side === 'right' ? 'left' : 'right'}, #000 35%, transparent)`,
       f.fade && `mask-image: linear-gradient(to ${side === 'right' ? 'left' : 'right'}, #000 35%, transparent)`,
-      'transition: opacity var(--kt-dur) var(--kt-ease), filter var(--kt-dur) var(--kt-ease), transform var(--kt-dur-slow) var(--kt-ease)'
+      'transition: opacity var(--kt-dur) var(--kt-ease-fade), filter var(--kt-dur) var(--kt-ease-fade), transform var(--kt-dur-slow) var(--kt-ease)'
     ]);
   }
   if (f.style === 'badge' || f.style === 'round') {
@@ -1073,8 +1074,21 @@ function motionRules(cfg: ThemeConfig): string {
   const m = cfg.motion;
   let out = '';
   if (m.easing !== 'app' || m.speed !== 1) {
-    out += rule(`${P} :is([data-slot="card"], [data-slot="button"], [data-slot="sidebar-menu-button"], [data-slot="switch"], [data-slot="switch-thumb"], [data-slot="tabs-trigger"], ${TILE}, ${PROFILE})`, [
-      'transition-duration: var(--kt-dur) !important', m.easing !== 'app' && 'transition-timing-function: var(--kt-ease) !important'
+    // Кривая из настроек - движению, цветам - --kt-ease-fade: пружина на фоне и тексте мигает при наведении.
+    // Кнопки, переключатели и вкладки клиент анимирует целиком (transition-all) - им кривая без перелёта.
+    // У пункта меню свойства известны (sidebar.tsx): размер и отступы при сворачивании панели - пружиной,
+    // цвет, фон и тень - плавно. Карточкам, плиткам и профилям кривые по свойствам задают правила
+    // наведения темы - здесь только длительность, иначе !important перебил бы их
+    const ease = m.easing !== 'app';
+    out += rule(`${P} :is([data-slot="card"], ${TILE}, ${PROFILE})`, ['transition-duration: var(--kt-dur) !important']);
+    out += rule(`${P} :is([data-slot="button"], [data-slot="switch"], [data-slot="tabs-trigger"])`, [
+      'transition-duration: var(--kt-dur) !important', ease && 'transition-timing-function: var(--kt-ease-fade) !important'
+    ]);
+    out += rule(`${P} [data-slot="switch-thumb"]`, ['transition-duration: var(--kt-dur) !important', ease && 'transition-timing-function: var(--kt-ease) !important']);
+    out += rule(`${P} [data-slot="sidebar-menu-button"]`, [
+      'transition-duration: var(--kt-dur) !important',
+      ease && 'transition-property: width, height, padding, color, background-color, box-shadow !important',
+      ease && 'transition-timing-function: var(--kt-ease), var(--kt-ease), var(--kt-ease), var(--kt-ease-fade), var(--kt-ease-fade), var(--kt-ease-fade) !important'
     ]);
   }
   if (m.entrance !== 'none') {
@@ -1358,6 +1372,8 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
     Math.abs(cfg.surfaces.radius - 0.625) > 0.001 && `--radius: ${cfg.surfaces.radius}rem !important`,
     `--kt-ease: ${EASE[easing]}`,
     `--kt-ease-out: ${easing === 'linear' ? 'linear' : EASE[easing === 'spring' ? 'smooth' : easing]}`,
+    // Для цвета, прозрачности и теней: пружина и отскок заходят за 1, на цвете это вспышка
+    `--kt-ease-fade: ${easing === 'linear' ? 'linear' : EASE[easing === 'spring' || easing === 'bounce' ? 'smooth' : easing]}`,
     `--kt-spring: ${EASE.spring}`,
     `--kt-dur-fast: ${Math.round(140 * m.speed)}ms`,
     `--kt-dur: ${Math.round(220 * m.speed)}ms`,
@@ -1388,10 +1404,11 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
 
   const div = dividerRules(cfg, rule);
   if (div.css) css += section(++n, 'Разделители', 'Горизонтальные полосы (Separator: настройки, правила, логи, окна) и вертикальные на главной', div.css);
+  css += section(++n, 'Иконки меню', 'components/icons/sidebar-icons.tsx. Каждая иконка узнаётся по началу контура (path d): у пунктов\nнет своих атрибутов, а порядок меняется - без профилей в меню три пункта', sidebarIconRules(cfg, rule));
 
   const click = clickRules(cfg, rule);
   const fun = funRules(cfg, rule);
-  css += section(++n, 'Разное', 'Подсветка по пингу, реакция фона на подключение, бегущая рамка, «дыхание» выбранного', fun.css);
+  css += section(++n, 'Эффекты', 'Подсветка по пингу, реакция фона на подключение, бегущая рамка, «дыхание» выбранного', fun.css);
 
   const props = [...new Set([...click.props, ...fun.props, ...(m.entrance !== 'none' ? ['--kt-fresh'] : []), ...(rowsFixed(cfg) ? ['--kt-row-k'] : []),
     ...(bgAnimation(cfg.background.light) === 'flow' || bgAnimation(cfg.background.dark) === 'flow' ? ['--kt-flow'] : [])])];

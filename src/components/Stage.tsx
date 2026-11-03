@@ -4,7 +4,8 @@
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Moon, Sun, Power, Loader, AlertTriangle, PanelLeft, MessageSquare, MousePointer2, Bell, SquareStack,
-  RotateCcw, Maximize2, ScanLine, Palette as PaletteIcon, X, Download, Wand2, Home, Users, Server, Cable, ListChecks, ScrollText, Settings
+  RotateCcw, Maximize2, ScanLine, Palette as PaletteIcon, X, Download, Wand2, Home, Users, Server, Cable, ListChecks, ScrollText, Settings,
+  Eye, ChevronDown
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { generateCSS } from '../lib/generator';
@@ -13,7 +14,7 @@ import { useStore, type PowerState, type PreviewPage } from '../state/store';
 import { galleryById } from '../data/themes';
 import { presetById } from '../data/presets';
 import { PaletteWindow } from './PaletteWindow';
-import { cx } from './ui';
+import { cx, Popover } from './ui';
 import { downloadText } from '../lib/share';
 import { readLocal, writeLocal } from '../lib/storage';
 import { svgBackdrop } from '../lib/env';
@@ -36,7 +37,7 @@ interface KTApi {
 }
 
 const SIZES = [
-  { id: '800x700', w: 800, h: 700, label: '800 × 700', note: 'по умолчанию' },
+  { id: '800x700', w: 800, h: 700, label: '800 × 700' },
   { id: '800x600', w: 800, h: 600, label: '800 × 600', note: 'минимум' },
   { id: '960x720', w: 960, h: 720, label: '960 × 720' },
   { id: '1120x760', w: 1120, h: 760, label: '1120 × 760' }
@@ -81,7 +82,18 @@ export function Stage() {
   const [fit, setFit] = useState(true);
   const [scale, setScale] = useState(1);
   const [viewCss, setViewCss] = useState<string | null>(null);
+  const [showOpen, setShowOpen] = useState(false);
+  const showBtn = useRef<HTMLButtonElement>(null);
   const win = SIZES.find((s) => s.id === size) ?? SIZES[0];
+
+  // Меню «Показать»: всплывающие элементы макета, которые иначе пришлось бы искать в нём самом
+  const SHOW: { label: string; icon: typeof Bell; run: () => void }[] = [
+    { label: 'Выпадающее меню', icon: SquareStack, run: () => kt?.menu() },
+    { label: 'Подсказку', icon: MousePointer2, run: () => kt?.tooltip() },
+    { label: 'Уведомление', icon: Bell, run: () => kt?.toast('Профиль обновлён', 'success') },
+    { label: 'Диалог', icon: MessageSquare, run: () => kt?.dialog('import') },
+    { label: 'Анимации появления заново', icon: RotateCcw, run: () => kt?.replay() }
+  ];
 
   // CSS темы конструктора. useDeferredValue - чтобы ползунки не тормозили на тяжёлых темах
   const deferred = useDeferredValue(config);
@@ -122,6 +134,22 @@ export function Stage() {
   useEffect(() => { if (kt && kt.getState().power !== power) kt.setPower(power); }, [kt, power]);
   useEffect(() => { if (kt && kt.getState().sidebar !== sidebar) kt.setSidebar(sidebar); }, [kt, sidebar]);
 
+  // Кнопка «Показать в макете» в группе настроек: обвести элемент на пару секунд и прокрутить к нему.
+  // Страницу макета группа уже переключила (эффект выше вызвал kt.go раньше этого)
+  const spot = useStore((s) => s.spot);
+  useEffect(() => {
+    if (!kt || !spot) return;
+    kt.highlight(spot.sel);
+    // Ждём, пока новая страница покажется, и прокручиваем к первому видимому элементу
+    const scroll = setTimeout(() => {
+      const els = frame.current?.contentDocument?.querySelectorAll<HTMLElement>(spot.sel) ?? [];
+      const el = [...els].find((x) => x.getClientRects().length);
+      el?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    }, 350);
+    const off = setTimeout(() => kt.highlight(null), 2500);
+    return () => { clearTimeout(scroll); clearTimeout(off); kt.highlight(null); };
+  }, [kt, spot]);
+
   // Тема с одной палитрой: переключаем превью в её режим, чтобы сразу было видно результат
   useEffect(() => {
     if (config.mode === 'dark' && !dark) set({ dark: true });
@@ -161,8 +189,8 @@ export function Stage() {
   }, [kt, zoomOk, scale, win.w]);
 
   const pal = config.palette[dark ? 'dark' : 'light'];
-  const glow = viewing ? '#6b7cff' : pal.primary;
-  const glow2 = viewing ? '#7cf0c5' : pal.powerOnStart;
+  const glow = viewing ? '#d3d0c8' : pal.primary;
+  const glow2 = viewing ? '#8a867d' : pal.powerOnStart;
   const viewTheme = viewing ? galleryById(viewing) : null;
   const modeLocked = !viewing && config.mode !== 'both';
 
@@ -176,7 +204,7 @@ export function Stage() {
           <button className={cx('tb-btn', dark && 'active')} disabled={modeLocked && config.mode === 'light'} onClick={() => set({ dark: true })} title="Тёмная тема клиента"><Moon size={15} /></button>
           <button className={cx('tb-btn', !dark && 'active')} disabled={modeLocked && config.mode === 'dark'} onClick={() => set({ dark: false })} title="Светлая тема клиента"><Sun size={15} /></button>
         </div>
-        <div className="tb-group tb-pages" role="group" aria-label="Страница">
+        <div className="tb-group tb-states" role="group" aria-label="Страница">
           {PAGES.map((p) => (
             <button key={p.id} className={cx('tb-btn', page === p.id && 'active')} onClick={() => set({ page: p.id })} title={p.label}>
               <p.icon size={15} /><span className="tb-label">{p.label}</span>
@@ -192,15 +220,22 @@ export function Stage() {
         </div>
         <div className="tb-group" role="group" aria-label="Элементы интерфейса">
           <button className={cx('tb-btn', sidebar && 'active')} onClick={() => set({ sidebar: !sidebar })} title="Развернуть боковую панель"><PanelLeft size={15} /></button>
-          <button className="tb-btn" onClick={() => kt?.menu()} title="Показать меню"><SquareStack size={15} /></button>
-          <button className="tb-btn" onClick={() => kt?.tooltip()} title="Показать подсказку"><MousePointer2 size={15} /></button>
-          <button className="tb-btn" onClick={() => kt?.toast('Профиль обновлён', 'success')} title="Показать уведомление"><Bell size={15} /></button>
-          <button className="tb-btn" onClick={() => kt?.dialog('import')} title="Показать диалог"><MessageSquare size={15} /></button>
-          <button className="tb-btn" onClick={() => kt?.replay()} title="Проиграть анимации появления ещё раз"><RotateCcw size={15} /></button>
+          <button ref={showBtn} className={cx('tb-btn', showOpen && 'active')} onClick={() => setShowOpen(!showOpen)} aria-haspopup="menu" aria-expanded={showOpen}>
+            <Eye size={15} /><span className="tb-label">Показать</span><ChevronDown size={13} className="tb-caret" />
+          </button>
         </div>
+        <Popover anchor={showBtn.current} open={showOpen} onClose={() => setShowOpen(false)} width={236}>
+          <div className="menu-list" role="menu">
+            {SHOW.map((s) => (
+              <button key={s.label} type="button" role="menuitem" className="menu-item" onClick={() => { setShowOpen(false); s.run(); }}>
+                <s.icon size={15} />{s.label}
+              </button>
+            ))}
+          </div>
+        </Popover>
         <div className="tb-spacer" />
         <div className="tb-group" role="group" aria-label="Окно">
-          <select className="tb-select" value={size} onChange={(e) => { setSize(e.target.value); writeLocal('koala-theme:size', e.target.value); }} title="Размер окна">
+          <select className="tb-select" value={size} onChange={(e) => { setSize(e.target.value); writeLocal('koala-theme:size', e.target.value); }} title="Размер окна клиента">
             {SIZES.map((s) => <option key={s.id} value={s.id}>{s.label}{s.note ? ` · ${s.note}` : ''}</option>)}
           </select>
           <button className={cx('tb-btn', fit && 'active')} onClick={() => setFit(!fit)} title={fit ? 'Увеличить на всю сцену' : 'Вписать в экран'}>

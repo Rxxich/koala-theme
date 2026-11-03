@@ -1,4 +1,4 @@
-// Раздел "Разное": нестандартные эффекты, которых нет в обычных темах.
+// Раздел "Эффекты": нестандартные эффекты, которых нет в обычных темах.
 
 import { useEffect } from 'react';
 import { useStore, useEditScheme } from '../../state/store';
@@ -6,6 +6,7 @@ import type { Particles, PingGlow } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
 import { PanelHead, useCfg } from './common';
+import { SPOTS } from '../../lib/spots';
 
 const PING: { value: PingGlow; label: string }[] = [
   { value: 'none', label: 'Нет' }, { value: 'bar', label: 'Полоска' }, { value: 'dot', label: 'Точка' }, { value: 'glow', label: 'Свечение' }, { value: 'tint', label: 'Заливка' }
@@ -25,9 +26,9 @@ export function FunPanel() {
 
   return (
     <>
-      <PanelHead title="Разное" text="Нестандартные эффекты: интерфейс реагирует на пинг и подключение, падает снег, выбранный сервер обводит бегущий свет." />
+      <PanelHead title="Эффекты" text="Интерфейс реагирует на пинг и подключение, падает снег, выбранный сервер обводит бегущий свет." />
 
-      <Group title="Подсветка по пингу" hint="Карточка сервера окрашивается по задержке, как цифры пинга в клиенте: зелёный - до 500 мс, жёлтый - 500 мс и больше, красный - сервер не ответил. Цвета - из палитры (Успех, Предупреждение, Ошибка)">
+      <Group title="Подсветка по пингу" spot={SPOTS.proxies} hint="Карточка сервера окрашивается по задержке, как цифры пинга в клиенте: зелёный - до 500 мс, жёлтый - 500 мс и больше, красный - сервер не ответил. Цвета - из палитры (Успех, Предупреждение, Ошибка)">
         <div className="ping-grid" style={vars}>
           {PING.map((o) => (
             <Choice key={o.value} active={f.ping === o.value} onClick={() => set('fun', 'ping', o.value)}>

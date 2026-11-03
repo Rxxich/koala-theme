@@ -2,7 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, LocateFixed } from 'lucide-react';
+import { useStore } from '../state/store';
+import type { Spot } from '../lib/spots';
 
 export function cx(...xs: (string | false | null | undefined)[]) {
   return xs.filter(Boolean).join(' ');
@@ -40,12 +42,23 @@ export function Tip({ text }: { text: string }) {
 
 /* ---------- Раздел и строка ---------- */
 
-export function Group({ title, hint, children, aside }: { title?: string; hint?: string; children: ReactNode; aside?: ReactNode }) {
+/** spot - элемент макета, который меняет группа: кнопка в заголовке показывает его в окне клиента (spots.ts) */
+export function Group({ title, hint, children, aside, spot }: { title?: string; hint?: string; children: ReactNode; aside?: ReactNode; spot?: Spot }) {
+  const set = useStore((s) => s.set);
+  // Открыть страницу макета, где есть элемент; обводку и прокрутку к нему делает Stage
+  const locate = () => {
+    if (!spot) return;
+    const { page } = useStore.getState();
+    set({ page: spot.pages && !spot.pages.includes(page) ? spot.pages[0] : page, spot: { ...spot, at: Date.now() } });
+  };
   return (
     <section className="group">
       {(title || aside) && (
         <header className="group-head">
-          <h3>{title}{hint && <Tip text={hint} />}</h3>
+          <h3>
+            {title}{hint && <Tip text={hint} />}
+            {spot && <button type="button" className="group-locate" onClick={locate} title="Показать в макете" aria-label="Показать в макете"><LocateFixed size={13} /></button>}
+          </h3>
           {aside}
         </header>
       )}

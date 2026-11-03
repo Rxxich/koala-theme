@@ -13,6 +13,7 @@ import { ColorField } from '../ColorPicker';
 import { GradientEditor } from '../GradientEditor';
 import { Button, Choice, Group, Row, Segmented, Slider, TextField, Toggle, cx } from '../ui';
 import { PanelHead, SchemeSwitch } from './common';
+import { SPOTS } from '../../lib/spots';
 
 const KINDS: { value: BgKind; label: string }[] = [
   { value: 'app', label: 'Как в клиенте' }, { value: 'palette', label: 'Из палитры' }, { value: 'solid', label: 'Цвет' }, { value: 'linear', label: 'Линейный' },
@@ -180,7 +181,7 @@ export function BackgroundPanel() {
         <Slider label="Виньетка" hint="Затемнение по краям окна" value={bg.vignette} min={0} max={80} unit="%" onChange={(v) => setBg({ vignette: v }, 'vignette')} />
       </Group>
 
-      <Group title="Карта мира" hint="Картинка с картой из стандартной темы Koala Clash. Общая для обеих схем">
+      <Group title="Карта мира" spot={SPOTS.map} hint="Картинка с картой из стандартной темы Koala Clash. Общая для обеих схем">
         <Toggle label="Показывать карту" checked={map.show} onChange={(v) => setMap('show', v)} />
         {map.show && (
           <>

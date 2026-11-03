@@ -64,7 +64,7 @@ export function PalettePanel() {
 
   // Генератор
   const [harmony, setHarmony] = useState<Harmony | 'auto'>('auto');
-  const [seed, setSeed] = useState('#7c8cff');
+  const [seed, setSeed] = useState(p.primary);
   const [vivid, setVivid] = useState(100);
   const [tint, setTint] = useState<number | null>(null);
   const [last, setLast] = useState<GenResult | null>(null);

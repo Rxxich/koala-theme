@@ -1,4 +1,4 @@
-// Эффекты нажатия и раздел "Разное".
+// Эффекты нажатия и раздел "Эффекты".
 //
 // Эффект нажатия работает без JS: пока кнопка мыши зажата (:active), слой эффекта мгновенно
 // сжимается в исходное состояние (transition: none). Когда кнопку отпускают, переход возвращает
@@ -116,7 +116,7 @@ export function clickRules(cfg: ThemeConfig, rule: RuleFn): { css: string; props
       // overflow: hidden. Переход дописан к "all", чтобы не потерять переходы клиента
       const w = Math.max(1, Math.round(sz / 6));
       css += rule(T, [`outline: ${w}px solid transparent`, `outline-offset: ${sz}px`,
-        `transition: all var(--kt-dur) var(--kt-ease), outline-offset ${d} ${ease}, outline-color ${d} linear !important`]);
+        `transition: all var(--kt-dur) var(--kt-ease-fade), outline-offset ${d} ${ease}, outline-color ${d} linear !important`]);
       css += rule(`${T}:active:not(:has(button:active))`, [`outline-color: ${c(2)}`, 'outline-offset: 0px', 'transition-duration: 0s !important']);
       props.length = 0;
       break;

@@ -8,6 +8,7 @@ import { highlightCss } from '../../lib/highlight';
 import { copyText, downloadText, fileNameFor } from '../../lib/share';
 import { Button, Group, Row, Segmented, TextField, Toggle } from '../ui';
 import { PanelHead, useCfg } from './common';
+import { SPOTS } from '../../lib/spots';
 
 export function ExtrasPanel() {
   const { config, update, set } = useCfg();
@@ -35,7 +36,7 @@ export function ExtrasPanel() {
           { value: 'app', label: 'Инверсия' }, { value: 'card', label: 'Карточка' }, { value: 'accent', label: 'Акцент' }, { value: 'glass', label: 'Стекло' }
         ]} />
       </Group>
-      <Group title="Заголовок страницы">
+      <Group title="Заголовок страницы" spot={SPOTS.title}>
         <Segmented wrap size="sm" value={e.title} onChange={(v) => set('extras', 'title', v)} options={[
           { value: 'app', label: 'Обычный' }, { value: 'gradient', label: 'Градиент' }, { value: 'accent', label: 'Акцент' }, { value: 'outline', label: 'Контур' }
         ]} />

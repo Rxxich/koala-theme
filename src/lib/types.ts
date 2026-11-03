@@ -78,6 +78,8 @@ export interface MapSettings {
 
 /** 'cards' - боковая панель повторяет фон карточек */
 export type SidebarStyle = 'app' | 'cards' | 'glass' | 'solid' | 'transparent' | 'outline';
+/** Набор иконок бокового меню: как в клиенте, свои двухцветные или наборы с svgrepo (sidebarIconArt.ts) */
+export type SidebarIcons = 'app' | 'duo' | 'solarDuo' | 'solarBroken' | 'chunk';
 export type CardFill = 'glass' | 'solid' | 'transparent';
 export type NavActive = 'app' | 'fill' | 'gradient' | 'bar' | 'glow' | 'solid' | 'scale' | 'capsule' | 'neon' | 'underline' | 'dot' | 'liquid';
 export type SelectedStyle = 'app' | 'tint' | 'gradient' | 'glow' | 'outline' | 'bar' | 'power'
@@ -159,6 +161,7 @@ export interface Surfaces {
   borderColor: StyleColor;
   borderCustom: string;
   sidebar: SidebarStyle;
+  sidebarIcons: SidebarIcons;
   navActive: NavActive;
   /** Скругление активного пункта в стиле «Жидкое стекло», px */
   navRadius: number;

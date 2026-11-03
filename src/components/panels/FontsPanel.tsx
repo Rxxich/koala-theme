@@ -11,6 +11,7 @@ import { copyText } from '../../lib/share';
 import type { FlagStyle, Flags, Fonts, TextShadow } from '../../lib/types';
 import { Button, Choice, Group, Row, Segmented, Select, Slider, TextField, Toggle, cx } from '../ui';
 import { PanelHead, useCfg } from './common';
+import { SPOTS } from '../../lib/spots';
 
 /** Подгружает шрифты в сам сайт, чтобы образцы в списках рисовались нужным шрифтом */
 function useSiteFonts(urls: string[]) {
@@ -274,7 +275,7 @@ export function FlagsPanel() {
           ))}
         </div>
       </Group>
-      <Group title="Стиль">
+      <Group title="Стиль" spot={SPOTS.flags}>
         <Segmented<FlagStyle> wrap size="sm" value={fl.style} options={STYLES} onChange={(v) => update((c) => {
           // У значка и угла разный масштаб размера - подставляем разумное значение при переключении
           c.flags.style = v;

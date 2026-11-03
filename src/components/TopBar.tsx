@@ -1,10 +1,11 @@
-// Верхняя панель: логотип, вкладки, отмена/повтор, импорт, поделиться, экспорт.
+// Верхняя панель: логотип, вкладки, отмена/повтор, случайная тема, импорт, поделиться, экспорт.
 
 import { useRef } from 'react';
-import { Undo2, Redo2, Upload, Share2, Download, RotateCcw } from 'lucide-react';
+import { Undo2, Redo2, Upload, Share2, Download, RotateCcw, Dices } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Tab } from '../state/store';
 import { defaultConfig } from '../lib/defaults';
+import { randomTheme } from '../lib/random';
 import { copyText, importText, readFile, shareUrl } from '../lib/share';
 import { Button, cx } from './ui';
 
@@ -18,10 +19,10 @@ export function Logo() {
   return (
     <span className="logo">
       <svg viewBox="0 0 64 64" width="26" height="26" aria-hidden>
-        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#7cf0c5" /><stop offset="1" stopColor="#7c8cff" /></linearGradient></defs>
-        <circle cx="17" cy="22" r="10" fill="url(#lg)" opacity=".55" />
-        <circle cx="47" cy="22" r="10" fill="url(#lg)" opacity=".55" />
-        <circle cx="32" cy="36" r="16" fill="url(#lg)" />
+        <defs><linearGradient id="logo-pearl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffffff" /><stop offset="1" stopColor="#d3d0c8" /></linearGradient></defs>
+        <circle cx="17" cy="22" r="10" fill="url(#logo-pearl)" opacity=".55" />
+        <circle cx="47" cy="22" r="10" fill="url(#logo-pearl)" opacity=".55" />
+        <circle cx="32" cy="36" r="16" fill="url(#logo-pearl)" />
         <ellipse cx="32" cy="40" rx="5" ry="6.5" fill="#0b0d12" />
       </svg>
       <span className="logo-text">koala<span>·</span>theme</span>
@@ -57,6 +58,10 @@ export function TopBar() {
           <button className="tb-btn" disabled={!canRedo} onClick={redo} title="Повторить (Ctrl+Shift+Z)"><Redo2 size={16} /></button>
           <button className="tb-btn" onClick={() => replace(defaultConfig(), 'Настройки сброшены. Ctrl+Z - вернуть')} title="Начать с чистого листа"><RotateCcw size={16} /></button>
         </div>
+        <Button variant="ghost" icon={<Dices size={15} />} title="Собрать тему целиком наугад: палитра, фон, карточки, кнопка подключения. Ctrl+Z - вернуть прежнюю"
+          onClick={() => { const cfg = randomTheme(useStore.getState().config); replace(cfg, `Случайная тема «${cfg.name}». Ctrl+Z - вернуть прежнюю`); set({ tab: 'editor' }); }}>
+          <span className="hide-sm">Случайная тема</span>
+        </Button>
         <input ref={file} type="file" accept=".css,.json,text/css,application/json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
         <Button variant="ghost" icon={<Upload size={15} />} onClick={() => file.current?.click()} title="Открыть тему, собранную в koala-theme (.css или .json)"><span className="hide-sm">Импорт</span></Button>
         <Button variant="ghost" icon={<Share2 size={15} />} onClick={async () => notify((await copyText(await shareUrl(useStore.getState().config))) ? 'Ссылка на тему скопирована' : 'Не удалось скопировать')} title="Скопировать ссылку с настройками темы"><span className="hide-sm">Поделиться</span></Button>
