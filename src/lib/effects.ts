@@ -5,6 +5,7 @@
 // его в покой - и в этот момент видна волна, вспышка или блик. Радиус волны - анимируемая
 // CSS-переменная (@property), поэтому градиент растёт плавно.
 
+import { cardBeforeTaken } from './shadows';
 import type { ThemeConfig } from './types';
 
 type Decl = string | false | null | undefined | 0;
@@ -150,13 +151,17 @@ export function funRules(cfg: ThemeConfig, rule: RuleFn): { css: string; keyfram
     css += rule(`${PX}:has([data-slot="button"] .text-success)`, ['--kt-ping: var(--success)']);
     css += rule(`${PX}:has([data-slot="button"] .text-warning)`, ['--kt-ping: var(--warning)']);
     css += rule(`${PX}:has([data-slot="button"] .text-destructive)`, ['--kt-ping: var(--destructive)']);
-    const sel = `${PX}:has(${DELAY})::before`;
+    // ::before карточки занят, если кромка жидкого стекла отражает то, что вокруг или на карточке, - тогда
+    // подсветка у содержимого карточки. Оно занимает всю карточку, а скругление срезает сама карточка (overflow-hidden)
+    const content = `${PX}:has(${DELAY}) > [data-slot="card-content"]`;
+    const layer = cardBeforeTaken(cfg.surfaces);
+    const sel = layer ? `${content}::after` : `${PX}:has(${DELAY})::before`;
+    if (layer && f.ping !== 'bar') css += rule(content, ['position: relative']);
     const base = ['content: ""', 'position: absolute', 'pointer-events: none', 'z-index: 0', 'transition: background 0.4s ease, box-shadow 0.4s ease'];
     // Полоска стоит на долях высоты, поэтому она - у содержимого карточки: «Подъём» вытягивает саму
     // карточку на 2px вниз, и полоска от неё поднималась не вместе с текстом, а сжималась.
     // --kt-frame - толщина контура-рамки у выбранного сервера (generator.ts): полоска встаёт внутрь него
     if (f.ping === 'bar') {
-      const content = `${PX}:has(${DELAY}) > [data-slot="card-content"]`;
       css += rule(content, ['position: relative']);
       css += rule(`${content}::after`, [...base, 'left: var(--kt-frame, 0px)', 'top: 22%', 'bottom: 22%', 'width: 3px', 'border-radius: 0 3px 3px 0', 'background: var(--kt-ping)', 'box-shadow: 0 0 8px var(--kt-ping)']);
     }

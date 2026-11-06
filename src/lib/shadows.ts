@@ -2,7 +2,7 @@
 // размытие и разброс применяются ко всем слоям, поэтому любой стиль можно повернуть и подстроить.
 
 import { mix, rgba } from './color';
-import type { Palette, Scheme, ShadowPreset, Shadows, Surfaces, ThemeConfig } from './types';
+import type { Palette, Scheme, ShadowPreset, Shadows, Surfaces, TextShadowLayer } from './types';
 
 /** Слой тени. dx/dy - смещение при свете сверху, c - цвет слоя */
 interface Layer { dx: number; dy: number; blur: number; spread?: number; a: number; c?: 'base' | 'white' | 'accent' | 'pa' | 'pb' | 'solid'; inset?: boolean; fixed?: boolean }
@@ -104,6 +104,12 @@ export function highlightShadow(scheme: Scheme, top = true, bottom = false, glow
 }
 /** Мягкий ободок жидкого стекла light */
 export const rimGlow = (s: Surfaces) => s.custom && s.fill === 'glass' && s.liquid && s.liquidLight && s.liquidGlow;
+/** Кромка жидкого стекла (не light) отражает то, что вокруг или под карточкой */
+export const liquidReflects = (s: Surfaces, mode: Surfaces['liquidReflect']) => s.custom && s.fill === 'glass' && s.liquid && !s.liquidLight && s.liquidReflect === mode;
+/** Отражение того, что вокруг: стекло карточек и кнопки подключения рисует слой ::before больше них (generator.ts) */
+export const liquidLayer = (s: Surfaces) => liquidReflects(s, 'outside');
+/** ::before карточек занят: слоем стекла (отражение того, что вокруг) или полосой поверх содержимого (того, что на карточке) */
+export const cardBeforeTaken = (s: Surfaces) => liquidReflects(s, 'outside') || liquidReflects(s, 'content');
 /** Есть хоть один блик по кромке */
 export const hasHighlight = (s: Surfaces) => s.highlight || s.highlightBottom || rimGlow(s);
 
@@ -150,19 +156,17 @@ export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: b
 
 /* ---------- Тень текста ---------- */
 
-export function textShadowCss(cfg: ThemeConfig, scheme: Scheme): string | null {
-  const f = cfg.fonts;
-  if (f.textShadow === 'none') return null;
-  const pal = cfg.palette[scheme];
+export function textShadowCss(t: TextShadowLayer, pal: Palette, scheme: Scheme): string | null {
+  if (t.style === 'none') return null;
   const dark = scheme === 'dark';
-  const op = f.textShadowOpacity / 100;
-  const base = f.textShadowColor === 'primary' ? pal.primary : f.textShadowColor === 'power' ? pal.powerOnEnd : f.textShadowColor === 'custom' ? f.textShadowCustom
-    : f.textShadow === 'glow' || f.textShadow === 'neon' ? pal.primary : dark ? '#000000' : mix(pal.background, '#000000', 0.75);
-  const rad = ((f.textShadowAngle - 90) * Math.PI) / 180;
-  const d = f.textShadowDistance / 100, b = f.textShadowBlur / 100;
+  const op = t.opacity / 100;
+  const base = t.color === 'primary' ? pal.primary : t.color === 'power' ? pal.powerOnEnd : t.color === 'custom' ? t.custom
+    : t.style === 'glow' || t.style === 'neon' ? pal.primary : dark ? '#000000' : mix(pal.background, '#000000', 0.75);
+  const rad = ((t.angle - 90) * Math.PI) / 180;
+  const d = t.distance / 100, b = t.blur / 100;
   const off = (dist: number) => `${Math.round(-Math.sin(rad) * dist * d * 10) / 10}px ${Math.round(Math.cos(rad) * dist * d * 10) / 10}px`;
   const c = (a: number) => rgba(base, Math.min(1, a * op));
-  switch (f.textShadow) {
+  switch (t.style) {
     case 'soft': return `${off(1)} ${2 * b}px ${c(0.5)}, ${off(2)} ${8 * b}px ${c(0.35)}`;
     case 'glow': return `0 0 ${6 * b}px ${c(0.8)}, 0 0 ${16 * b}px ${c(0.5)}`;
     case 'neon': return `0 0 ${2 * b}px ${rgba('#ffffff', 0.8 * op)}, 0 0 ${6 * b}px ${c(1)}, 0 0 ${14 * b}px ${c(0.9)}, 0 0 ${28 * b}px ${c(0.6)}`;
@@ -177,10 +181,9 @@ export function textShadowCss(cfg: ThemeConfig, scheme: Scheme): string | null {
 }
 
 /** Насколько тень текста выходит за буквы, px: смещение плюс размытие самого дальнего слоя */
-export function textShadowReach(cfg: ThemeConfig): number {
-  const f = cfg.fonts;
-  const d = f.textShadowDistance / 100, b = f.textShadowBlur / 100;
-  switch (f.textShadow) {
+export function textShadowReach(t: TextShadowLayer): number {
+  const d = t.distance / 100, b = t.blur / 100;
+  switch (t.style) {
     case 'soft': return 2 * d + 8 * b;
     case 'glow': return 16 * b;
     case 'neon': return 28 * b;

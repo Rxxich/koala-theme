@@ -940,6 +940,9 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 .ts-tile small { font-size: 10.5px; opacity: 0.7; }
 .ts-tile:hover { border-color: rgba(127, 127, 127, 0.3); }
 .ts-tile.active { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(226, 223, 216, 0.15); }
+.ts-tabs { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ts-where { display: flex; flex-wrap: wrap; gap: 6px; }
+.ts-where .chip small { margin-left: 5px; color: var(--text-3); font-size: 10.5px; }
 
 /* Разное */
 .ping-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }

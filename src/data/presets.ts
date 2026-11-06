@@ -1,7 +1,7 @@
 // Готовые темы конструктора. Каждая собирается из настроек по умолчанию + изменений,
 // поэтому её можно открыть, поменять что угодно и сохранить как свою.
 
-import { deepMerge, makeBackground, styledBase } from '../lib/defaults';
+import { deepMerge, makeBackground, styledBase, textShadowLayer } from '../lib/defaults';
 import { derivePalette } from '../lib/palette';
 import type { DeepPartial, Palette, ThemeConfig } from '../lib/types';
 import { GRADIENTS, photoUrl } from './gradients';
@@ -252,7 +252,7 @@ export const PRESETS: ThemePreset[] = [
       power: { style: 'radar', size: 108, glow: 40 },
       motion: { click: 'border', clickColor: 'power', easing: 'snappy', entrance: 'fade' },
       fun: { ping: 'bar' },
-      fonts: { imports: [googleFontUrl('JetBrains Mono', '400;500;600;700')], ui: 'JetBrains Mono', heading: 'JetBrains Mono', mono: 'JetBrains Mono', uppercaseTitles: true, textShadow: 'glow', textShadowOpacity: 45 },
+      fonts: { imports: [googleFontUrl('JetBrains Mono', '400;500;600;700')], ui: 'JetBrains Mono', heading: 'JetBrains Mono', mono: 'JetBrains Mono', uppercaseTitles: true, textShadows: [textShadowLayer({ style: 'glow', opacity: 45 })] },
       extras: { scrollbar: 'accent', statusColor: true }
     })
   },

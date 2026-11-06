@@ -10,7 +10,7 @@ import { bgAnimation, cardPreview, liquidOn, liquidSamples, schemeScopes } from 
 import { cardStops, defaultConfig, detachCardGradient } from '../../lib/defaults';
 import { GradientEditor } from '../GradientEditor';
 import { CardGradientTiles } from './CardGradients';
-import type { SidebarIcons, ButtonStyle, CardFill, CardGradient, ThemeConfig, Divider, DividerEffect, DividerStyle, GlassKind, HoverStyle, IconPlate, IconShape, LiquidSmooth, NavActive, Palette, ProfileSwitch, SelectedHover, SelectedStyle, ShadowPreset, SidebarStyle, StyleColor, Surfaces } from '../../lib/types';
+import type { SidebarIcons, ButtonStyle, CardFill, CardGradient, ThemeConfig, Divider, DividerEffect, DividerStyle, GlassKind, HoverStyle, IconPlate, IconShape, LiquidSmooth, NavActive, Palette, ProfileSwitch, ReflectMode, SelectedHover, SelectedStyle, ShadowPreset, SidebarStyle, StyleColor, Surfaces } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
 import { PanelHead, SchemeSwitch, useCfg } from './common';
@@ -29,6 +29,9 @@ const CARD_FILL: { value: FillChoice; label: string }[] = [
   { value: 'app', label: 'Как в клиенте' }, { value: 'glass', label: 'Стекло' }, { value: 'liquid', label: 'Жидкое стекло' }, { value: 'solid', label: 'Сплошные' }, { value: 'light', label: 'Жидкое стекло light' }, { value: 'transparent', label: 'Без фона' }
 ];
 const SMOOTH: { value: LiquidSmooth; label: string }[] = [{ value: 'off', label: 'Нет' }, { value: 'soft', label: 'Мягкое' }, { value: 'exact', label: 'Точное' }];
+const REFLECT: { value: ReflectMode; label: string }[] = [
+  { value: 'off', label: 'Нет' }, { value: 'outside', label: 'Вокруг карточки' }, { value: 'content', label: 'На карточке' }, { value: 'surface', label: 'Под карточкой' }
+];
 const NAV: { value: NavActive; label: string }[] = [
   { value: 'app', label: 'Рамка' }, { value: 'fill', label: 'Заливка' }, { value: 'gradient', label: 'Градиент' }, { value: 'bar', label: 'Полоска' }, { value: 'glow', label: 'Свечение' }, { value: 'solid', label: 'Инверсия' },
   { value: 'scale', label: 'Увеличение' }, { value: 'capsule', label: 'Капсула' }, { value: 'neon', label: 'Неон' }, { value: 'underline', label: 'Подчёркивание' }, { value: 'dot', label: 'Точка' },
@@ -146,6 +149,24 @@ function LightLoadNote() {
   );
 }
 
+/**
+ * Линза и отражение кромки: насколько тяжелее стекло. Замер 06.11.2026: 25 карточек, стекло каждой
+ * пересчитывается каждый кадр, экран 180 Гц - без них 180 кадров/с, линза 127, отражение того, что
+ * вокруг, 91, того, что под карточкой, 85, линза с отражением 66-69. Отражение того, что на карточке,
+ * мерили позже, когда и обычное жидкое стекло давало 82: оно 87, вокруг 99, под карточкой 95 - того же порядка
+ */
+function LensReflectNote({ lens, reflect }: { lens: boolean; reflect: ReflectMode }) {
+  const out = reflect === 'outside', on = reflect !== 'off';
+  const what = lens && on ? 'Линза с отражением в два с половиной раза' : lens ? 'Линза примерно в полтора раза' : 'Отражение примерно вдвое';
+  return (
+    <div className="csp-note warn">
+      <AlertTriangle size={14} />
+      <span>{what} тяжелее обычного жидкого стекла{out ? ': чтобы кромка видела, что лежит рядом, стекло каждой карточки считается по участку шире неё'
+        : reflect === 'content' ? ': чтобы кромка видела текст и значки карточки, поверх них лежит второй слой стекла' : ''}. Неподвижное стекло ничего не стоит, но при прокрутке списка серверов и любой анимации на экранах 144-180 Гц прокрутка может опуститься до {lens && on ? '65' : lens ? '120' : '85'} кадров/с. Если стало подтормаживать - уменьшите размытие или выключите {lens && on ? 'одно из двух' : lens ? 'линзу' : 'отражение'}.</span>
+    </div>
+  );
+}
+
 export function SurfacesPanel() {
   const { config, set, update } = useCfg();
   const setUi = useStore((st) => st.set);
@@ -160,6 +181,7 @@ export function SurfacesPanel() {
   };
   /** Любая настройка карточек включает "свои поверхности" */
   const setCard = <K extends 'opacity' | 'blur' | 'saturate' | 'grain' | 'liquidStrength' | 'liquidEdge' | 'liquidSmooth' | 'liquidRainbow' | 'liquidRim' | 'liquidReach' | 'liquidShine' | 'liquidRimAlways' | 'liquidGlow'
+    | 'liquidLens' | 'liquidReflect' | 'liquidReflectShine' | 'liquidReflectWidth'
     | 'borderWidth' | 'borderOpacity' | 'gradient' | 'highlight' | 'highlightBottom' | 'borderColor' | 'borderCustom'>(k: K, v: (typeof s)[K]) =>
     update((c) => { c.surfaces[k] = v; c.surfaces.custom = true; }, `surfaces.${k}`);
   const liquid = liquidOn(s);
@@ -266,7 +288,7 @@ export function SurfacesPanel() {
                 <Button size="sm" variant="soft" title="Размытие 4px, непрозрачность до 30%, насыщенность от 150% - как у жидкого стекла Apple. Сильное размытие и плотная заливка прячут преломление"
                   onClick={() => update((c) => thinGlass(c.surfaces))}>Сделать стекло прозрачнее</Button>
               )}
-              <Slider label="Преломление" hint="Насколько далеко сдвигается фон у самого края. Изгиб всегда плавный: при сильном преломлении кромка сама становится шире, чтобы фон не ломался складкой" value={s.liquidStrength} min={2} max={40} unit="px" onChange={(v) => setCard('liquidStrength', v)} />
+              <Slider label="Преломление" hint="Насколько далеко сдвигается фон у самого края. Изгиб всегда плавный: при сильном преломлении кромка сама становится шире, чтобы фон не ломался складкой. Сильное преломление при узкой кромке вытягивает мелкие детали фона у края в полосы - тогда уменьшите его или расширьте кромку, а увеличение дайте линзой. 0 - фон у кромки не изгибается" value={s.liquidStrength} min={0} max={40} unit="px" onChange={(v) => setCard('liquidStrength', v)} />
               <Slider label="Ширина кромки" hint="Полоса у края, где фон изгибается: узкая - изгиб только у кромки, а середина остаётся ровной, широкая - вся карточка как увеличительное стекло" value={s.liquidEdge} min={6} max={50} unit="px" onChange={(v) => setCard('liquidEdge', v)} />
               <Row label="Сглаживание" stack hint="Видеокарта берёт для каждой точки стекла ближайший пиксель фона, и тонкие линии узора под стеклом рвутся лесенкой. Мягкое - стекло чуть размывается на полпикселя, бесплатно. Точное - несколько соседних выборок усредняются: линии ровные, середина остаётся чёткой, но стекло вдвое тяжелее">
                 <Segmented<LiquidSmooth> size="sm" value={s.liquidSmooth} options={SMOOTH} onChange={(v) => setCard('liquidSmooth', v)} />
@@ -274,6 +296,18 @@ export function SurfacesPanel() {
               <Slider label="Радужность" hint="У кромки цвета расходятся, как в призме: красный сдвигается сильнее, синий слабее. 0 - выключить. Примерно вдвое тяжелее обычного жидкого стекла"
                 value={s.liquidRainbow} min={0} max={100} unit="%" onChange={(v) => setCard('liquidRainbow', v)} />
               {liquidSamples(s.liquidSmooth, s.liquidRainbow) > 1 && <HeavyLiquidNote samples={liquidSamples(s.liquidSmooth, s.liquidRainbow)} />}
+              <Slider label="Линза" hint="Фон под всей карточкой увеличен, как под толстой линзой: картинка за карточкой крупнее, чем вокруг неё. Увеличение ровное по всей карточке, детали фона не вытягиваются. У боковой панели линзы нет: она слишком высокая, и фон растягивался бы только вбок. 0 - выключить"
+                value={s.liquidLens} min={0} max={100} unit="%" onChange={(v) => setCard('liquidLens', v)} />
+              <Row label="Отражение кромки" stack hint="Край стекла подсвечивается тем, что ярче него. Вокруг карточки - то, что лежит рядом с ней снаружи: яркая картинка возле карточки красит её кромку своим цветом. На карточке - то, что на ней нарисовано: текст, флаг, цифры пинга у края отражаются в кромке, у кнопки подключения - её значок. Эти два - у карточек, плиток, профилей и кнопки подключения «Стекло». Под карточкой - то, что под самим стеклом ближе к середине (всё жидкое стекло, и боковая панель тоже). Включено что-то одно. Тёмное отражения не даёт">
+                <Segmented<ReflectMode> wrap size="sm" value={s.liquidReflect} options={REFLECT} onChange={(v) => setCard('liquidReflect', v)} />
+              </Row>
+              {s.liquidReflect !== 'off' && (
+                <>
+                  <Slider label="Сила отражения" hint="50% - отражение как есть, больше - ярче" value={s.liquidReflectShine} min={10} max={100} unit="%" onChange={(v) => setCard('liquidReflectShine', v)} />
+                  <Slider label="Ширина отражения" hint="Полоса у края, в которой видно отражение" value={s.liquidReflectWidth} min={3} max={20} unit="px" onChange={(v) => setCard('liquidReflectWidth', v)} />
+                </>
+              )}
+              {(s.liquidLens > 0 || s.liquidReflect !== 'off') && <LensReflectNote lens={s.liquidLens > 0} reflect={s.liquidReflect} />}
               <MovingBgNote config={config} />
             </>
           )}

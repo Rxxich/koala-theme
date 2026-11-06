@@ -101,6 +101,8 @@ export type CardGradientPreset = 'lighter' | 'deep' | 'accent' | 'corner' | 'hal
 
 /** Сглаживание жидкого стекла (lib/generator.ts, liquidUri) */
 export type LiquidSmooth = 'off' | 'soft' | 'exact';
+/** Отражение кромки жидкого стекла: нет, то что вокруг карточки (слой стекла больше неё), то что на ней (текст, значки), то что под ней */
+export type ReflectMode = 'off' | 'outside' | 'content' | 'surface';
 /** Вид стекла карточек: обычное, жидкое, жидкое light */
 export type GlassKind = 'glass' | 'liquid' | 'light';
 /** Непрозрачность, размытие и насыщенность, которые запоминаются для каждого вида стекла. opacity < 0 - не запомнены */
@@ -123,6 +125,14 @@ export interface Surfaces {
   liquidSmooth: LiquidSmooth;
   /** Радужность у кромки: красный канал сдвигается сильнее, синий слабее, %. 0 - выключена */
   liquidRainbow: number;
+  /** Линза: фон под всей карточкой увеличен, %. 100 - в 1.5 раза, 0 - выключена */
+  liquidLens: number;
+  /** Отражение кромки: что отражает край стекла - то, что рядом снаружи, что на карточке или что под ней */
+  liquidReflect: ReflectMode;
+  /** Сила отражения, %: 50 - как есть, больше - ярче */
+  liquidReflectShine: number;
+  /** Ширина полосы отражения у края, px */
+  liquidReflectWidth: number;
   /** Жидкое стекло light: кромка светится тем, что лежит под стеклом в глубине, стекло матовое. Только при liquid */
   liquidLight: boolean;
   /** Ширина светящейся кромки light, px */
@@ -319,6 +329,22 @@ export interface Motion {
 }
 
 export type TextShadow = 'none' | 'soft' | 'glow' | 'neon' | 'hard' | 'outline' | 'emboss' | 'long';
+/**
+ * Где тень текста: заголовки, подписка на главной и её цифры (numbers), таймер подключения, скорость, названия
+ * серверов, пинг, группы, пункты меню, подписи, кнопки или весь текст
+ */
+export type TextShadowTarget = 'titles' | 'subscription' | 'numbers' | 'timer' | 'speed' | 'servers' | 'ping' | 'groups' | 'menu' | 'muted' | 'buttons' | 'all';
+/** Одна тень текста: свой вид и свои места. Место может быть только у одной тени */
+export interface TextShadowLayer {
+  style: TextShadow;
+  targets: TextShadowTarget[];
+  color: 'auto' | 'primary' | 'power' | 'custom';
+  custom: string;
+  blur: number;
+  distance: number;
+  angle: number;
+  opacity: number;
+}
 export interface Fonts {
   imports: string[];
   ui: string;
@@ -333,14 +359,8 @@ export interface Fonts {
   smoothing: boolean;
   /** Шрифт twemoji для текстов в карточках без класса flag-emoji (описание сервера) */
   flagFix: boolean;
-  textShadow: TextShadow;
-  textShadowTarget: 'titles' | 'all';
-  textShadowColor: 'auto' | 'primary' | 'power' | 'custom';
-  textShadowCustom: string;
-  textShadowBlur: number;
-  textShadowDistance: number;
-  textShadowAngle: number;
-  textShadowOpacity: number;
+  /** Тени текста, до трёх (TEXT_SHADOW_MAX). Всегда хотя бы одна, выключенная - style: 'none' */
+  textShadows: TextShadowLayer[];
 }
 
 export type FlagStyle = 'app' | 'hide' | 'corner' | 'watermark' | 'badge' | 'round';

@@ -66,7 +66,29 @@ type RuleFn = (selector: string | string[], decls: Decl[]) => string;
 
 /** Стекло карточек из «Поверхностей» (glassLook в генераторе): зерно, заливка, фильтр, цвет рамки */
 /** filterPower - то же стекло для кнопки подключения: у жидкого light полоса повторяет её скругление */
-export interface GlassLook { grain: string; fill: string; filter: string; filterPower: string; stroke: string }
+/** layer - если кромка отражает то, что вокруг: стекло рисует слой больше кнопки на pad px, его фильтр - filter */
+/** rimOver - если кромка отражает то, что на кнопке (значок, ручку тумблера): фильтр слоя поверх них */
+export interface GlassLook { grain: string; fill: string; filter: string; filterPower: string; layer: { pad: number; filter: string } | null; rimOver: string | null; stroke: string }
+
+/** Кнопка подключения - из стекла карточек: стиль «Стекло» или стеклянный тумблер */
+export const powerGlassy = (pw: ThemeConfig['power']) => pw.style === 'glass' || (pw.style === 'toggle' && pw.toggleLook === 'glass');
+
+/**
+ * Стекло кнопки с отражением того, что вокруг. Как у карточек (generator.ts, surfaceRules): стекло рисует
+ * слой ::before круга, больше круга на pad px с каждой стороны, - так у края есть то, что лежит рядом,
+ * в том числе подсветка позади кнопки. Круг - без своего стекла и заливки: заливка с бликом шара лежит на
+ * слое поверх стекла, внутренние тени круга слой рисует сам (inherit). Скругление - только маской
+ */
+const glassLayer = (layer: NonNullable<GlassLook['layer']>, radius: string, bg: string): Decl[] => [
+  'content: ""', 'position: absolute', `inset: -${layer.pad}px`, `border: ${layer.pad}px solid transparent`, `border-radius: ${radius}`,
+  'z-index: -1', 'pointer-events: none', `backdrop-filter: ${layer.filter}`, 'mask: linear-gradient(#000 0 0) padding-box',
+  `background: ${bg}`, 'box-shadow: inherit'
+];
+/** Фон круга - на слой: его край - край круга внутри рамки (padding-box), а не край слоя */
+const onLayer = (bg: string) => bg.replaceAll(' border-box', ' padding-box');
+/** Отражение того, что на кнопке: слой поверх значка отдаёт только полосу у края, прозрачную вне отражения (как у карточек) */
+const rimOverlay = (filter: string): Decl[] => ['content: ""', 'position: absolute', 'inset: 0', 'border-radius: inherit', 'z-index: 1', 'pointer-events: none',
+  `backdrop-filter: ${filter}`];
 
 /** Орбита: полуоси эллипса, запас под спутник (px) и радиус круга кнопки, который загораживает дальнюю половину */
 const ORBIT = { a: 92, b: 26, pad: 8, r: 64 };
@@ -345,9 +367,18 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         bb(`radial-gradient(circle at 30% 45%, color-mix(in srgb, var(--gradient-start-power-${state}) ${op}%, transparent), color-mix(in srgb, var(--gradient-end-power-${state}) ${op}%, transparent))`))} !important`;
       const shadows = (shade: number, drop: number) => `box-shadow: ${[hl && 'var(--kt-highlight)', `inset 0 -10px 22px rgba(0, 0, 0, ${shade})`,
         !pwShadow && `0 18px 40px rgba(0, 0, 0, ${drop})`].filter(Boolean).join(', ')} !important`;
+      if (glass.layer) {
+        out += rule(C, ['background: transparent !important', `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, shadows(0.16, 0.25),
+          'backdrop-filter: none !important', 'position: relative', 'isolation: isolate']);
+        out += rule(`${C}::before`, glassLayer(glass.layer, `calc(var(--kt-pw-r, 50%) - ${pw.ringWidth}px + ${glass.layer.pad}px)`, onLayer(ball3d('off'))));
+        out += rule(`${ON} > div::before`, [`background: ${onLayer(ball3d('on'))}`]);
+        out += rule(`${ON} > div`, [shadows(0.12, 0.2)]);
+        break;
+      }
       out += rule(C, [`background: ${ball3d('off')}`, `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, shadows(0.16, 0.25),
-        `backdrop-filter: ${glass.filterPower} !important`]);
+        `backdrop-filter: ${glass.filterPower} !important`, glass.rimOver && 'position: relative']);
       out += rule(`${ON} > div`, [`background: ${ball3d('on')}`, shadows(0.12, 0.2)]);
+      if (glass.rimOver) out += rule(`${C}::before`, rimOverlay(glass.rimOver));
       break;
     }
 
@@ -595,10 +626,13 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         out += rule([ON, LOAD], ['--kt-tg-a: var(--gradient-start-power-on)', '--kt-tg-b: var(--gradient-end-power-on)']);
         out += rule(ERR, ['--kt-tg-a: var(--destructive)', '--kt-tg-b: color-mix(in srgb, var(--destructive) 70%, black)']);
         out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important', 'overflow: hidden',
-          `background: ${glass.grain}${glass.fill} !important`,
-          `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, `backdrop-filter: ${glass.filterPower} !important`,
+          `background: ${glass.layer ? 'transparent' : `${glass.grain}${glass.fill}`} !important`,
+          `border: ${pw.ringWidth}px solid ${glass.stroke} !important`, `backdrop-filter: ${glass.layer ? 'none' : glass.filterPower} !important`,
+          glass.layer && 'position: relative', glass.layer && 'isolation: isolate',
           // Блики - только «Блики по кромке» карточек (сверху и снизу); своя тень - если не включена тень из «Теней»
           `box-shadow: ${[hl && 'var(--kt-highlight)', 'inset 0 -8px 16px rgba(0, 0, 0, 0.1)', !pwShadow && '0 10px 24px rgba(0, 0, 0, 0.18)'].filter(Boolean).join(', ')} !important`]);
+        if (glass.layer) out += rule(`${C}::before`, glassLayer(glass.layer, '999px', `${glass.grain}${glass.fill} padding-box`));
+        if (glass.rimOver) out += rule(C, ['position: relative']) + rule(`${C}::before`, rimOverlay(glass.rimOver));
         out += rule(I, ['width: 58px !important', 'height: 58px !important', 'border-radius: 50%',
           'background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--kt-tg-a) 45%, white), var(--kt-tg-a) 55%, var(--kt-tg-b))',
           // Без свечения остаются блик сверху и обычная тень, как у классической ручки

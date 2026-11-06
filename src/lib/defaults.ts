@@ -5,7 +5,7 @@
 // styledBase() - аккуратная основа для шаблонов конструктора (стекло, тени, анимации).
 
 import { mix } from './color';
-import type { Background, CardGradientPreset, DeepPartial, GradientStop, MeshBlob, Palette, Scheme, Surfaces, ThemeConfig } from './types';
+import type { Background, CardGradientPreset, DeepPartial, GradientStop, MeshBlob, Palette, Scheme, Surfaces, TextShadow, TextShadowLayer, TextShadowTarget, ThemeConfig } from './types';
 
 /** Стандартная палитра клиента (assets/main.css: :root и .dark), переведённая из OKLCH в HEX */
 export const APP_PALETTE: Record<Scheme, Palette> = {
@@ -32,6 +32,15 @@ export const APP_WRAPPER: Record<Scheme, string> = { light: '#c5d4f1', dark: '#0
 
 export const isAppPalette = (p: Palette, scheme: Scheme) =>
   (Object.keys(APP_PALETTE[scheme]) as (keyof Palette)[]).every((k) => p[k].toLowerCase() === APP_PALETTE[scheme][k]);
+
+/** Тень текста: по умолчанию выключена и стоит у заголовков */
+export const textShadowLayer = (over: Partial<TextShadowLayer> = {}): TextShadowLayer => ({
+  style: 'none', targets: ['titles'], color: 'auto', custom: '#000000', blur: 100, distance: 100, angle: 90, opacity: 60, ...over
+});
+/** Сколько теней текста можно добавить */
+export const TEXT_SHADOW_MAX = 3;
+const TEXT_SHADOW_STYLES: TextShadow[] = ['none', 'soft', 'glow', 'neon', 'hard', 'outline', 'emboss', 'long'];
+const TEXT_SHADOW_TARGETS: TextShadowTarget[] = ['titles', 'subscription', 'numbers', 'timer', 'speed', 'servers', 'ping', 'groups', 'menu', 'muted', 'buttons', 'all'];
 
 export function makeBackground(over: Partial<Background> = {}): Background {
   return {
@@ -117,6 +126,7 @@ export function defaultConfig(): ThemeConfig {
     map: { show: true, opacity: 65, grayscale: 0, hue: 0, brightness: 100, tintPrimary: false, blurPages: true },
     surfaces: {
       custom: false, fill: 'glass', grain: 0, liquid: false, liquidStrength: 18, liquidEdge: 20, liquidSmooth: 'off', liquidRainbow: 0,
+      liquidLens: 0, liquidReflect: 'off', liquidReflectShine: 50, liquidReflectWidth: 8,
       liquidLight: false, liquidRim: 10, liquidReach: 30, liquidShine: 170, liquidRimAlways: false, liquidGlow: true,
       glassMemory: { glass: { opacity: -1, blur: -1, saturate: -1 }, liquid: { opacity: -1, blur: -1, saturate: -1 }, light: { opacity: -1, blur: -1, saturate: -1 } },
       opacity: 50, blur: 24, saturate: 100, borderWidth: 1, borderOpacity: 100, radius: 0.625,
@@ -151,8 +161,7 @@ export function defaultConfig(): ThemeConfig {
     fonts: {
       imports: [], ui: '', heading: '', mono: '', scale: 100, weight: 400, headingWeight: 600,
       letterSpacing: 0, tabular: false, uppercaseTitles: false, smoothing: false, flagFix: false,
-      textShadow: 'none', textShadowTarget: 'titles', textShadowColor: 'auto', textShadowCustom: '#000000',
-      textShadowBlur: 100, textShadowDistance: 100, textShadowAngle: 90, textShadowOpacity: 60
+      textShadows: [textShadowLayer()]
     },
     flags: {
       style: 'app', hideInline: true, size: 114, rotate: -50, x: -50, y: 15, opacity: 45,
@@ -238,10 +247,28 @@ export function sanitizeConfig(raw: unknown): ThemeConfig {
   }
   if (!Object.hasOwn(CARD_GRADIENTS, merged.surfaces.gradientPreset)) merged.surfaces.gradientPreset = '';
   if (!['off', 'soft', 'exact'].includes(merged.surfaces.liquidSmooth)) merged.surfaces.liquidSmooth = 'off';
+  if (!['off', 'outside', 'content', 'surface'].includes(merged.surfaces.liquidReflect)) merged.surfaces.liquidReflect = 'off';
   // Карточки «Контур» убраны: прозрачное стекло без размытия с рамкой выглядит так же
   const su = merged.surfaces;
   if ((su.fill as string) === 'outline') Object.assign(su, { fill: 'glass', liquid: false, opacity: 0, blur: 0, borderWidth: Math.max(1, su.borderWidth) });
   if (!['glass', 'solid', 'transparent'].includes(su.fill)) su.fill = 'glass';
   if (!['app', 'duo', 'solarDuo', 'solarBroken', 'chunk'].includes(su.sidebarIcons)) su.sidebarIcons = 'app';
+  // Тени текста. Раньше тень была одна, плоскими полями (textShadow, textShadowTarget - заголовки или весь текст)
+  const rf: Record<string, unknown> = isObj(raw.fonts) ? raw.fonts : {};
+  const layers: unknown[] = Array.isArray(rf.textShadows) ? rf.textShadows : typeof rf.textShadow === 'string'
+    ? [{ style: rf.textShadow, targets: [rf.textShadowTarget === 'all' ? 'all' : 'titles'], color: rf.textShadowColor, custom: rf.textShadowCustom,
+      blur: rf.textShadowBlur, distance: rf.textShadowDistance, angle: rf.textShadowAngle, opacity: rf.textShadowOpacity }] : [];
+  const taken = new Set<TextShadowTarget>();
+  merged.fonts.textShadows = layers.filter(isObj).slice(0, TEXT_SHADOW_MAX).map((l) => {
+    const t = mergeTyped(textShadowLayer(), l);
+    if (!TEXT_SHADOW_STYLES.includes(t.style)) t.style = 'none';
+    if (!['auto', 'primary', 'power', 'custom'].includes(t.color)) t.color = 'auto';
+    // Место - только у одной тени: у следующих повтор снимается. «Подключение» разделено на таймер и скорость
+    t.targets = t.targets.flatMap((k): TextShadowTarget[] => (k as string) === 'connection' ? ['timer', 'speed'] : [k])
+      .filter((k, j, a) => TEXT_SHADOW_TARGETS.includes(k) && !taken.has(k) && a.indexOf(k) === j);
+    t.targets.forEach((k) => taken.add(k));
+    return t;
+  });
+  if (!merged.fonts.textShadows.length) merged.fonts.textShadows = [textShadowLayer()];
   return merged;
 }

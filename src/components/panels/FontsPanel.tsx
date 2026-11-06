@@ -8,7 +8,8 @@ import { useEditScheme } from '../../state/store';
 import { textShadowCss } from '../../lib/shadows';
 import { ColorField } from '../ColorPicker';
 import { copyText } from '../../lib/share';
-import type { FlagStyle, Flags, Fonts, TextShadow } from '../../lib/types';
+import { TEXT_SHADOW_MAX, textShadowLayer } from '../../lib/defaults';
+import type { FlagStyle, Flags, Fonts, TextShadow, TextShadowLayer, TextShadowTarget } from '../../lib/types';
 import { Button, Choice, Group, Row, Segmented, Select, Slider, TextField, Toggle, cx } from '../ui';
 import { PanelHead, useCfg } from './common';
 import { SPOTS } from '../../lib/spots';
@@ -172,35 +173,81 @@ const TEXT_SHADOWS: { value: TextShadow; label: string }[] = [
   { value: 'hard', label: 'Жёсткая' }, { value: 'long', label: 'Длинная' }, { value: 'outline', label: 'Обводка' }, { value: 'emboss', label: 'Тиснение' }
 ];
 
+/** Места тени текста - в порядке панели */
+const TEXT_PLACES: { value: TextShadowTarget; label: string }[] = [
+  { value: 'titles', label: 'Заголовки' }, { value: 'subscription', label: 'Подписка' }, { value: 'numbers', label: 'Цифры подписки' }, { value: 'timer', label: 'Таймер' }, { value: 'speed', label: 'Скорость' },
+  { value: 'servers', label: 'Серверы' }, { value: 'ping', label: 'Пинг' }, { value: 'groups', label: 'Группы' }, { value: 'menu', label: 'Меню' },
+  { value: 'muted', label: 'Подписи' }, { value: 'buttons', label: 'Кнопки' }, { value: 'all', label: 'Весь текст' }
+];
+
 function TextShadowGroup({ scheme }: { scheme: 'light' | 'dark' }) {
-  const { config, set } = useCfg();
-  const f = config.fonts;
+  const { config, update } = useCfg();
+  const list = config.fonts.textShadows;
+  const [pick, setPick] = useState(0);
+  const i = Math.min(pick, list.length - 1);
+  const t = list[i];
   const p = config.palette[scheme];
-  const preview = (v: TextShadow) => textShadowCss({ ...config, fonts: { ...f, textShadow: v } }, scheme) ?? 'none';
+  const set = <K extends keyof TextShadowLayer>(k: K, v: TextShadowLayer[K]) => update((c) => { c.fonts.textShadows[i][k] = v; }, `fonts.textShadows.${i}.${k}`);
+  const preview = (v: TextShadow) => textShadowCss({ ...t, style: v }, p, scheme) ?? 'none';
+  /** Номер тени, у которой место (с 1); 0 - ни у какой */
+  const owner = (k: TextShadowTarget) => list.findIndex((l) => l.targets.includes(k)) + 1;
+  // Место - только у одной тени: отмеченное здесь снимается с остальных
+  const toggle = (k: TextShadowTarget) => update((c) => {
+    const on = c.fonts.textShadows[i].targets.includes(k);
+    c.fonts.textShadows.forEach((l, j) => { l.targets = l.targets.filter((x) => x !== k); if (j === i && !on) l.targets.push(k); });
+  }, 'fonts.textShadows');
+  const add = () => {
+    // Новой тени - первое свободное место, кроме «Весь текст»
+    const free = TEXT_PLACES.find((o) => o.value !== 'all' && !owner(o.value))?.value;
+    update((c) => { c.fonts.textShadows.push(textShadowLayer({ style: 'soft', targets: free ? [free] : [] })); }, 'fonts.textShadows');
+    setPick(list.length);
+  };
+  const remove = () => { update((c) => { c.fonts.textShadows.splice(i, 1); }, 'fonts.textShadows'); setPick(Math.max(0, i - 1)); };
   return (
-    <Group title="Тень текста" hint="Тень у заголовков или у всего текста. Цвет и форма подстраиваются под палитру">
+    <Group title="Тень текста" hint="Тень у заголовков, названий серверов, цифр и других текстов. Теней можно сделать до трёх: у каждой свой вид и свои места. Цвет и форма подстраиваются под палитру">
+      {list.length > 1 && (
+        <div className="ts-tabs">
+          <Segmented size="sm" value={String(i)} onChange={(v) => setPick(Number(v))} options={list.map((_, j) => ({ value: String(j), label: `Тень ${j + 1}` }))} />
+          <Button size="sm" icon={<X size={13} />} onClick={remove}>Убрать</Button>
+        </div>
+      )}
       <div className="ts-grid" style={{ background: p.background, color: p.foreground }}>
-        {TEXT_SHADOWS.map((t) => (
-          <button key={t.value} type="button" className={cx('ts-tile', f.textShadow === t.value && 'active')} onClick={() => set('fonts', 'textShadow', t.value)}>
-            <b style={{ textShadow: preview(t.value) }}>Аа</b>
-            <small>{t.label}</small>
+        {TEXT_SHADOWS.map((o) => (
+          <button key={o.value} type="button" className={cx('ts-tile', t.style === o.value && 'active')} onClick={() => set('style', o.value)}>
+            <b style={{ textShadow: preview(o.value) }}>Аа</b>
+            <small>{o.label}</small>
           </button>
         ))}
       </div>
-      {f.textShadow !== 'none' && (
+      {t.style !== 'none' && (
         <>
-          <Row label="Где"><Segmented size="sm" value={f.textShadowTarget} onChange={(v) => set('fonts', 'textShadowTarget', v)} options={[{ value: 'titles', label: 'Заголовки' }, { value: 'all', label: 'Весь текст' }]} /></Row>
-          <Row label="Цвет" stack>
-            <Segmented size="sm" value={f.textShadowColor} onChange={(v) => set('fonts', 'textShadowColor', v)} options={[{ value: 'auto', label: 'Авто' }, { value: 'primary', label: 'Акцент' }, { value: 'power', label: 'Цвет кнопки' }, { value: 'custom', label: 'Свой' }]} />
+          <Row label="Где" stack hint="Место может быть только у одной тени. Цифра на кнопке - у какой тени оно сейчас, нажатие переносит его сюда. «Подписка» - карточки профиля на главной: название, объявление и подписи «Трафика осталось», «Истекает»; их значения - «Цифры подписки». «Таймер» и «Скорость» - под кнопкой подключения. «Весь текст» - тень у всего остального текста">
+            <div className="ts-where">
+              {TEXT_PLACES.map((o) => {
+                const n = owner(o.value);
+                return (
+                  <button key={o.value} type="button" className={cx('chip', n === i + 1 && 'active')} title={n && n !== i + 1 ? `Сейчас у тени ${n}` : undefined} onClick={() => toggle(o.value)}>
+                    {o.label}{n > 0 && n !== i + 1 && <small>{n}</small>}
+                  </button>
+                );
+              })}
+            </div>
           </Row>
-          {f.textShadowColor === 'custom' && <Row label="Свой цвет"><ColorField value={f.textShadowCustom} onChange={(v) => set('fonts', 'textShadowCustom', v)} /></Row>}
-          <Slider label="Заметность" value={f.textShadowOpacity} min={5} max={100} unit="%" onChange={(v) => set('fonts', 'textShadowOpacity', v)} />
-          {['soft', 'glow', 'neon'].includes(f.textShadow) && <Slider label="Размытие" value={f.textShadowBlur} min={0} max={300} step={5} unit="%" onChange={(v) => set('fonts', 'textShadowBlur', v)} />}
-          {['soft', 'hard', 'long'].includes(f.textShadow) && (
+          {!t.targets.length && <p className="note">Отметьте, где нужна эта тень</p>}
+          <Row label="Цвет" stack>
+            <Segmented size="sm" value={t.color} onChange={(v) => set('color', v)} options={[{ value: 'auto', label: 'Авто' }, { value: 'primary', label: 'Акцент' }, { value: 'power', label: 'Цвет кнопки' }, { value: 'custom', label: 'Свой' }]} />
+          </Row>
+          {t.color === 'custom' && <Row label="Свой цвет"><ColorField value={t.custom} onChange={(v) => set('custom', v)} /></Row>}
+          <Slider label="Заметность" value={t.opacity} min={5} max={100} unit="%" onChange={(v) => set('opacity', v)} />
+          {['soft', 'glow', 'neon'].includes(t.style) && <Slider label="Размытие" value={t.blur} min={0} max={300} step={5} unit="%" onChange={(v) => set('blur', v)} />}
+          {['soft', 'hard', 'long'].includes(t.style) && (
             <>
-              <Slider label="Дальность" value={f.textShadowDistance} min={0} max={400} step={10} unit="%" onChange={(v) => set('fonts', 'textShadowDistance', v)} />
-              <Slider label="Направление" hint="90° - тень вниз, 0° - вправо" value={f.textShadowAngle} min={0} max={359} unit="°" onChange={(v) => set('fonts', 'textShadowAngle', v)} />
+              <Slider label="Дальность" value={t.distance} min={0} max={400} step={10} unit="%" onChange={(v) => set('distance', v)} />
+              <Slider label="Направление" hint="90° - тень вниз, 0° - вправо" value={t.angle} min={0} max={359} unit="°" onChange={(v) => set('angle', v)} />
             </>
+          )}
+          {list.length < TEXT_SHADOW_MAX && (
+            <Button size="sm" variant="soft" icon={<Plus size={13} />} onClick={add}>Другая тень для других текстов</Button>
           )}
         </>
       )}
