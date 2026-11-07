@@ -64,9 +64,10 @@ const themeCache = new Map<string, string>();
 
 /**
  * Превью в Firefox и Safari: фильтр преломления там не рисуется. Пустые переменные убирают его из
- * backdrop-filter, и от жидкого стекла остаётся обычное - только в превью, в скачанной теме их нет
+ * backdrop-filter, и от жидкого стекла остаётся обычное - только в превью, в скачанной теме их нет.
+ * Полосу «На карточке» у содержимого (обычный filter, --kt-liquid-oc) тоже: её проверяли только в Chromium
  */
-const NO_REFRACTION = '\n/* Превью сайта: браузер не рисует SVG-фильтры в backdrop-filter */\nhtml:root {\n    --kt-liquid: ;\n    --kt-liquid-sm: ;\n    --kt-liquid-lg: ;\n    --kt-liquid-pw: ;\n    --kt-liquid-out: ;\n    --kt-liquid-out-lg: ;\n    --kt-liquid-out-pw: ;\n    --kt-liquid-on: ;\n    --kt-liquid-on-lg: ;\n    --kt-liquid-on-pw: ;\n    --kt-liquid-sb: ;\n}\n';
+const NO_REFRACTION = '\n/* Превью сайта: браузер не рисует SVG-фильтры в backdrop-filter */\nhtml:root {\n    --kt-liquid: ;\n    --kt-liquid-sm: ;\n    --kt-liquid-lg: ;\n    --kt-liquid-pw: ;\n    --kt-liquid-out: ;\n    --kt-liquid-out-lg: ;\n    --kt-liquid-out-pw: ;\n    --kt-liquid-on: ;\n    --kt-liquid-on-lg: ;\n    --kt-liquid-on-pw: ;\n    --kt-liquid-oc: ;\n    --kt-liquid-oc-lg: ;\n    --kt-liquid-sb: ;\n}\n';
 
 export function Stage() {
   const config = useStore((s) => s.config);

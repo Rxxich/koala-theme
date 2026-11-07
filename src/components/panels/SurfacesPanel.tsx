@@ -139,12 +139,15 @@ function frostedGlass(s: Surfaces) {
 /** Вид стекла карточек; null - карточки не стеклянные или как в клиенте */
 const glassKind = (s: Surfaces): GlassKind | null => !s.custom || s.fill !== 'glass' ? null : !s.liquid ? 'glass' : s.liquidLight ? 'light' : 'liquid';
 
-/** Жидкое стекло light: матовое стекло тоже размывает фон под каждой карточкой */
-function LightLoadNote() {
+/**
+ * Жидкое стекло light: чего стоит кромка при прокрутке. Замер 07.11.2026, 32 карточки, экран 180 Гц:
+ * без light 180 кадров/с, кромка с копией фона 100, рассеянный свет 132. Размытие стекла почти не влияет
+ */
+function LightLoadNote({ diffuse }: { diffuse: boolean }) {
   return (
     <div className="csp-note warn">
       <AlertTriangle size={14} />
-      <span>Пока ничего не двигается, стекло ничего не стоит. Но при прокрутке списка серверов и любой анимации матовое стекло каждой карточки пересчитывается в каждом кадре, и дороже всего тут размытие, а не светящаяся кромка. На экранах 144-180 Гц и на встроенной графике ноутбука прокрутка может подтормаживать - тогда уменьшите размытие.</span>
+      <span>Пока ничего не двигается, стекло ничего не стоит. Но при прокрутке списка серверов и любой анимации светящаяся кромка каждой карточки пересчитывается в каждом кадре. На экранах 144-180 Гц и на встроенной графике ноутбука прокрутка может подтормаживать{diffuse ? '.' : ' - тогда включите «Рассеянный свет»: он примерно на треть легче.'}</span>
     </div>
   );
 }
@@ -152,17 +155,17 @@ function LightLoadNote() {
 /**
  * Линза и отражение кромки: насколько тяжелее стекло. Замер 06.11.2026: 25 карточек, стекло каждой
  * пересчитывается каждый кадр, экран 180 Гц - без них 180 кадров/с, линза 127, отражение того, что
- * вокруг, 91, того, что под карточкой, 85, линза с отражением 66-69. Отражение того, что на карточке,
- * мерили позже, когда и обычное жидкое стекло давало 82: оно 87, вокруг 99, под карточкой 95 - того же порядка
+ * вокруг, 91, того, что под карточкой, 85, линза с отражением 66-69. Отражение того, что на карточке, с
+ * 07.11.2026 у серверов, групп и правил рисует обычный filter содержимого (surfaceRules): на 32 карточках
+ * 177 кадров/с вместо 43 у слоя стекла поверх, поэтому про него не предупреждаем
  */
 function LensReflectNote({ lens, reflect }: { lens: boolean; reflect: ReflectMode }) {
-  const out = reflect === 'outside', on = reflect !== 'off';
+  const out = reflect === 'outside', on = out || reflect === 'surface';
   const what = lens && on ? 'Линза с отражением в два с половиной раза' : lens ? 'Линза примерно в полтора раза' : 'Отражение примерно вдвое';
   return (
     <div className="csp-note warn">
       <AlertTriangle size={14} />
-      <span>{what} тяжелее обычного жидкого стекла{out ? ': чтобы кромка видела, что лежит рядом, стекло каждой карточки считается по участку шире неё'
-        : reflect === 'content' ? ': чтобы кромка видела текст и значки карточки, поверх них лежит второй слой стекла' : ''}. Неподвижное стекло ничего не стоит, но при прокрутке списка серверов и любой анимации на экранах 144-180 Гц прокрутка может опуститься до {lens && on ? '65' : lens ? '120' : '85'} кадров/с. Если стало подтормаживать - уменьшите размытие или выключите {lens && on ? 'одно из двух' : lens ? 'линзу' : 'отражение'}.</span>
+      <span>{what} тяжелее обычного жидкого стекла{out ? ': чтобы кромка видела, что лежит рядом, стекло каждой карточки считается по участку шире неё' : ''}. Неподвижное стекло ничего не стоит, но при прокрутке списка серверов и любой анимации на экранах 144-180 Гц прокрутка может опуститься до {lens && on ? '65' : lens ? '120' : '85'} кадров/с. Если стало подтормаживать - уменьшите размытие или выключите {lens && on ? 'одно из двух' : lens ? 'линзу' : 'отражение'}.</span>
     </div>
   );
 }
@@ -180,7 +183,7 @@ export function SurfacesPanel() {
     setUi({ page: 'profiles' });
   };
   /** Любая настройка карточек включает "свои поверхности" */
-  const setCard = <K extends 'opacity' | 'blur' | 'saturate' | 'grain' | 'liquidStrength' | 'liquidEdge' | 'liquidSmooth' | 'liquidRainbow' | 'liquidRim' | 'liquidReach' | 'liquidShine' | 'liquidRimAlways' | 'liquidGlow'
+  const setCard = <K extends 'opacity' | 'blur' | 'saturate' | 'grain' | 'liquidStrength' | 'liquidEdge' | 'liquidSmooth' | 'liquidRainbow' | 'liquidRim' | 'liquidReach' | 'liquidShine' | 'liquidRimAlways' | 'liquidLightDiffuse' | 'liquidGlow'
     | 'liquidLens' | 'liquidReflect' | 'liquidReflectShine' | 'liquidReflectWidth'
     | 'borderWidth' | 'borderOpacity' | 'gradient' | 'highlight' | 'highlightBottom' | 'borderColor' | 'borderCustom'>(k: K, v: (typeof s)[K]) =>
     update((c) => { c.surfaces[k] = v; c.surfaces.custom = true; }, `surfaces.${k}`);
@@ -267,7 +270,8 @@ export function SurfacesPanel() {
             <>
               <p className="note">Кромка светится тем, что лежит под стеклом в глубине, как у толстого стекла, где свет уходит к краям: яркая картинка или узор под серединой карточки подсвечивает её края. Середина - матовое стекло. Светящаяся полоса повторяет скругление карточек (ползунок «Скругление» ниже) и форму кнопки подключения. Лучше всего видно на картинке или узоре фона. Действует и на стеклянную боковую панель и кнопку подключения «Стекло».</p>
               <NoRefractionNote />
-              <LightLoadNote />
+              <LightLoadNote diffuse={s.liquidLightDiffuse} />
+              <Toggle label="Рассеянный свет" hint="Кромку подсвечивает размытое пятно фона рядом, а не его копия из глубины: свечение мягче, без отражения формы того, что под стеклом. При прокрутке примерно на треть легче" checked={s.liquidLightDiffuse} onChange={(v) => setCard('liquidLightDiffuse', v)} />
               <Slider label="Ширина кромки" hint="Полоса у края, которая светится. Узкая - тонкая светящаяся грань, широкая - толстый скос стекла" value={s.liquidRim} min={3} max={20} unit="px" onChange={(v) => setCard('liquidRim', v)} />
               <Slider label="Глубина отсвета" hint="Откуда кромка берёт свет: на сколько пикселей ближе к середине. Чем больше, тем дальше от края то, что подсвечивает кромку" value={s.liquidReach} min={6} max={60} unit="px" onChange={(v) => setCard('liquidReach', v)} />
               <Slider label="Яркость кромки" hint="Во сколько раз усиливается свет, который подсвечивает кромку: так он пробивается сквозь заливку стекла. 100% - как есть" value={s.liquidShine} min={100} max={300} step={10} unit="%" onChange={(v) => setCard('liquidShine', v)} />
@@ -307,7 +311,7 @@ export function SurfacesPanel() {
                   <Slider label="Ширина отражения" hint="Полоса у края, в которой видно отражение" value={s.liquidReflectWidth} min={3} max={20} unit="px" onChange={(v) => setCard('liquidReflectWidth', v)} />
                 </>
               )}
-              {(s.liquidLens > 0 || s.liquidReflect !== 'off') && <LensReflectNote lens={s.liquidLens > 0} reflect={s.liquidReflect} />}
+              {(s.liquidLens > 0 || s.liquidReflect === 'outside' || s.liquidReflect === 'surface') && <LensReflectNote lens={s.liquidLens > 0} reflect={s.liquidReflect} />}
               <MovingBgNote config={config} />
             </>
           )}

@@ -45,6 +45,8 @@ export function ExtrasPanel() {
         <Toggle label="Выделение текста цветом акцента" checked={e.selection} onChange={(v) => set('extras', 'selection', v)} />
         <Toggle label="Заметное кольцо фокуса (Tab)" checked={e.focusRing} onChange={(v) => set('extras', 'focusRing', v)} />
         <Toggle label="Надпись «Подключено» цветом кнопки" checked={e.statusColor} onChange={(v) => set('extras', 'statusColor', v)} />
+        <Toggle label="Запрет редактирования профиля" hint="Скрывает в меню профиля пункты «Редактировать информацию», «Редактировать файл», «Редактировать правила» и «Открыть файл»"
+          checked={e.noProfileEdit} onChange={(v) => set('extras', 'noProfileEdit', v)} />
       </Group>
       <Group title="Свой CSS" hint="Добавится в конец темы. Используйте :root перед селектором, чтобы правило было сильнее стилей клиента">
         <textarea className="field area mono code-area" rows={8} spellCheck={false} value={e.customCss}

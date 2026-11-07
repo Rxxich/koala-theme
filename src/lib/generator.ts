@@ -399,7 +399,7 @@ interface LiquidExtra {
   /** Отражение кромки: полоса rim px у края берёт фон на reach px снаружи (outward) или ближе к середине, свет усиливается в shine раз */
   reflect?: Reflect;
 }
-interface Reflect { rim: number; reach: number; shine: number; radius: number; outward: boolean }
+interface Reflect { rim: number; reach: number; shine: number; radius: number; outward: boolean; exact?: boolean }
 
 /**
  * Вертикаль линзы: карта сдвигов с короткой заливкой (s 10px) и широким размытием (σ 40px). У карточек до
@@ -466,6 +466,62 @@ const axisMap = (dx: number, dy: number, sd: number, inset: number, row: string)
   : `<feOffset in='f' dx='${-dx}' dy='${-dy}' result='p'/><feFlood flood-color='lime' x='${dx}' y='${dy}' width='99999' height='99999'/>`)
   + `<feComposite in2='p' operator='arithmetic' k2='1' k3='1'/><feGaussianBlur stdDeviation='${dx ? sd : 0} ${dy ? sd : 0}'/><feColorMatrix values='${row}'`;
 
+/** Маска полосы у кромки k (rimParts): таблица от h - прямоугольника, отступившего от краёв на σ и размытого на σ */
+function rimMask(inset: number, rim: number, radius: number): string {
+  const sd = r1(Math.max(1, 0.39 * radius, rim / 2));
+  const m = Math.max(1, Math.round(sd));
+  const a = inset + m;
+  const fade = rim * 0.3;
+  const prof = (t: number) => t < 0 || t > rim ? 0 : t < fade ? 0.5 + 0.5 * t / fade : 0.5 + 0.5 * Math.cos(Math.PI * (t - fade) / (rim - fade));
+  // У прямого края h = Φ((t - m)/σ): по h находим расстояние t от края, по нему - яркость полосы
+  const table = Array.from({ length: 64 }, (_, i) => Math.round(prof(m + sd * probit(i / 63)) * 100) / 100).join(' ');
+  return `<feFlood result='ra'/><feOffset dx='-${a}' dy='-${a}' result='rb'/><feFlood x='${a}' y='${a}' width='99999' height='99999'/><feComposite in2='rb' operator='in'/>`
+    + `<feGaussianBlur stdDeviation='${sd}' result='h'/><feComponentTransfer result='k'><feFuncA type='table' tableValues='${table}'/></feComponentTransfer>`;
+}
+
+/**
+ * Полоса у кромки - общая для отражения (reflectRim) и light (lightRimUri): маска k - яркость полосы по
+ * глубине, и карта сдвигов rm - у края во всю силу внутрь (outward - наружу), к середине ноль.
+ * Маска - таблица от h, размытого прямоугольника (как его строить - lightRimUri): линии равной глубины h
+ * повторяют скругление блока. Карту раньше считали наклоном того же h, и Chromium размывал h заново для
+ * каждого из пяти чтений (маска и четыре сдвинутые копии): на 32 карточках при прокрутке это была половина
+ * цены стекла. Теперь по каждой оси ступенька, размытая только вдоль оси (axisMap, как у преломления): у
+ * прямых краёв сдвиг тот же, а у угла - по диагонали, а не вдоль скругления. Так можно, пока скругление не
+ * больше ступеньки: у круглой кнопки на диагонали обе ступеньки уже нулевые, и там (и с exact) карта
+ * прежняя, по наклону h
+ */
+function rimParts(inset: number, rim: number, radius: number, outward: boolean, exact = false): string {
+  const mask = rimMask(inset, rim, radius);
+  // Ступенька в s px от края, размыта на ss: по всей полосе (до rim) сдвиг упирается в полный, за ней спадает
+  const ss = r1(Math.max(1, rim / 4));
+  const s = Math.max(1, Math.round(rim + 2 * ss));
+  if (!exact && radius <= 2.5 * s) {
+    // Разность каналов axisMap в t px от края: 1 - Φ((t - s)/ss) / Φ(t/ss); на rim она дотягивается до 0.5
+    const phi = (x: number) => 0.5 * (1 + erf(x / Math.SQRT2));
+    const k = Math.ceil(520 / (1 - phi((rim - s) / ss) / phi(rim / ss))) / 1000;
+    const [p, n] = outward ? [-k, k] : [k, -k];
+    return mask + `<feFlood flood-color='red' result='f'/>`
+      + `${axisMap(s, 0, ss, inset, `${p} ${n} 0 0 0.5 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1`)} result='rx'/>`
+      + `${axisMap(0, s, ss, inset, `0 0 0 0 0 ${p} ${n} 0 0 0.5 0 0 0 0 0 0 0 0 0 1`)}/>`
+      + `<feComposite in2='rx' operator='arithmetic' k2='1' k3='1' result='rm'/>`;
+  }
+  // Разность h(+d) - h(-d) на внутренней границе полосы (|z| = 1.18) - с неё карта упирается в 0 или 1.
+  // h впереди - из красного канала g, позади - из зелёного gm. Пиксели из-за края блока прозрачны и
+  // читаются как h = 0: у края разность только растёт, сдвиг всё так же внутрь
+  const sd = r1(Math.max(1, 0.39 * radius, rim / 2));
+  const d = Math.max(1, Math.round(sd / 2));
+  const k = Math.round(1000 / (erf((1.18 + d / sd) / Math.SQRT2) - erf((1.18 - d / sd) / Math.SQRT2))) / 1000;
+  const slope = (dx: number, dy: number, row: string) => `<feOffset in='g' dx='${-dx}' dy='${-dy}' result='q'/>`
+    + `<feOffset in='gm' dx='${dx}' dy='${dy}'/><feComposite in2='q' operator='arithmetic' k2='1' k3='1'/><feColorMatrix values='${row}'`;
+  // Наклон h смотрит к середине: сдвиг по нему берёт фон глубже под карточкой, с обратным знаком - снаружи
+  const [p, n] = outward ? [`-${k}`, `${k}`] : [`${k}`, `-${k}`];
+  return mask
+    + `<feColorMatrix in='h' values='0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1' result='g'/><feColorMatrix in='h' values='0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 1' result='gm'/>`
+    + `${slope(d, 0, `${p} ${n} 0 0 0.5 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1`)} result='rx'/>`
+    + `${slope(0, d, `0 0 0 0 0 ${p} ${n} 0 0 0.5 0 0 0 0 0 0 0 0 0 1`)}/>`
+    + `<feComposite in2='rx' operator='arithmetic' k2='1' k3='1' result='rm'/>`;
+}
+
 /**
  * Отражение кромки жидкого стекла: у края карточки полоса шириной rim показывает то, что лежит на reach px
  * от края - снаружи (outward: яркая картинка рядом с карточкой подсвечивает её край своим цветом) или под
@@ -478,36 +534,24 @@ const axisMap = (dx: number, dy: number, sd: number, inset: number, row: string)
  * Сравнение - с фоном до преломления: так результат преломления читается один раз. Когда его читали
  * трижды (lighten, усиление, наложение), стекло с отражением давало 64 кадра/с вместо 127.
  * src - что отражается (по умолчанию фон), base пустой - на выходе одна полоса, прозрачная вне её,
- * soft - размытие копии, px
+ * soft - размытие копии, px. opaque - копия после размытия снова непрозрачна: у обычного filter за краем
+ * блока пусто, и полоса у самой кромки тускнела бы (backdrop-filter там отражает фон зеркально).
+ * Каждое чтение результата Chromium считает заново со всей цепочкой до него: второе чтение копии стоит
+ * столько же, сколько первое. Поэтому усиление 1 (сила 50%) - без своего прохода
  */
-function reflectRim(inset: number, r: Reflect, base: string, src = 'SourceGraphic', soft = 1.5): string {
-  const sd = r1(Math.max(1, 0.39 * r.radius, r.rim / 2));
-  const m = Math.max(1, Math.round(sd));
-  const a = inset + m;
-  const fade = r.rim * 0.3;
-  const prof = (t: number) => t < 0 || t > r.rim ? 0 : t < fade ? 0.5 + 0.5 * t / fade : 0.5 + 0.5 * Math.cos(Math.PI * (t - fade) / (r.rim - fade));
-  const table = Array.from({ length: 64 }, (_, i) => Math.round(prof(m + sd * probit(i / 63)) * 100) / 100).join(' ');
-  const d = Math.max(1, Math.round(sd / 2));
-  const k = Math.round(1000 / (erf((1.18 + d / sd) / Math.SQRT2) - erf((1.18 - d / sd) / Math.SQRT2))) / 1000;
-  const slope = (dx: number, dy: number, row: string) => `<feOffset in='g' dx='${-dx}' dy='${-dy}' result='q'/>`
-    + `<feOffset in='gm' dx='${dx}' dy='${dy}'/><feComposite in2='q' operator='arithmetic' k2='1' k3='1'/><feColorMatrix values='${row}'`;
+function reflectRim(inset: number, r: Reflect, base: string, src = 'SourceGraphic', soft = 1.5, opaque = false): string {
   const g = r1(r.shine);
-  // Наклон h смотрит к середине: сдвиг по нему берёт фон глубже под карточкой, с обратным знаком - снаружи
-  const [p, n] = r.outward ? [`-${k}`, `${k}`] : [`${k}`, `-${k}`];
-  return `<feFlood result='ra'/><feOffset dx='-${a}' dy='-${a}' result='rb'/><feFlood x='${a}' y='${a}' width='99999' height='99999'/><feComposite in2='rb' operator='in'/>`
-    + `<feGaussianBlur stdDeviation='${sd}' result='h'/><feComponentTransfer result='k'><feFuncA type='table' tableValues='${table}'/></feComponentTransfer>`
-    + `<feColorMatrix in='h' values='0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1' result='g'/><feColorMatrix in='h' values='0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 1' result='gm'/>`
-    + `${slope(d, 0, `${p} ${n} 0 0 0.5 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1`)} result='rx'/>`
-    + `${slope(0, d, `0 0 0 0 0 ${p} ${n} 0 0 0.5 0 0 0 0 0 0 0 0 0 1`)}/>`
-    + `<feComposite in2='rx' operator='arithmetic' k2='1' k3='1' result='rm'/>`
+  return rimParts(inset, r.rim, r.radius, r.outward, r.exact)
     + `<feDisplacementMap in='${src}' in2='rm' scale='${r1(r.reach * 2)}' xChannelSelector='R' yChannelSelector='G'/><feGaussianBlur stdDeviation='${soft}'/>`
-    + `<feBlend in2='${src}' mode='lighten'/><feBlend in2='${src}' mode='difference'/>`
-    + (base ? `<feColorMatrix values='${g} 0 0 0 0 0 ${g} 0 0 0 0 0 ${g} 0 0 0 0 0 1 0'/><feComposite in2='k' operator='in'/><feComposite in='${base}' operator='arithmetic' k2='1' k3='1'/>`
+    + (opaque ? `<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0 1'/>` : '')
+    + `<feBlend in2='${src}' mode='lighten'/><feBlend in2='${src}' mode='difference'${g === 1 ? ` result='gl'` : ''}/>`
+    + (g === 1 ? '' : `<feColorMatrix values='${g} 0 0 0 0 0 ${g} 0 0 0 0 0 ${g} 0 0 0 0 0 1 0' result='gl'/>`)
+    + (base ? `<feComposite in2='k' operator='in'/><feComposite in='${base}' operator='arithmetic' k2='1' k3='1'/>`
       // Одна полоса: её кладут поверх (mix-blend-mode к результату стекла Chromium не применяет), и где
       // отражать нечего, она должна быть прозрачной, а не чёрной. Непрозрачность - сумма каналов (не
       // меньше любого из них, иначе цвет срезало бы): чёрная заливка с прозрачностью 1 - сумма, вычтенная
       // из отражения, оставляет его цвет и даёт ему такую непрозрачность
-      : `<feColorMatrix values='${g} 0 0 0 0 0 ${g} 0 0 0 0 0 ${g} 0 0 0 0 0 1 0' result='gl'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1 -1 -1 0 1'/>`
+      : `<feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1 -1 -1 0 1'/>`
         + `<feComposite in='gl' operator='arithmetic' k2='1' k3='-1'/><feComposite in2='k' operator='in'/>`);
 }
 
@@ -519,12 +563,29 @@ function reflectRim(inset: number, r: Reflect, base: string, src = 'SourceGraphi
  * на reach px ближе к середине, полупрозрачное там, где отражение слабое. Раньше им просто ставили
  * непрозрачность 1: при карточках с непрозрачностью 0 край свечения (точка пинга, активный пункт «Свечение»)
  * становился сплошным цветом, а почти прозрачные точки получали случайный цвет - вокруг шли цветные кольца.
- * Копия размыта на 4px: при полутора у верхнего края группы читалась копия её названия, будто текст двоится
+ * Копия размыта на 4px: при полутора у верхнего края группы читалась копия её названия, будто текст двоится.
+ * fill - то же для обычного filter у содержимого карточки (surfaceRules): ему видно только содержимое, без
+ * заливки карточки, поэтому оно кладётся на её цвет (cardFill), а полоса - поверх самого содержимого.
+ * Карта сдвигов - прежняя, по наклону h (exact): filter у содержимого и так почти бесплатен, а вид одобрен
  */
-function contentRimUri(s: ThemeConfig['surfaces'], radius: number, reach?: number): string {
+function contentRimUri(s: ThemeConfig['surfaces'], radius: number, reach?: number, fill?: string): string {
   const g = reflectGeo(s);
-  return filterUrl(`<feFlood/><feComposite in='SourceGraphic' operator='over' result='s'/>`
-    + reflectRim(0, { rim: g.rim, reach: reach ?? g.reach, shine: g.shine, radius, outward: false }, '', 's', 4));
+  return filterUrl(`<feFlood${fill ? ` flood-color='${fill}'` : ''}/><feComposite in='SourceGraphic' operator='over' result='s'/>`
+    + reflectRim(0, { rim: g.rim, reach: reach ?? g.reach, shine: g.shine, radius, outward: false, exact: true }, '', 's', 4, !!fill)
+    + (fill ? `<feComposite in2='SourceGraphic' operator='over'/>` : ''));
+}
+
+/**
+ * Заливка карточек схемы, умноженная на её непрозрачность, - как слою «На карточке» видна карточка под
+ * содержимым. Свой градиент - средним цветом точек. Цвет - rgb(): решётка в data:-адресе начала бы якорь
+ */
+function cardFill(cfg: ThemeConfig, scheme: Scheme): string {
+  const s = cfg.surfaces;
+  const p = cfg.palette[scheme];
+  const cols = (ownGradient(s) ? cardStops(s, p, scheme).map((x) => x.color) : [p.card]).map(parseColor).filter((c) => c !== null);
+  const k = cardAlpha(s) / 100 / Math.max(1, cols.length);
+  const ch = (key: 'r' | 'g' | 'b') => Math.round(cols.reduce((t, c) => t + c[key] * c.a, 0) * k);
+  return `rgb(${ch('r')},${ch('g')},${ch('b')})`;
 }
 
 /** Обратная функция нормального распределения: бисекцией по erf */
@@ -558,39 +619,22 @@ function probit(p: number): number {
  * вместе с размытием при масштабе экрана и zoom кнопки. Свёртка 3×3 брала соседние пиксели экрана, и на
  * крупной кнопке (σ 25 px × 1.5 × 1.5) их разница - пара ступенек из 255: сдвиг дрожал, кромка рябила.
  * σ не меньше rim/2 - иначе у острых углов наклон h был бы только в паре пикселей у края.
- * Без размытия стекла включается мягкое сглаживание. Одна выборка фона - легче обычного жидкого стекла
+ * Без размытия стекла включается мягкое сглаживание. Одна выборка фона - легче обычного жидкого стекла.
+ * Маску и карту строит rimParts: у карточек карта - ступеньки по осям, по наклону h - только у круглых кнопок.
+ * diffuse - свет берётся не копией фона в reach px, а фоном, размытым на reach/2: кромку подсвечивает пятно
+ * рядом, без отражения формы. Карта сдвигов тогда не нужна, а дорого именно её построение: на 32 карточках
+ * при прокрутке 132 кадра/с вместо 100
  */
-export function lightRimUri(rim: number, reach: number, shine: number, smooth: LiquidSmooth = 'off', radius = 14, always = false): string {
-  const sd = r1(Math.max(1, 0.39 * radius, rim / 2));
-  const m = Math.max(1, Math.round(sd));
-  const fade = rim * 0.3;
-  const prof = (t: number) => t < 0 || t > rim ? 0 : t < fade ? 0.5 + 0.5 * t / fade : 0.5 + 0.5 * Math.cos(Math.PI * (t - fade) / (rim - fade));
-  // У прямого края h = Φ((t - m)/σ): по h находим расстояние t от края, по нему - яркость полосы
-  const table = Array.from({ length: 64 }, (_, i) => Math.round(prof(m + sd * probit(i / 63)) * 100) / 100).join(' ');
-  // Разность h(+d) - h(-d) на внутренней границе полосы (|z| = 1.18) - с неё карта упирается в 0 или 1
-  const d = Math.max(1, Math.round(sd / 2));
-  const k = Math.round(1000 / (erf((1.18 + d / sd) / Math.SQRT2) - erf((1.18 - d / sd) / Math.SQRT2))) / 1000;
-  // h впереди - из красного канала g, позади - из зелёного gm. Пиксели из-за края блока прозрачны и
-  // читаются как h = 0: у края разность только растёт, сдвиг всё так же внутрь
-  const slope = (dx: number, dy: number, row: string) => `<feOffset in='g' dx='${-dx}' dy='${-dy}' result='p'/>`
-    + `<feOffset in='gm' dx='${dx}' dy='${dy}'/><feComposite in2='p' operator='arithmetic' k2='1' k3='1'/><feColorMatrix values='${row}'`;
-  const shape = `<feFlood result='a'/><feOffset dx='-${m}' dy='-${m}' result='b'/>`
-    + `<feFlood x='${m}' y='${m}' width='99999' height='99999'/><feComposite in2='b' operator='in'/>`
-    + `<feGaussianBlur stdDeviation='${sd}' result='h'/>`
-    + `<feComponentTransfer result='k'><feFuncA type='table' tableValues='${table}'/></feComponentTransfer>`
-    + `<feColorMatrix in='h' values='0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1' result='g'/>`
-    + `<feColorMatrix in='h' values='0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 1' result='gm'/>`
-    + `${slope(d, 0, `${k} -${k} 0 0 0.5 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1`)} result='x'/>`
-    + `${slope(0, d, `0 0 0 0 0 ${k} -${k} 0 0 0.5 0 0 0 0 0 0 0 0 0 1`)}/>`
-    + `<feComposite in2='x' operator='arithmetic' k2='1' k3='1' result='m'/>`;
+export function lightRimUri(rim: number, reach: number, shine: number, smooth: LiquidSmooth = 'off', radius = 14, always = false, diffuse = false): string {
   const g = r1(shine / 100);
   const lit = always
     ? `<feColorMatrix type='saturate' values='1.6'/><feComponentTransfer><feFuncR type='linear' slope='${g}'/><feFuncG type='linear' slope='${g}'/>`
       + `<feFuncB type='linear' slope='${g}'/></feComponentTransfer>`
     : `<feBlend in2='SourceGraphic' mode='lighten'/><feComposite in2='SourceGraphic' operator='arithmetic' k2='${g}' k3='${r1(1 - g)}'/>`;
-  const glow = `<feDisplacementMap in='SourceGraphic' in2='m' scale='${r1(reach * 2)}' xChannelSelector='R' yChannelSelector='G'/>`
-    + `${lit}<feComposite in2='k' operator='in'/><feComposite in2='SourceGraphic' operator='over'/>`;
-  return filterUrl(shape + glow + (smooth === 'soft' ? `<feGaussianBlur stdDeviation='0.5'/>` : ''));
+  const copy = diffuse ? `<feGaussianBlur in='SourceGraphic' stdDeviation='${r1(reach / 2)}'/>`
+    : `<feDisplacementMap in='SourceGraphic' in2='rm' scale='${r1(reach * 2)}' xChannelSelector='R' yChannelSelector='G'/>`;
+  const glow = `${copy}${lit}<feComposite in2='k' operator='in'/><feComposite in2='SourceGraphic' operator='over'/>`;
+  return filterUrl((diffuse ? rimMask(0, rim, radius) : rimParts(0, rim, radius, false)) + glow + (smooth === 'soft' ? `<feGaussianBlur stdDeviation='0.5'/>` : ''));
 }
 
 /** Скругление карточек в px: rounded-xl клиента - --radius × 1.4 (см. surfaceRules) */
@@ -602,9 +646,13 @@ const reflectGeo = (s: ThemeConfig['surfaces']) => {
   const reach = rim + 6;
   return { rim, reach, pad: reach + 4, shine: 2 * s.liquidReflectShine / 100 };
 };
-/** Стеклянные поверхности со своими настройками: на них слой жидкого стекла с отражением */
+/**
+ * Стеклянные поверхности со своими настройками: на них слой жидкого стекла с отражением. Окна и меню клиента
+ * с классами плиток (rounded-2xl border-stroke) - без слоя: его position: relative перебивал fixed окон, и
+ * редактор профиля уезжал за низ экрана. :where - чтобы вес селектора остался прежним
+ */
 const glassTargets = (s: ThemeConfig['surfaces']) =>
-  [s.selected !== 'app' ? '[data-slot="card"]' : '[data-slot="card"]:not([class*="border-primary/"])', TILE, '[data-slot="accordion"]', PROFILE].join(', ');
+  [s.selected !== 'app' ? '[data-slot="card"]' : '[data-slot="card"]:not([class*="border-primary/"])', `${TILE}:not(:where([data-slot]))`, '[data-slot="accordion"]', PROFILE].join(', ');
 /** Боковая панель со стеклом карточек («Как карточки» и «Стекло»): отражение кромки у неё - как у карточек */
 const sidebarLiquid = (s: ThemeConfig['surfaces']) => liquidOn(s) && (s.sidebar === 'cards' || s.sidebar === 'glass');
 /**
@@ -625,6 +673,9 @@ const sidebarBorder = (s: ThemeConfig['surfaces']) => s.sidebar === 'cards' ? s.
 function liquidFilter(s: ThemeConfig['surfaces'], radius?: number, outer = false): string {
   const lens = s.liquidLens > 0 ? lensZoom(s.liquidLens) : 1;
   const g = radius === undefined ? null : reflectGeo(s);
+  // «Преломление» 0 без линзы и отражения: сдвиг нулевой, а фильтр всё равно считал карту сдвигов каждый кадр
+  // прокрутки. Остаётся пустое размытие - оно держит стекло карточки корнем фона для слоя «На карточке»
+  if (s.liquidStrength <= 0 && lens <= 1 && !g) return s.liquidSmooth === 'soft' ? 'blur(0.5px)' : 'blur(0px)';
   const main = liquidUri(s.liquidStrength, s.liquidEdge, s.liquidSmooth, s.liquidRainbow,
     { lens, inset: g && outer ? g.pad : 0, reflect: g ? { rim: g.rim, reach: g.reach, shine: g.shine, radius: Math.max(0, radius!), outward: outer } : undefined });
   return lens > 1 ? `${lensXUri(lens)} ${main}` : main;
@@ -633,7 +684,7 @@ function liquidFilter(s: ThemeConfig['surfaces'], radius?: number, outer = false
 const powerRadius = (pw: ThemeConfig['power']) => pw.style === 'toggle' ? 37 : pw.shape === 'circle' ? 64 : 1.28 * pw.corner;
 /** Фильтр стекла light для блока со скруглением radius */
 const lightFilter = (s: ThemeConfig['surfaces'], radius: number) =>
-  lightRimUri(s.liquidRim, s.liquidReach, s.liquidShine, s.blur < 2 ? 'soft' : 'off', radius, s.liquidRimAlways);
+  lightRimUri(s.liquidRim, s.liquidReach, s.liquidShine, s.blur < 2 ? 'soft' : 'off', radius, s.liquidRimAlways, s.liquidLightDiffuse);
 
 /** Каналы для радужности: только красный, только зелёный, только синий; прозрачность - 1 */
 const CHANNEL = ['1 0 0 0 0 0 0 0 0 0 0 0 0 0 0', '0 0 0 0 0 0 1 0 0 0 0 0 0 0 0', '0 0 0 0 0 0 0 0 0 0 0 0 1 0 0'].map((m) => `${m} 0 0 0 0 1`);
@@ -740,6 +791,8 @@ function surfaceRules(cfg: ThemeConfig): string {
     // Подложка раскрытой группы прокси - прозрачнее карточек. --kt-row-k проявляет её при раскрытии (см. ниже)
     out += rule(`${P} div[class*="bg-card/30"]`, [`background: ${rowFade('var(--card)', alpha * 0.5)} !important`,
       `border-color: ${bw === 0 ? 'transparent' : rowFade(stroke, Math.min(100, s.borderOpacity))} !important`]);
+    // Окна и меню с классами плиток слоя не получают (glassTargets): стекло и зерно у них свои, как без отражения
+    if (layer) out += rule(`${P} ${TILE}[data-slot]`, [`background: ${grain}${fill} !important`, `backdrop-filter: ${blur} !important`]);
     out += rule([`${P} ${PROFILE}`, PINNED], [`backdrop-filter: ${cardBlur} !important`, `border-width: ${bw}px !important`]);
     // Рамка профилей - отдельная переменная клиента (border-stroke-profile-inactive) со своим цветом из
     // палитры. Задаём её всегда, а не только при своём цвете: иначе при «Авто» заметность рамок до
@@ -768,9 +821,22 @@ function surfaceRules(cfg: ThemeConfig): string {
     const T = `${P} :is(${glassTargets(s)})`;
     const over = (v: string) => ['content: ""', 'position: absolute', 'inset: 0', 'border-radius: inherit', 'z-index: 1', 'pointer-events: none',
       `backdrop-filter: var(${v})`];
+    // Серверы, шапки групп, строки правил - карточки без отступов с одним card-content во всю карточку. Им полосу
+    // рисует обычный filter содержимого: его Chromium растрирует один раз, а backdrop-filter слоя считал заново
+    // каждый кадр прокрутки (32 карточки на экране: 45 кадров/с вместо 180). filter срезал бы свечение текста
+    // за краем карточки, поэтому при тени таких мест - только серверы: они и так обрезаны (overflow-hidden)
+    const flat = `[data-slot="card"].py-0${textShadowsOn(cfg).some((t) => t.targets.some((x) => CARD_TEXT.includes(x))) ? '.overflow-hidden' : ''}`;
+    const CC = '> [data-slot="card-content"]:only-child';
     out += rule(`:where(${T})`, ['position: relative']);
-    out += rule(`${T}::before`, over('--kt-liquid-on'));
-    out += rule(`${T}.rounded-lg::before`, ['backdrop-filter: var(--kt-liquid-on-lg)']);
+    out += rule(`${T}:not(:where(${flat}:has(${CC})))::before`, over('--kt-liquid-on'));
+    out += rule(`${T}:not(:where(${flat}:has(${CC}))).rounded-lg::before`, ['backdrop-filter: var(--kt-liquid-on-lg)']);
+    out += rule(`${T}${flat} ${CC}`, ['filter: var(--kt-liquid-oc)']);
+    out += rule(`${T}${flat}.rounded-lg ${CC}`, ['filter: var(--kt-liquid-oc-lg)']);
+    // Содержимое кладётся на заливку карточки - у каждой схемы своя
+    for (const { scheme, sel } of schemeScopes(cfg.mode)) {
+      const fill = cardFill(cfg, scheme);
+      out += rule(sel, [`--kt-liquid-oc: ${contentRimUri(s, cardRadius(s), undefined, fill)}`, `--kt-liquid-oc-lg: ${contentRimUri(s, s.radius * 16, undefined, fill)}`]);
+    }
     if (sbLiquid) {
       out += rule(`:where(${sbSel})`, ['position: relative']);
       out += rule(`${sbSel}::before`, over(sbLg ? '--kt-liquid-on-lg' : '--kt-liquid-on'));
@@ -1540,6 +1606,8 @@ const TEXT_TARGETS: Record<TextShadowTarget, string> = {
 
 /** Включённые тени текста: со своим видом и хотя бы одним местом */
 const textShadowsOn = (cfg: ThemeConfig) => cfg.fonts.textShadows.filter((t) => t.style !== 'none' && t.targets.length > 0);
+/** Места тени текста в шапках групп и строках правил: свечение у них выходит за карточку (surfaceRules, «На карточке») */
+const CARD_TEXT: TextShadowTarget[] = ['all', 'groups', 'servers', 'muted', 'buttons'];
 
 /** Запас под тень текста у строк с многоточием, px (overflow-clip-margin); 0 - тени нет. Без потолка:
  * у неона с сильным размытием свечение уходит на 84px, и прежний потолок 40px срезал его заметной гранью */
@@ -1589,6 +1657,13 @@ function extrasRules(cfg: ThemeConfig): string {
     // Надпись состояния - соседний блок перед кнопкой подключения
     out += rule(`${P} div:has(+ [data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"]) .uppercase`, ['color: var(--stroke-power-on) !important', 'text-shadow: 0 0 18px color-mix(in srgb, var(--stroke-power-on) 45%, transparent)']);
     out += rule(`${P} div:has(+ [data-guide="home-power-toggle"] > div > div > img:nth-child(4).opacity-100) .uppercase`, ['color: var(--destructive) !important']);
+  }
+  // Меню профиля узнаём по значку «Редактировать правила» (list-tree): в других меню клиента его нет. Без
+  // «Главной страницы» и «Поддержки» разделитель перед «Удалить» остался бы первой строкой меню
+  if (e.noProfileEdit) {
+    const menu = `${P} [data-slot="dropdown-menu-content"]:has(.lucide-list-tree)`;
+    out += rule([`${menu} [data-slot="dropdown-menu-item"]:has(> :is(.lucide-pencil, .lucide-file-text, .lucide-list-tree, .lucide-folder-open))`,
+      `${menu}:not(:has(.lucide-external-link, .lucide-headset)) [data-slot="dropdown-menu-separator"]`], ['display: none !important']);
   }
   return out;
 }

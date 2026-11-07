@@ -127,7 +127,7 @@ export function defaultConfig(): ThemeConfig {
     surfaces: {
       custom: false, fill: 'glass', grain: 0, liquid: false, liquidStrength: 18, liquidEdge: 20, liquidSmooth: 'off', liquidRainbow: 0,
       liquidLens: 0, liquidReflect: 'off', liquidReflectShine: 50, liquidReflectWidth: 8,
-      liquidLight: false, liquidRim: 10, liquidReach: 30, liquidShine: 170, liquidRimAlways: false, liquidGlow: true,
+      liquidLight: false, liquidRim: 10, liquidReach: 30, liquidShine: 170, liquidRimAlways: false, liquidLightDiffuse: false, liquidGlow: true,
       glassMemory: { glass: { opacity: -1, blur: -1, saturate: -1 }, liquid: { opacity: -1, blur: -1, saturate: -1 }, light: { opacity: -1, blur: -1, saturate: -1 } },
       opacity: 50, blur: 24, saturate: 100, borderWidth: 1, borderOpacity: 100, radius: 0.625,
       gradient: false, gradientKind: 'soft', gradientAngle: 180, gradientX: 50, gradientY: 0,
@@ -167,7 +167,7 @@ export function defaultConfig(): ThemeConfig {
       style: 'app', hideInline: true, size: 114, rotate: -50, x: -50, y: 15, opacity: 45,
       fade: true, blur: 0, dim: 0, side: 'right', selectedBoost: true, selectedNoBlur: false, grayscale: false
     },
-    extras: { scrollbar: 'app', selection: false, tooltip: 'app', title: 'app', focusRing: false, statusColor: false, customCss: '' },
+    extras: { scrollbar: 'app', selection: false, tooltip: 'app', title: 'app', focusRing: false, statusColor: false, noProfileEdit: false, customCss: '' },
     fun: {
       ping: 'none', pingDotInPlace: false, pingDotSize: 6,pingHide: false, pingHideHover: false, reactive: false, reactiveStrength: 60, runningBorder: false, breathing: false,
       particles: 'none', particlesOver: false, particlesDensity: 100, particlesSpeed: 100, particlesOpacity: 70,

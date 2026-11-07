@@ -38,6 +38,10 @@
     refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>',
     trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+    'file-text': '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+    'list-tree': '<path d="M8 5h13"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="M3 10a2 2 0 0 0 2 2h3"/><path d="M3 5v12a2 2 0 0 0 2 2h3"/>',
+    'folder-open': '<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
     chevron: '<path d="m6 9 6 6 6-6"/>',
     gauge: '<path d="m12 14 4-4M3.3 19a10 10 0 1 1 17.4 0"/>',
     locate: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
@@ -541,7 +545,7 @@
     menuEl = document.createElement('div');
     menuEl.setAttribute('data-radix-popper-content-wrapper', '');
     menuEl.className = 'kt-pop';
-    menuEl.innerHTML = `<div data-slot="dropdown-menu-content" role="menu" data-state="open" data-side="bottom" class="bg-card/50 backdrop-blur-xl text-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 z-50 min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-2xl border border-stroke p-1.5 shadow-lg" style="width:210px">${items.map((it) => it === '-' ? '<div role="separator" data-slot="dropdown-menu-separator" class="bg-stroke -mx-1 my-1 h-px"></div>' : `<div role="menuitem" data-item="${it.id}" data-slot="dropdown-menu-item" ${it.danger ? 'data-variant="destructive"' : ''} class="${MENU_ITEM} ${it.danger ? 'data-[variant=destructive]:text-destructive' : ''}">${it.icon ? svg(LUCIDE[it.icon], '') : ''}${it.label}</div>`).join('')}</div>`;
+    menuEl.innerHTML = `<div data-slot="dropdown-menu-content" role="menu" data-state="open" data-side="bottom" class="bg-card/50 backdrop-blur-xl text-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 z-50 min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-2xl border border-stroke p-1.5 shadow-lg" style="width:210px">${items.map((it) => it === '-' ? '<div role="separator" data-slot="dropdown-menu-separator" class="bg-stroke -mx-1 my-1 h-px"></div>' : `<div role="menuitem" data-item="${it.id}" data-slot="dropdown-menu-item" ${it.danger ? 'data-variant="destructive"' : ''} class="${MENU_ITEM} ${it.danger ? 'data-[variant=destructive]:text-destructive' : ''}">${it.icon ? svg(LUCIDE[it.icon], it.lucide ? `lucide lucide-${it.icon}` : '') : ''}${it.label}</div>`).join('')}</div>`;
     portal.appendChild(menuEl);
     const mw = 210;
     menuEl.style.left = Math.min(innerWidth - mw - 8, r.right - mw) + 'px';
@@ -582,9 +586,11 @@
     if (m) {
       e.stopPropagation();
       openMenu(m, [
-        { id: 'edit', label: 'Редактировать', icon: 'edit', run: () => dialog('edit') },
-        { id: 'file', label: 'Открыть файл', icon: 'file' },
-        { id: 'upd', label: 'Обновить', icon: 'refresh', run: () => toast('Профиль обновлён', 'success') },
+        // Как в клиенте: значки lucide со своими классами (по ним тема скрывает пункты «Редактировать...»)
+        { id: 'edit', label: 'Редактировать информацию', icon: 'pencil', lucide: true, run: () => dialog('edit') },
+        { id: 'edit-file', label: 'Редактировать файл', icon: 'file-text', lucide: true },
+        { id: 'edit-rules', label: 'Редактировать правила', icon: 'list-tree', lucide: true },
+        { id: 'file', label: 'Открыть файл', icon: 'folder-open', lucide: true },
         '-',
         { id: 'del', label: 'Удалить', icon: 'trash', danger: true, run: () => dialog('delete') }
       ]);

@@ -146,5 +146,6 @@ export function randomTheme(current: ThemeConfig): ThemeConfig {
   }
   cfg.fonts = structuredClone(current.fonts);
   cfg.extras.customCss = current.extras.customCss;
+  cfg.extras.noProfileEdit = current.extras.noProfileEdit;
   return cfg;
 }

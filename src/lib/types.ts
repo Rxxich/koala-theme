@@ -143,6 +143,8 @@ export interface Surfaces {
   liquidShine: number;
   /** Кромка светится на любом фоне светлой рамкой. false - только там, где в глубине под стеклом ярче, чем у края */
   liquidRimAlways: boolean;
+  /** Свет кромки - размытый фон рядом, а не его сдвинутая копия: мягче и легче при прокрутке */
+  liquidLightDiffuse: boolean;
   /** Мягкий светлый ободок по краю стекла light */
   liquidGlow: boolean;
   /** Свои непрозрачность, размытие и насыщенность у каждого вида стекла: при переключении вида возвращаются */
@@ -389,6 +391,8 @@ export interface Extras {
   title: 'app' | 'gradient' | 'accent' | 'outline';
   focusRing: boolean;
   statusColor: boolean;
+  /** Скрыть в меню профиля пункты «Редактировать информацию», «файл», «правила» и «Открыть файл» */
+  noProfileEdit: boolean;
   customCss: string;
 }
 
