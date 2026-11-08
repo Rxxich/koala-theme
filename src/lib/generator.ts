@@ -16,10 +16,13 @@ import { powerGlassy, powerKeyframes, powerRules, type GlassLook } from './power
 import { particleSet, patternLayer } from './backdrop';
 import { clickRules, funRules, PROXY_SEL } from './effects';
 import { dividerRules } from './dividers';
+import { FPS, pace } from './frames';
 import { sidebarIconRules } from './sidebarIcons';
 import type { Background, BgAnimation, GradientStop, IconPlate, LiquidSmooth, Palette, Scheme, SelectedStyle, StyleColor, TextShadowTarget, ThemeConfig } from './types';
 
 const P = ':root';
+/** Анимация фона перерисовывает всё окно, а градиент мягкий и ступенек на нём не видно. BG_PARTS - отрезков в кадрах хода туда-обратно */
+const BG_FPS = 20, BG_PARTS = 10;
 const WRAP = `${P} [data-slot="sidebar-wrapper"]`;
 const MAP = `${WRAP} > img.pointer-events-none`;
 const CARD_BASE = '[data-slot="card"]:not([class*="border-primary/"]):not([class*="bg-amber-500"])';
@@ -92,9 +95,10 @@ const glassRedraw = (cfg: ThemeConfig) => cfg.surfaces.custom && cfg.surfaces.fi
 /** Постоянные анимации выбранного сервера. У текущего профиля - только блик и сияние, без «дыхания» */
 function selectedAnims(cfg: ThemeConfig, v = cfg.surfaces.selected, breath = cfg.fun.breathing): string[] {
   const a: string[] = [];
-  if (v === 'shine') a.push('kt-sel-shine 3.6s ease-in-out infinite');
-  if (v === 'aurora') a.push('kt-sel-aurora 6s ease-in-out infinite alternate');
-  if (breath) a.push('kt-breath 2.6s ease-in-out infinite');
+  // Блик движется только на среднем отрезке кадров: 60% времени. Сияние мягкое, ему хватает и половины кадров
+  if (v === 'shine') a.push(`kt-sel-shine ${pace(3.6, 'ease-in-out', 5 / 3)} infinite`);
+  if (v === 'aurora') a.push(`kt-sel-aurora ${pace(6, 'ease-in-out', 1, FPS / 2)} infinite alternate`);
+  if (breath) a.push(`kt-breath ${pace(2.6, 'ease-in-out', 2)} infinite`);
   return a;
 }
 const REDRAW_LAYER = ['content: ""', 'position: fixed', 'inset: 0', 'z-index: 2147483647', 'pointer-events: none', 'background: #000', 'opacity: 0', 'visibility: hidden', 'will-change: opacity'];
@@ -195,7 +199,7 @@ function backgroundRules(cfg: ThemeConfig, scheme: Scheme, scope: string, kfs: R
       isImage && bg.imageBlur > 0 && `filter: blur(${bg.imageBlur}px)`,
       isImage && bg.imageOpacity < 100 && `opacity: ${bg.imageOpacity / 100}`,
       !isImage && anim === 'pan' && 'background-size: 220% 220%',
-      anim !== 'none' && `animation: kt-bg-${anim} ${bg.animSpeed}s ${anim === 'spin' || anim === 'hue' || anim === 'flow' ? 'linear' : 'ease-in-out'} infinite${anim === 'pan' || anim === 'breathe' ? ' alternate' : ''}`,
+      anim !== 'none' && (anim === 'pan' || anim === 'breathe' ? `animation: kt-bg-${anim} ${pace(bg.animSpeed, 'linear', BG_PARTS, BG_FPS)} infinite alternate` : `animation: kt-bg-${anim} ${pace(bg.animSpeed, 'linear', 1, BG_FPS)} infinite`),
       bg.blurPages && 'transition: filter 0.6s ease'
     ]);
     // На внутренних страницах клиент вешает на карту класс blur-3xl - по нему узнаём, что мы не на главной.
@@ -219,7 +223,7 @@ function backgroundRules(cfg: ThemeConfig, scheme: Scheme, scope: string, kfs: R
       const stat = Array.from({ length: staticCount() }, () => '0 0');
       const name = `pt-${scheme}${scope === 'html:root' ? '' : ''}`;
       kfs[name] = `from { background-position: ${[...parts.from, ...stat].join(', ')}; } to { background-position: ${[...parts.to, ...stat].join(', ')}; }`;
-      animDecl = `animation: kt-${name} ${parts.duration}s linear infinite`;
+      animDecl = `animation: kt-${name} ${parts.duration}s steps(${parts.steps}) infinite`;
     }
     out += rule(`${w}::after`, ['content: ""', 'position: absolute', 'inset: 0', 'z-index: 0', 'pointer-events: none', `background: ${overlays.join(',\n        ')}`, animDecl]);
   }
@@ -230,7 +234,7 @@ function backgroundRules(cfg: ThemeConfig, scheme: Scheme, scope: string, kfs: R
     if (ps) {
       const name = `pto-${scheme}`;
       kfs[name] = `from { background-position: ${ps.from.join(', ')}; } to { background-position: ${ps.to.join(', ')}; }`;
-      out += rule(`${scope} body::after`, ['content: ""', 'position: fixed', 'inset: 0', 'z-index: 45', 'pointer-events: none', `background: ${ps.layers.join(',\n        ')}`, `animation: kt-${name} ${ps.duration}s linear infinite`]);
+      out += rule(`${scope} body::after`, ['content: ""', 'position: fixed', 'inset: 0', 'z-index: 45', 'pointer-events: none', `background: ${ps.layers.join(',\n        ')}`, `animation: kt-${name} ${ps.duration}s steps(${ps.steps}) infinite`]);
     }
   }
   return out;
@@ -1223,14 +1227,14 @@ function surfaceRules(cfg: ThemeConfig): string {
   // Со слоем стекла прозрачность карточки выключила бы стекло - тускнеют и пульсируют слой и содержимое
   const busyFill = [`${BUSY} > *`, `${BUSY}::before`];
   if (layer && pw === 'app') out += rule(BUSY, ['opacity: 1']) + rule(busyFill, ['opacity: 0.6']);
-  if (pw === 'pulse') out += layer ? rule(BUSY, ['opacity: 1']) + rule(busyFill, ['animation: kt-prof-pulse 0.8s ease-in-out infinite alternate'])
-    : rule(BUSY, ['animation: kt-prof-pulse 0.8s ease-in-out infinite alternate']);
+  if (pw === 'pulse') out += layer ? rule(BUSY, ['opacity: 1']) + rule(busyFill, [`animation: kt-prof-pulse ${pace(0.8, 'ease-in-out')} infinite alternate`])
+    : rule(BUSY, [`animation: kt-prof-pulse ${pace(0.8, 'ease-in-out')} infinite alternate`]);
   if (pw === 'shimmer') {
     // Полоса света проезжает по карточке сдвигом (translate) - это делает видеокарта, без перерисовки.
     // ::before занят, если кромка отражает то, что вокруг или на карточке
     out += rule(BUSY, ['overflow: hidden']);
     out += rule(`${BUSY}::${cardBeforeTaken(s) ? 'after' : 'before'}`, ['content: ""', 'position: absolute', 'inset: 0', 'border-radius: inherit', 'pointer-events: none', 'z-index: 1',
-      `background: linear-gradient(105deg, transparent 30%, ${cm('var(--foreground)', 14)} 50%, transparent 70%)`, 'animation: kt-prof-sweep 1.1s ease-in-out infinite']);
+      `background: linear-gradient(105deg, transparent 30%, ${cm('var(--foreground)', 14)} 50%, transparent 70%)`, `animation: kt-prof-sweep ${pace(1.1, 'ease-in-out')} infinite`]);
   }
 
   // Наведение на группы прокси и кнопку выбора сервера на главной. Со своими поверхностями их фон
@@ -1489,12 +1493,19 @@ function motionRules(cfg: ThemeConfig): string {
   return out;
 }
 
+const r4 = (v: number) => Math.round(v * 10000) / 10000;
+/**
+ * Плавный ход фона туда-обратно: разгон и торможение записаны в сами ключевые кадры, между ними - ровные ступеньки. Фон
+ * идёт десятки секунд, и кривая ступеньками (linear() из frames.ts) заняла бы десятки килобайт
+ */
+const bgSwing = (at: (k: number) => string) => Array.from({ length: BG_PARTS + 1 }, (_, i) => `${(i * 100) / BG_PARTS}% { ${at((1 - Math.cos((Math.PI * i) / BG_PARTS)) / 2)} }`).join(' ');
+
 function baseKeyframes(cfg: ThemeConfig): Record<string, string> {
   const kf: Record<string, string> = {};
   const KF: Record<string, string> = {
-    'bg-pan': 'from { background-position: 0% 30%; } to { background-position: 100% 70%; }',
+    'bg-pan': bgSwing((k) => `background-position: ${r4(100 * k)}% ${r4(30 + 40 * k)}%;`),
     'bg-hue': 'to { filter: hue-rotate(360deg); }',
-    'bg-breathe': 'from { transform: scale(1); opacity: 0.85; } to { transform: scale(1.12); opacity: 1; }',
+    'bg-breathe': bgSwing((k) => `transform: scale(${r4(1 + 0.12 * k)}); opacity: ${r4(0.85 + 0.15 * k)};`),
     'bg-spin': 'to { transform: rotate(360deg); }',
     'bg-flow': 'to { --kt-flow: 360deg; }',
     // Появление: размах задаёт --kt-fresh (1 - обычное, 0 - карточка сразу на месте, см. motionRules)

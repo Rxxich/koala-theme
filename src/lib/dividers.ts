@@ -9,6 +9,7 @@
 // Скрытая полоса остаётся на месте (visibility): на главной она - колонка сетки, и без неё цифры
 // подписки разъехались бы.
 
+import { pace } from './frames';
 import type { Divider, ThemeConfig } from './types';
 
 type Decl = string | false | null | undefined | 0;
@@ -63,7 +64,7 @@ function decls(d: Divider, vertical: boolean): { base: Decl[]; after: Decl[] | n
     vertical ? `width: ${size}px` : `height: ${size}px`,
     size >= 2 && style !== 'double' && 'border-radius: 999px',
     d.effect === 'glow' && `box-shadow: 0 0 ${4 + size * 2}px ${glowCol}`,
-    d.effect === 'pulse' && 'animation: kt-div-pulse 2.6s ease-in-out infinite',
+    d.effect === 'pulse' && `animation: kt-div-pulse ${pace(2.6, 'ease-in-out', 2)} infinite`,
     d.effect === 'shimmer' && 'position: relative',
     d.effect === 'shimmer' && 'overflow: hidden'
   ];
@@ -72,7 +73,7 @@ function decls(d: Divider, vertical: boolean): { base: Decl[]; after: Decl[] | n
     'content: ""', 'position: absolute', 'inset: 0', 'pointer-events: none',
     `background: linear-gradient(${dir}, transparent, color-mix(in srgb, ${style === 'gradient' ? 'var(--primary)' : raw} 35%, white), transparent) no-repeat`,
     `background-size: ${vertical ? '100% 45%' : '45% 100%'}`,
-    `animation: kt-div-shine-${vertical ? 'v' : 'h'} 2.8s ease-in-out infinite`
+    `animation: kt-div-shine-${vertical ? 'v' : 'h'} ${pace(2.8, 'ease-in-out')} infinite`
   ] : null;
   return { base, after };
 }

@@ -5,6 +5,7 @@
 // его в покой - и в этот момент видна волна, вспышка или блик. Радиус волны - анимируемая
 // CSS-переменная (@property), поэтому градиент растёт плавно.
 
+import { pace } from './frames';
 import { cardBeforeTaken } from './shadows';
 import type { ThemeConfig } from './types';
 
@@ -204,7 +205,7 @@ export function funRules(cfg: ThemeConfig, rule: RuleFn): { css: string; keyfram
     css += rule(`${P} .main::before`, ['content: ""', 'position: fixed', 'inset: 0', 'z-index: -1', 'pointer-events: none', 'opacity: 0',
       `background: radial-gradient(60% 55% at 50% 52%, color-mix(in srgb, var(--gradient-end-power-on) ${Math.round(k * 0.55)}%, transparent), transparent 70%), radial-gradient(40% 35% at 50% 50%, color-mix(in srgb, var(--gradient-start-power-on) ${Math.round(k * 0.35)}%, transparent), transparent 70%)`,
       'transition: opacity 1.4s ease']);
-    css += rule(`${P} .main:has(${POWER_ON})::before`, ['opacity: 1', 'animation: kt-reactive 4s ease-in-out infinite alternate']);
+    css += rule(`${P} .main:has(${POWER_ON})::before`, ['opacity: 1', `animation: kt-reactive ${pace(4, 'ease-in-out', 1, 20)} infinite alternate`]);
     kf.reactive = 'from { transform: scale(1); filter: hue-rotate(0deg); } to { transform: scale(1.08); filter: hue-rotate(18deg); }';
   }
 
@@ -220,7 +221,7 @@ export function funRules(cfg: ThemeConfig, rule: RuleFn): { css: string; keyfram
       'background: conic-gradient(from var(--kt-ang), transparent 0 55%, var(--gradient-start-power-on) 75%, var(--primary) 90%, transparent)',
       '-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)', '-webkit-mask-composite: xor',
       'mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)', 'mask-composite: exclude',
-      'animation: kt-ang 3.2s linear infinite']);
+      `animation: kt-ang ${pace(3.2)} infinite`]);
     kf.ang = 'to { --kt-ang: 360deg; }';
   }
 

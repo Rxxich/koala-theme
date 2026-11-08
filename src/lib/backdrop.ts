@@ -64,7 +64,9 @@ function topoLayer(hex: string, a: number, k: number): string {
 
 /* ---------- Частицы ---------- */
 
-export interface ParticleSet { layers: string[]; from: string[]; to: string[]; duration: number }
+export interface ParticleSet { layers: string[]; from: string[]; to: string[]; duration: number; steps: number }
+/** Частицы перерисовывают всё окно, поэтому ступенек не больше нужного: не чаще 20 в секунду и не меньше полупикселя за шаг */
+const PARTICLE_FPS = 20;
 
 const seeded = (seed: number) => () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 
@@ -78,8 +80,10 @@ export function particleSet(f: Fun, pal: Palette, scheme: Scheme): ParticleSet |
   // В пределах ползунка: от плотности зависит число слоёв, и огромное число из чужой ссылки вешало вкладку
   const density = Math.min(200, Math.max(30, f.particlesDensity)) / 100;
   const layers: string[] = [], from: string[] = [], to: string[] = [];
+  let travel = 0;
   const add = (img: string, w: number, h: number, dx: number, dy: number) => {
     const x0 = Math.round(rand() * w), y0 = Math.round(rand() * h);
+    travel = Math.max(travel, Math.hypot(dx, dy));
     layers.push(`${img} ${x0}px ${y0}px / ${w}px ${h}px`);
     from.push(`${x0}px ${y0}px`);
     to.push(`${x0 + dx}px ${y0 + dy}px`);
@@ -142,5 +146,6 @@ export function particleSet(f: Fun, pal: Palette, scheme: Scheme): ParticleSet |
     }
   }
   const base_dur = { snow: 26, stars: 120, fireflies: 34, rain: 3.2, sakura: 30, bubbles: 30, confetti: 18 }[f.particles];
-  return { layers, from, to, duration: Math.round((base_dur / Math.max(0.2, f.particlesSpeed / 100)) * 10) / 10 };
+  const duration = Math.round((base_dur / Math.max(0.2, f.particlesSpeed / 100)) * 10) / 10;
+  return { layers, from, to, duration, steps: Math.max(1, Math.round(Math.min(duration * PARTICLE_FPS, travel * 2))) };
 }

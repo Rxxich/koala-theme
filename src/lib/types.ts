@@ -241,13 +241,15 @@ export interface Shadows {
 }
 
 export type PowerStyle = 'app' | 'glow' | 'pulse' | 'ring' | 'glass' | 'neon' | 'minimal' | 'sphere'
-  | 'network' | 'globe' | 'dots' | 'plasma'
+  | 'network' | 'globe' | 'dots' | 'plasma' | 'caustic'
   | 'rocket' | 'orbit' | 'radar' | 'liquid' | 'equalizer' | 'heartbeat' | 'portal' | 'toggle' | 'daynight';
 export type PowerShape = 'circle' | 'squircle' | 'square';
 /** Цвет рамки круга: 'app' - цвета рамки кнопки из палитры, 'gradient' - градиентом цветов кнопки */
 export type PowerRing = 'app' | 'gradient' | 'primary' | 'foreground' | 'custom';
 export type PowerVolume = 'none' | 'convex' | 'concave' | 'gloss';
-export type ToggleLook = 'classic' | 'glass';
+export type ToggleLook = 'classic' | 'glass' | 'orb';
+/** Цвет ленты «Шара света»: природная призма, цвета кнопки подключения, акцент или свой */
+export type OrbColor = 'prism' | 'power' | 'primary' | 'custom';
 export type DayScene = 'clouds' | 'hills';
 export type PowerFill = 'app' | 'radial' | 'linear' | 'conic' | 'solid' | 'none';
 export type PowerHover = 'app' | 'scale' | 'lift' | 'tilt' | 'glow' | 'none';
@@ -302,6 +304,12 @@ export interface Power {
   knobSize: number;
   /** Тумблер «Стекло»: непрозрачность ручки, % */
   knobOpacity: number;
+  /** «Шар света»: сила затемнения внутри шара, %. 0 - шар прозрачный */
+  orbBg: number;
+  orbColor: OrbColor;
+  orbCustom: string;
+  /** Тумблер «Шар света»: световой след за ручкой при подключении, %. 0 - без следа */
+  orbTrail: number;
   dayScene: DayScene;
   /** «День и ночь»: днём - подключено (иначе наоборот) */
   dayOn: boolean;

@@ -13,7 +13,9 @@
 //   иконки::before/after - рисунок вместо иконки (ракета и пламя, эквалайзер, кардиограмма)
 
 import particleSphere from '../snippets/particle-sphere.css?raw';
+import { inkOf, orbBody, orbBodyLight, PRISM_INK, PRISM_INK_LIGHT, ribbonImage, rimImage } from './caustic';
 import { mix } from './color';
+import { type Curve, FPS, halfOf, pace, paceDecl } from './frames';
 import { hasHighlight } from './shadows';
 import { sphereImage } from './sphere';
 import type { Palette, Scheme, ThemeConfig } from './types';
@@ -50,14 +52,18 @@ const GLOSS = 'radial-gradient(120% 75% at 50% 0%, rgba(255, 255, 255, 0.42), rg
 
 /** Стили, которые движутся всё время, и те, что только при подключении и подключено */
 const MOVING_ALWAYS = ['liquid', 'plasma', 'portal'];
-const MOVING_ON = ['pulse', 'ring', 'neon', 'network', 'globe', 'dots', 'sphere', 'rocket', 'orbit', 'radar', 'equalizer', 'heartbeat'];
+const MOVING_ON = ['pulse', 'ring', 'network', 'globe', 'dots', 'sphere', 'caustic', 'rocket', 'orbit', 'radar', 'equalizer', 'heartbeat'];
+/** Тумблер, на ручке которого «Шар света» */
+const orbToggle = (pw: ThemeConfig['power']) => pw.style === 'toggle' && pw.toggleLook === 'orb';
+/** Отрезков в кадрах kt-orb-twist и точек орбиты: с такими числами ступеньки ложатся на общую сетку кадров (frames.ts) */
+const ORB_PARTS = 10, ORBIT_POINTS = 32;
 
 /** Когда кнопка анимирована - условие для :root (без вложенного :has, его браузер не принимает), иначе null */
 function movingWhen(pw: ThemeConfig['power']): string | null {
   if (!pw.animate) return null;
   const btn = '[data-guide="home-power-toggle"]';
   if (MOVING_ALWAYS.includes(pw.style) || (pw.idle !== 'none' && pw.style !== 'sphere')) return `:root:has(${btn})`;
-  if (MOVING_ON.includes(pw.style) || (pw.glowPulse && pw.glow > 0)) return `:root:has(${btn} > div[class*="border-stroke-power-on"], ${btn} svg[role="status"].opacity-100)`;
+  if (MOVING_ON.includes(pw.style) || orbToggle(pw) || (pw.glowPulse && pw.glow > 0)) return `:root:has(${btn} > div[class*="border-stroke-power-on"], ${btn} svg[role="status"].opacity-100)`;
   return null;
 }
 
@@ -71,7 +77,7 @@ type RuleFn = (selector: string | string[], decls: Decl[]) => string;
 export interface GlassLook { grain: string; fill: string; filter: string; filterPower: string; layer: { pad: number; filter: string } | null; rimOver: string | null; stroke: string; edge: boolean }
 
 /** Кнопка подключения - из стекла карточек: стиль «Стекло» или стеклянный тумблер */
-export const powerGlassy = (pw: ThemeConfig['power']) => pw.style === 'glass' || (pw.style === 'toggle' && pw.toggleLook === 'glass');
+export const powerGlassy = (pw: ThemeConfig['power']) => pw.style === 'glass' || (pw.style === 'toggle' && pw.toggleLook !== 'classic');
 
 /**
  * Стекло кнопки с отражением того, что вокруг. Как у карточек (generator.ts, surfaceRules): стекло рисует
@@ -169,11 +175,16 @@ const scoped = (sel: string, part: string) => part.replace(':root', sel);
 export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook): string {
   const pw = cfg.power;
   const dur = (s: number) => `${Math.round((s / Math.max(0.2, pw.speed)) * 100) / 100}s`;
+  // Постоянные анимации - ступеньками (см. frames.ts), с учётом скорости кнопки
+  const scaled = (s: number) => s / Math.max(0.2, pw.speed);
+  const run = (s: number, curve?: Curve, parts?: number) => pace(scaled(s), curve, parts);
+  const runDecl = (s: number, curve?: Curve, parts?: number) => paceDecl(scaled(s), curve, parts);
+  const half = (s: number, curve?: Curve, parts?: number) => halfOf(scaled(s), curve, parts);
   const anim = pw.animate;
   const st = pw.style;
   let out = '';
   // Шары всегда круглые и заливаются по-своему
-  const ball = st === 'sphere' || st === 'network' || st === 'globe' || st === 'dots' || st === 'plasma';
+  const ball = st === 'sphere' || st === 'network' || st === 'globe' || st === 'dots' || st === 'plasma' || st === 'caustic';
 
   // Тень из раздела «Тени» («Где показывать» → «Кнопка подключения»). Стили задают кругу свои тени,
   // поэтому она дописывается в конец каждого объявления box-shadow самого круга - в покое, при
@@ -285,7 +296,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
       'transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)'
     ]);
     out += rule([`${ON}::after`, `${LOAD}::after`, `${ERR}::after`], [`opacity: ${gk.toFixed(2)}`]);
-    if (pw.glowPulse && anim) out += rule(`${ON}::after`, [`animation: kt-pw-glow ${dur(2.8)} ease-in-out infinite alternate`]);
+    if (pw.glowPulse && anim) out += rule(`${ON}::after`, [`animation: kt-pw-glow ${run(2.8, 'ease-in-out')} infinite alternate`]);
     if (pw.hover === 'glow') out += rule(`${B}:hover:not(:disabled)::after`, [`opacity: ${Math.min(1, gk + 0.3).toFixed(2)}`, 'transform: translate(-50%, -50%) scale(1.18)']);
   }
 
@@ -300,7 +311,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
   // Анимация в покое (выключено)
   if (pw.idle !== 'none' && anim && st !== 'sphere') {
     const kf = { float: 'kt-pw-float', breathe: 'kt-pw-breathe-c', wobble: 'kt-pw-wobble' }[pw.idle];
-    out += rule(`${IDLE} > div`, [`animation: ${kf} ${dur(pw.idle === 'wobble' ? 2.4 : 3.4)} ease-in-out infinite`]);
+    out += rule(`${IDLE} > div`, [`animation: ${kf} ${pw.idle === 'wobble' ? run(2.4, 'ease-in-out', 4) : run(3.4, 'ease-in-out', 2)} infinite`]);
   }
 
   // Иконки
@@ -320,6 +331,50 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
     if (pw.iconSize !== 100) out += rule(I, [`zoom: ${pw.iconSize / 100}`]);
   }
 
+  /** Цвета ленты «Шара света» - те, что можно подставить в CSS: холодная сторона и тёплая */
+  const orbA = pw.orbColor === 'power' ? 'var(--gradient-start-power-on)' : pw.orbColor === 'primary' ? 'color-mix(in srgb, var(--primary) 75%, white)' : pw.orbColor === 'custom' ? `color-mix(in srgb, ${pw.orbCustom} 75%, white)` : PRISM_INK.cool;
+  const orbB = pw.orbColor === 'power' ? 'var(--gradient-end-power-on)' : pw.orbColor === 'primary' ? 'var(--primary)' : pw.orbColor === 'custom' ? pw.orbCustom : PRISM_INK.warm;
+  /**
+   * «Шар света» на блоке значка (сама кнопка или ручка тумблера): тело и обод - его фон, лента - псевдоэлементы,
+   * они перекручиваются вместе (см. caustic.ts). h и w - размах и толщина ленты, steps и gain - обод. Картинки
+   * запекаются для каждой схемы: у светлой свой шар и свои цвета, а у цветной ленты ещё и своя палитра. Отключено -
+   * тонкая тусклая нить и никакого движения, подключено - лента светится и вращается, при подключении вращается быстро
+   */
+  const orbLook = (h: number, w: number, steps: number, gain: number) => {
+    const body = orbBody(pw.orbBg, pw.orbColor === 'prism' ? '#06070a' : `color-mix(in srgb, ${orbB} 14%, #06070a)`, orbA, orbB);
+    const inkFor = (p: Palette, light: boolean) => {
+      if (pw.orbColor === 'prism') return light ? PRISM_INK_LIGHT : PRISM_INK;
+      if (pw.orbColor === 'power') return inkOf(p.powerOnStart, p.powerOnEnd, light);
+      const c = pw.orbColor === 'primary' ? p.primary : pw.orbCustom;
+      return inkOf(mix(c, '#ffffff', 0.25), c, light);
+    };
+    const layer = ['content: ""', 'position: absolute', 'inset: 0', 'pointer-events: none', 'mix-blend-mode: screen', 'background: center / 100% 100% no-repeat', 'rotate: -4deg',
+      'will-change: transform', 'transition: transform 0.9s ease, opacity 1s ease'];
+    out += rule(I, ['z-index: 2', 'overflow: hidden', 'isolation: isolate', 'border-radius: 50%']);
+    out += rule(`${I}::before`, [...layer, 'transform: scaleY(0.2)', 'opacity: 0.34']);
+    out += rule(`${I}::after`, [...layer, 'transform: scaleY(-0.1)', 'opacity: 0.3']);
+    for (const { scheme, sel } of bakeScopes(cfg)) {
+      const light = scheme === 'light', ink = inkFor(cfg.palette[scheme], light);
+      out += rule(scoped(sel, I), [`background: ${rimImage(ink, steps, light ? 1 : gain, light)} center / 100% 100% no-repeat, ${light ? orbBodyLight(pw.orbBg) : body}`]);
+      out += rule(scoped(sel, `${I}::before`), [`background-image: ${ribbonImage('hump', ink, h, w, light)}`, light && 'mix-blend-mode: normal']);
+      out += rule(scoped(sel, `${I}::after`), [`background-image: ${ribbonImage('wave', ink, h, w, light)}`, light && 'mix-blend-mode: normal']);
+    }
+    const on = `${ON} > div > div`, load = `${LOAD} > div > div`;
+    if (anim) {
+      out += rule([`${on}::before`, `${load}::before`], [`animation: kt-orb-twist ${run(6.5, 'linear', ORB_PARTS)} infinite alternate`]);
+      out += rule([`${on}::after`, `${load}::after`], [`animation: kt-orb-twist ${run(6.5, 'linear', ORB_PARTS)} -${half(6.5, 'linear', ORB_PARTS)} infinite alternate`]);
+      out += rule(`${load}::before`, [runDecl(1.2, 'linear', ORB_PARTS)]);
+      out += rule(`${load}::after`, [runDecl(1.2, 'linear', ORB_PARTS), `animation-delay: -${half(1.2, 'linear', ORB_PARTS)}`]);
+    } else {
+      out += rule([`${on}::before`, `${load}::before`], ['opacity: 1', 'transform: scaleY(0.85)']);
+      out += rule([`${on}::after`, `${load}::after`], ['opacity: 1', 'transform: scaleY(0.45)']);
+    }
+    out += rule(`${ERR} > div > div`, ['box-shadow: inset 0 0 14px color-mix(in srgb, var(--destructive) 75%, transparent), 0 0 12px color-mix(in srgb, var(--destructive) 35%, transparent)']);
+    out += rule([`${ERR} > div > div::before`, `${ERR} > div > div::after`], ['opacity: 0']);
+    // Состояние видно по ленте, значки питания и паузы и спиннер не нужны. Знак ошибки остаётся
+    out += rule([`${I} > svg`, `${I} > img:nth-child(2)`, `${I} > img:nth-child(3)`], ['visibility: hidden']);
+  };
+
   /* ---------- Стили ---------- */
   const g = pw.glow / 100;
   switch (st) {
@@ -336,10 +391,10 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         `border: ${Math.max(1, pw.ringWidth)}px solid var(--stroke-power-on)`, 'opacity: 0']);
       out += rule(`${B}::before`, ['z-index: -1']);
       if (anim) {
-        out += rule([`${ON}::before`, `${ON} > div::after`], [`animation: kt-pw-ripple ${dur(2.6)} cubic-bezier(0.2, 0.6, 0.35, 1) infinite`]);
-        out += rule(`${ON} > div::after`, [`animation-delay: ${dur(1.3)}`]);
-        out += rule([`${LOAD}::before`, `${LOAD} > div::after`], ['border-color: var(--stroke-power-off)', `animation: kt-pw-ripple ${dur(1.2)} ease-out infinite`]);
-        out += rule(`${LOAD} > div::after`, [`animation-delay: ${dur(0.6)}`]);
+        out += rule([`${ON}::before`, `${ON} > div::after`], [`animation: kt-pw-ripple ${run(2.6, [0.2, 0.6, 0.35, 1])} infinite`]);
+        out += rule(`${ON} > div::after`, [`animation-delay: ${half(2.6, [0.2, 0.6, 0.35, 1])}`]);
+        out += rule([`${LOAD}::before`, `${LOAD} > div::after`], ['border-color: var(--stroke-power-off)', `animation: kt-pw-ripple ${run(1.2, 'ease-out')} infinite`]);
+        out += rule(`${LOAD} > div::after`, [`animation-delay: ${half(1.2, 'ease-out')}`]);
       } else {
         out += rule(`${ON}::before`, ['opacity: 0.5', 'transform: scale(1.18)']);
       }
@@ -354,8 +409,8 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         '-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)', '-webkit-mask-composite: xor',
         'mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)', 'mask-composite: exclude',
         'opacity: 0', 'transition: opacity 0.5s ease']);
-      out += rule([`${ON}::before`, `${LOAD}::before`], ['opacity: 1', anim && `animation: kt-spin ${dur(2.8)} linear infinite`]);
-      if (anim) out += rule(`${LOAD}::before`, [`animation-duration: ${dur(1)}`]);
+      out += rule([`${ON}::before`, `${LOAD}::before`], ['opacity: 1', anim && `animation: kt-spin ${run(2.8)} infinite`]);
+      if (anim) out += rule(`${LOAD}::before`, [runDecl(1)]);
       out += rule(`${IDLE}::before`, ['opacity: 0.55', 'background: color-mix(in srgb, var(--stroke-power-off) 65%, transparent)']);
       break;
     }
@@ -395,7 +450,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
       out += rule(C, [`background: ${fillOr('off', 'color-mix(in srgb, var(--background) 82%, transparent)')} !important`, `border: ${Math.max(1, pw.ringWidth)}px solid var(--kt-pw) !important`,
         `box-shadow: 0 0 6px var(--kt-pw), 0 0 ${Math.round(26 * g + 8)}px color-mix(in srgb, var(--kt-pw) 70%, transparent), inset 0 0 18px color-mix(in srgb, var(--kt-pw) 45%, transparent) !important`]);
       out += rule(ICONS, ['filter: drop-shadow(0 0 6px var(--kt-pw))']);
-      if (anim) out += rule(`${ON} > div`, [`animation: kt-neon ${dur(4)} linear infinite`]);
+      if (anim) out += rule(`${ON} > div`, [`animation: kt-neon ${dur(4)} step-end infinite`]);
       out += lightIconFix(cfg, rule);
       break;
 
@@ -442,7 +497,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         out += rule(scoped(sel, `${C}::before`), ['background: linear-gradient(150deg, color-mix(in srgb, var(--kt-sp-a) 35%, var(--kt-sp-b)), color-mix(in srgb, var(--kt-sp-b) 70%, black))']);
       }
       out += rule([`${ON} > div::before`, `${LOAD} > div::before`], [anim && `--kt-sp-img: ${moving}`, 'opacity: 1']);
-      if (anim) out += rule(`${LOAD} > div::before`, [`animation: kt-sp-load ${dur(0.9)} ease-in-out infinite alternate`]);
+      if (anim) out += rule(`${LOAD} > div::before`, [`animation: kt-sp-load ${run(0.9, 'ease-in-out')} infinite alternate`]);
       out += rule(`${ON} > div`, [`background: ${body(22, 12, 40)}`]);
       break;
     }
@@ -460,19 +515,27 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
       const layer = ['content: ""', 'position: absolute', 'border-radius: 50%', 'pointer-events: none', 'mix-blend-mode: screen', 'opacity: var(--kt-sp-k)', 'transition: opacity 0.6s ease'];
       out += rule(`${C}::before`, [...layer, 'inset: 4%',
         `background: ${blob(30, 16, 28, 40, 'var(--kt-sp-a)')}, ${blob(18, 32, 70, 34, 'var(--kt-sp-b)')}, ${blob(32, 18, 62, 72, 'var(--kt-sp-a)')}, ${blob(16, 26, 32, 70, 'var(--kt-sp-b)')}`,
-        'filter: blur(7px) saturate(1.3)', anim && `animation: kt-spin ${dur(10)} linear infinite`]);
+        'filter: blur(7px) saturate(1.3)', anim && `animation: kt-spin ${run(10)} infinite`]);
       out += rule(`${C}::after`, [...layer, 'inset: 0',
         'background: repeating-conic-gradient(from 10deg, transparent 0deg 13deg, color-mix(in srgb, var(--kt-sp-a) 45%, white) 14.5deg, transparent 16deg 37deg)',
         '-webkit-mask: radial-gradient(circle, transparent 10%, #000 22%, rgba(0, 0, 0, 0.6) 50%, transparent 66%)', 'mask: radial-gradient(circle, transparent 10%, #000 22%, rgba(0, 0, 0, 0.6) 50%, transparent 66%)',
-        'filter: blur(0.8px)', anim && `animation: kt-spin ${dur(16)} linear infinite reverse`]);
+        'filter: blur(0.8px)', anim && `animation: kt-spin ${run(16)} infinite reverse`]);
       if (anim) {
-        out += rule([`${ON} > div::before`, `${LOAD} > div::before`], [`animation-duration: ${dur(3.2)}`]);
-        out += rule([`${ON} > div::after`, `${LOAD} > div::after`], [`animation-duration: ${dur(5)}`]);
-        out += rule(`${ON} > div`, [`animation: kt-plasma ${dur(2.6)} ease-in-out infinite alternate`]);
+        out += rule([`${ON} > div::before`, `${LOAD} > div::before`], [runDecl(3.2)]);
+        out += rule([`${ON} > div::after`, `${LOAD} > div::after`], [runDecl(5)]);
+        out += rule(`${ON} > div`, [`animation: kt-plasma ${run(2.6, 'ease-in-out')} infinite alternate`]);
       }
       out += rule(I, ['z-index: 2', 'filter: drop-shadow(0 0 6px color-mix(in srgb, var(--kt-sp-a) 80%, transparent))']);
       break;
     }
+
+    case 'caustic':
+      // Сам круг только держит тень, всё остальное рисует блок значка на весь круг
+      out += rule(C, ['position: relative', 'border: 0 !important', 'background: transparent !important', 'backdrop-filter: none !important', 'box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4) !important']);
+      out += rule(I, ['width: 100% !important', 'height: 100% !important']);
+      orbLook(8.5, 1, 48, 1);
+      out += rule(`${I} > img:nth-child(4)`, ['inset: 26% !important', 'width: 48% !important', 'height: 48% !important']);
+      break;
 
     case 'rocket': {
       // Иллюминатор с ракетой. Выключено - стоит на земле; подключение - трясётся, вспыхивает пламя;
@@ -483,7 +546,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
       out += rule(`${C}::before`, ['content: ""', 'position: absolute', 'inset: 0', 'pointer-events: none', 'opacity: 0.55',
         'background: radial-gradient(1.2px 1.2px at 12px 18px, #fff, transparent), radial-gradient(1px 1px at 46px 8px, #fff, transparent), radial-gradient(1.4px 1.4px at 30px 40px, #fff, transparent), radial-gradient(1px 1px at 56px 52px, #fff, transparent), radial-gradient(1px 1px at 8px 58px, #fff, transparent)',
         'background-size: 64px 64px']);
-      out += rule(`${ON} > div::before`, ['opacity: 1', anim && `animation: kt-rocket-stars ${dur(0.7)} linear infinite`]);
+      out += rule(`${ON} > div::before`, ['opacity: 1', anim && `animation: kt-rocket-stars ${run(0.7)} infinite`]);
       // Земля: верх холма на 74% высоты круга - ровно там, где сопло ракеты. Сверху - стартовая площадка и тень
       out += rule(`${C}::after`, ['content: ""', 'position: absolute', 'left: -15%', 'right: -15%', 'bottom: -58%', 'height: 84%', 'border-radius: 50%', 'pointer-events: none',
         'background: radial-gradient(22px 3px at 50% 2px, rgba(0, 0, 0, 0.55), transparent), radial-gradient(30px 5px at 50% 3px, color-mix(in srgb, var(--gradient-end-power-off) 35%, #4a5470) 60%, transparent 62%), radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--gradient-end-power-off) 55%, #2a3350), #161b2e 70%)',
@@ -498,10 +561,10 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         'border-radius: 50% 50% 50% 50% / 30% 30% 70% 70%', 'transform-origin: 50% 0', 'transform: scaleY(0)', 'opacity: 0',
         'background: radial-gradient(ellipse at 50% 15%, #ffffff 0 12%, #fff2a8 24%, #ffb703 48%, #fb5607 70%, transparent 76%)',
         'filter: blur(0.4px) drop-shadow(0 0 6px #ff9f1c)', 'transition: transform 0.5s ease, opacity 0.3s ease']);
-      out += rule(`${LOAD} > div > div`, [anim && `animation: kt-rocket-shake ${dur(0.12)} linear infinite`]);
-      out += rule(`${LOAD} > div > div::after`, ['opacity: 0.9', 'transform: scaleY(0.55)', anim && `animation: kt-flame ${dur(0.12)} ease-in-out infinite alternate`]);
-      out += rule(`${ON} > div > div`, ['transform: translate(5px, -7px) rotate(45deg)', anim && `animation: kt-rocket-fly ${dur(1.6)} ease-in-out ${dur(1)} infinite`]);
-      out += rule(`${ON} > div > div::after`, ['opacity: 1', 'transform: scaleY(1.35)', anim && `animation: kt-flame-big ${dur(0.14)} ease-in-out infinite alternate`]);
+      out += rule(`${LOAD} > div > div`, [anim && `animation: kt-rocket-shake ${run(0.12, 'linear', 4)} infinite`]);
+      out += rule(`${LOAD} > div > div::after`, ['opacity: 0.9', 'transform: scaleY(0.55)', anim && `animation: kt-flame ${run(0.12, 'ease-in-out')} infinite alternate`]);
+      out += rule(`${ON} > div > div`, ['transform: translate(5px, -7px) rotate(45deg)', anim && `animation: kt-rocket-fly ${run(1.6, 'ease-in-out', 2)} ${dur(1)} infinite`]);
+      out += rule(`${ON} > div > div::after`, ['opacity: 1', 'transform: scaleY(1.35)', anim && `animation: kt-flame-big ${run(0.14, 'ease-in-out')} infinite alternate`]);
       out += rule(`${ERR} > div > div`, ['transform: translateY(13px) rotate(-22deg)', 'filter: grayscale(0.7)']);
       out += rule(`${ERR} > div`, ['border-color: var(--destructive) !important']);
       break;
@@ -525,8 +588,8 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         `background: ${sat('var(--kt-orb-a)', 4)}, ${sat('var(--kt-orb-b)', 2.5)}`, 'background-size: 16px 16px', 'background-repeat: no-repeat',
         `background-position: ${orbitPos(-0.35)}`]);
       if (anim) {
-        out += rule(`${ON} > div::after`, [`animation: kt-orbit ${dur(3.2)} linear infinite`]);
-        out += rule(`${LOAD} > div::after`, [`animation: kt-orbit ${dur(1.1)} linear infinite`]);
+        out += rule(`${ON} > div::after`, [`animation: kt-orbit ${run(3.2, 'linear', ORBIT_POINTS)} infinite`]);
+        out += rule(`${LOAD} > div::after`, [`animation: kt-orbit ${run(1.1, 'linear', ORBIT_POINTS)} infinite`]);
       }
       break;
     }
@@ -542,10 +605,10 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
       if (pw.fill !== 'app') out += rule(`${ON} > div`, [`background: ${screen('on')}`]);
       out += rule(`${C}::before`, ['content: ""', 'position: absolute', 'inset: 0', 'border-radius: inherit', 'pointer-events: none', 'opacity: 0',
         'background: conic-gradient(from 0deg, transparent 0deg, transparent 270deg, color-mix(in srgb, var(--kt-rd) 75%, transparent) 360deg)', 'transition: opacity 0.5s ease']);
-      out += rule([`${ON} > div::before`, `${LOAD} > div::before`], ['opacity: 1', anim && `animation: kt-spin ${dur(2.4)} linear infinite`]);
+      out += rule([`${ON} > div::before`, `${LOAD} > div::before`], ['opacity: 1', anim && `animation: kt-spin ${run(2.4)} infinite`]);
       out += rule(`${C}::after`, ['content: ""', 'position: absolute', 'inset: 0', 'pointer-events: none', 'opacity: 0',
         'background: radial-gradient(circle at 70% 32%, var(--kt-rd) 0 2.5px, transparent 4px), radial-gradient(circle at 28% 66%, var(--kt-rd) 0 2px, transparent 3.5px), radial-gradient(circle at 62% 74%, var(--kt-rd) 0 1.8px, transparent 3px)']);
-      out += rule(`${ON} > div::after`, ['opacity: 1', anim && `animation: kt-blink ${dur(2.4)} ease-in-out infinite`]);
+      out += rule(`${ON} > div::after`, ['opacity: 1', anim && `animation: kt-blink ${run(2.4, 'ease-in-out', 2)} infinite`]);
       out += rule(I, ['z-index: 2']);
       break;
     }
@@ -559,9 +622,9 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
       out += rule(B, ['--kt-lq: 84%', '--kt-lq-a: var(--gradient-start-power-off)', '--kt-lq-b: var(--gradient-end-power-off)']);
       out += rule(ON, ['--kt-lq: 26%', '--kt-lq-a: var(--gradient-start-power-on)', '--kt-lq-b: var(--gradient-end-power-on)']);
       out += rule(ERR, ['--kt-lq-a: var(--destructive)', '--kt-lq-b: var(--destructive)']);
-      out += rule(`${C}::before`, [...wave(95, '42%'), 'z-index: 1', anim && `animation: kt-wave ${dur(7)} linear infinite`]);
-      out += rule(`${C}::after`, [...wave(55, '38%'), 'z-index: 0', 'margin-top: -5px', anim && `animation: kt-wave ${dur(11)} linear infinite reverse`]);
-      if (anim) out += rule([`${LOAD} > div::before`, `${LOAD} > div::after`], [`animation: kt-wave ${dur(3)} linear infinite, kt-lq-fill ${dur(1.6)} ease-in-out infinite alternate`]);
+      out += rule(`${C}::before`, [...wave(95, '42%'), 'z-index: 1', anim && `animation: kt-wave ${run(7)} infinite`]);
+      out += rule(`${C}::after`, [...wave(55, '38%'), 'z-index: 0', 'margin-top: -5px', anim && `animation: kt-wave ${run(11)} infinite reverse`]);
+      if (anim) out += rule([`${LOAD} > div::before`, `${LOAD} > div::after`], [`animation: kt-wave ${run(3)} infinite, kt-lq-fill ${run(1.6, 'ease-in-out')} infinite alternate`]);
       out += rule(I, ['z-index: 2']);
       break;
     }
@@ -576,8 +639,8 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         `background: ${[0, 12, 24, 36, 48].map(bar).join(', ')}`, 'background-size: 7px 18%, 7px 18%, 7px 18%, 7px 18%, 7px 18%',
         'filter: drop-shadow(0 0 6px color-mix(in srgb, var(--kt-eq-a) 50%, transparent))', 'transition: background-size 0.4s ease']);
       if (anim) {
-        out += rule(`${ON} > div > div::before`, [`animation: kt-eq ${dur(1.1)} ease-in-out infinite alternate`]);
-        out += rule(`${LOAD} > div > div::before`, [`animation: kt-eq-load ${dur(0.9)} ease-in-out infinite alternate`]);
+        out += rule(`${ON} > div > div::before`, [`animation: kt-eq ${run(1.1, 'ease-in-out', 3)} infinite alternate`]);
+        out += rule(`${LOAD} > div > div::before`, [`animation: kt-eq-load ${run(0.9, 'ease-in-out')} infinite alternate`]);
       } else {
         out += rule(`${ON} > div > div::before`, ['background-size: 7px 45%, 7px 80%, 7px 60%, 7px 95%, 7px 50%']);
       }
@@ -598,9 +661,9 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         out += rule(scoped(sel, `${ERR} > div > div::before`), [`background-image: ${ecgSvg(p.destructive, true)}`]);
       }
       if (anim) {
-        out += rule(`${ON} > div > div::before`, [`animation: kt-ecg ${dur(1.2)} linear infinite`, 'filter: drop-shadow(0 0 4px var(--stroke-power-on))']);
-        out += rule(`${LOAD} > div > div::before`, [`animation: kt-ecg ${dur(2.4)} linear infinite`]);
-        out += rule(`${ON} > div`, [`animation: kt-heart ${dur(1.2)} ease-in-out infinite`]);
+        out += rule(`${ON} > div > div::before`, [`animation: kt-ecg ${run(1.2)} infinite`, 'filter: drop-shadow(0 0 4px var(--stroke-power-on))']);
+        out += rule(`${LOAD} > div > div::before`, [`animation: kt-ecg ${run(2.4)} infinite`]);
+        out += rule(`${ON} > div`, [`animation: kt-heart ${dur(1.2)} steps(6) infinite`]);
       }
       break;
     }
@@ -613,9 +676,9 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
       out += rule(`${C}::before`, ['content: ""', 'position: absolute', 'inset: -30%', 'pointer-events: none', 'opacity: 0.6',
         'background: repeating-conic-gradient(from 0deg, var(--kt-pt-a) 0deg 14deg, var(--kt-pt-b) 26deg 40deg, var(--kt-pt-a) 52deg 60deg)',
         '-webkit-mask: radial-gradient(circle, #000 18%, rgba(0, 0, 0, 0.6) 45%, transparent 70%)', 'mask: radial-gradient(circle, #000 18%, rgba(0, 0, 0, 0.6) 45%, transparent 70%)',
-        'filter: blur(1.5px)', anim && `animation: kt-portal ${dur(9)} linear infinite`, 'transition: opacity 0.6s ease']);
-      out += rule(`${ON} > div::before`, ['opacity: 1', anim && `animation-duration: ${dur(2.2)}`]);
-      out += rule(`${LOAD} > div::before`, ['opacity: 0.85', anim && `animation-duration: ${dur(1)}`]);
+        'filter: blur(1.5px)', anim && `animation: kt-portal ${run(9, 'linear', 2)} infinite`, 'transition: opacity 0.6s ease']);
+      out += rule(`${ON} > div::before`, ['opacity: 1', anim && runDecl(2.2, 'linear', 2)]);
+      out += rule(`${LOAD} > div::before`, ['opacity: 0.85', anim && runDecl(1, 'linear', 2)]);
       out += rule(`${C}::after`, ['content: ""', 'position: absolute', 'inset: 30%', 'border-radius: 50%', 'pointer-events: none',
         'background: radial-gradient(circle, rgba(0, 0, 0, 0.75) 0 40%, transparent 72%)']);
       out += rule(I, ['z-index: 2']);
@@ -623,7 +686,7 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
     }
 
     case 'toggle': {
-      const glassy = pw.toggleLook === 'glass';
+      const glassy = pw.toggleLook !== 'classic';
       if (glassy) {
         // Дорожка - стекло карточек из «Поверхностей» (заливка, зерно, размытие, цвет рамки), толщина
         // рамки - своя. Ручка - светящийся шар цвета кнопки; свечение растекается по стеклу
@@ -638,18 +701,34 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
           `box-shadow: ${[hl && 'var(--kt-highlight)', 'inset 0 -8px 16px rgba(0, 0, 0, 0.1)', !pwShadow && '0 10px 24px rgba(0, 0, 0, 0.18)'].filter(Boolean).join(', ')} !important`]);
         if (glass.layer) out += rule(`${C}::before`, glassLayer(glass.layer, '999px', onLayer(`${glass.grain}${glass.fill} padding-box`)));
         if (glass.rimOver) out += rule(C, ['position: relative']) + rule(`${C}::before`, rimOverlay(glass.rimOver));
-        // Ручка: светлое пятно внутри (knobShine), свечение вокруг (knobGlow), диаметр и непрозрачность. Ход
-        // ручки от диаметра не зависит: при любом её центр стоит в центре полукруга дорожки
-        const shine = pw.knobShine / 100, halo = pw.knobGlow / 100;
-        const knobMix = (c: string) => pw.knobOpacity >= 100 ? c : `color-mix(in srgb, ${c} ${pw.knobOpacity}%, transparent)`;
-        const tint = shine > 0 ? `color-mix(in srgb, var(--kt-tg-a) ${Math.round(100 - 55 * shine)}%, white)` : 'var(--kt-tg-a)';
-        out += rule(I, [`width: ${pw.knobSize}px !important`, `height: ${pw.knobSize}px !important`, 'border-radius: 50%',
-          `background: radial-gradient(circle at 50% 42%, ${knobMix(tint)}, ${knobMix('var(--kt-tg-a)')} 55%, ${knobMix('var(--kt-tg-b)')})`,
-          // Без свечения остаются блик сверху и обычная тень, как у классической ручки
-          `box-shadow: ${[shine > 0 && `inset 0 1px 2px rgba(255, 255, 255, ${Math.round(60 * shine) / 100})`, !pw.toggleGlow ? '0 4px 12px rgba(0, 0, 0, 0.3)'
-            : halo > 0 ? `0 0 ${Math.round(16 * halo)}px ${Math.round(4 * halo)}px color-mix(in srgb, var(--kt-tg-a) ${Math.round(70 * halo)}%, transparent), 0 0 ${Math.round(46 * halo)}px ${Math.round(16 * halo)}px color-mix(in srgb, var(--kt-tg-b) ${Math.round(40 * halo)}%, transparent)`
-            : false].filter(Boolean).join(', ') || 'none'}`,
-          'transform: translateX(-39px)', 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
+        if (pw.toggleLook === 'orb') {
+          // Ручка - маленький «Шар света». Лента на ней толще, чем на большом шаре: при 58 px ядро иначе теряется
+          out += rule(I, [`width: ${pw.knobSize}px !important`, `height: ${pw.knobSize}px !important`, 'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4)',
+            'transform: translateX(-39px)', 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
+          orbLook(10, 1.08, 24, 1.1);
+          // След за ручкой: тонкая линия вдоль оси дорожки, заканчивается у центра ручки во включённом положении
+          if (pw.orbTrail > 0) {
+            const k = pw.orbTrail / 100;
+            const side = (c: string, sign: string) => `radial-gradient(ellipse 52px 5px at 66px calc(50% ${sign} 3px), color-mix(in srgb, ${c} 70%, transparent), transparent)`;
+            out += rule(`${C}::after`, ['content: ""', 'position: absolute', 'inset: 0', 'pointer-events: none', 'opacity: 0', 'transition: opacity 0.9s ease',
+              `background: radial-gradient(ellipse 56px 1.5px at 66px 50%, #fff, transparent), ${side(orbA, '-')}, ${side(orbB, '+')}`]);
+            out += rule(`${ON} > div::after`, [`opacity: ${k}`]);
+            out += rule(`${LOAD} > div::after`, [`opacity: ${Math.round(k * 50) / 100}`]);
+          }
+        } else {
+          // Ручка: светлое пятно внутри (knobShine), свечение вокруг (knobGlow), диаметр и непрозрачность. Ход
+          // ручки от диаметра не зависит: при любом её центр стоит в центре полукруга дорожки
+          const shine = pw.knobShine / 100, halo = pw.knobGlow / 100;
+          const knobMix = (c: string) => pw.knobOpacity >= 100 ? c : `color-mix(in srgb, ${c} ${pw.knobOpacity}%, transparent)`;
+          const tint = shine > 0 ? `color-mix(in srgb, var(--kt-tg-a) ${Math.round(100 - 55 * shine)}%, white)` : 'var(--kt-tg-a)';
+          out += rule(I, [`width: ${pw.knobSize}px !important`, `height: ${pw.knobSize}px !important`, 'border-radius: 50%',
+            `background: radial-gradient(circle at 50% 42%, ${knobMix(tint)}, ${knobMix('var(--kt-tg-a)')} 55%, ${knobMix('var(--kt-tg-b)')})`,
+            // Без свечения остаются блик сверху и обычная тень, как у классической ручки
+            `box-shadow: ${[shine > 0 && `inset 0 1px 2px rgba(255, 255, 255, ${Math.round(60 * shine) / 100})`, !pw.toggleGlow ? '0 4px 12px rgba(0, 0, 0, 0.3)'
+              : halo > 0 ? `0 0 ${Math.round(16 * halo)}px ${Math.round(4 * halo)}px color-mix(in srgb, var(--kt-tg-a) ${Math.round(70 * halo)}%, transparent), 0 0 ${Math.round(46 * halo)}px ${Math.round(16 * halo)}px color-mix(in srgb, var(--kt-tg-b) ${Math.round(40 * halo)}%, transparent)`
+              : false].filter(Boolean).join(', ') || 'none'}`,
+            'transform: translateX(-39px)', 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
+        }
       } else {
         out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important',
           'background: linear-gradient(135deg, var(--gradient-start-power-off), var(--gradient-end-power-off)) !important',
@@ -722,12 +801,13 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
   // всего, что изменилось. Если кнопка движется, а курсор в это время подсвечивает что-то ещё (пункт
   // меню, карточку), прямоугольник растягивается между ними и режет стекло (backdrop-filter) поперёк:
   // перерисованная часть получается светлее, на краю остаётся полоса. Пока кнопка движется, почти
-  // невидимый слой на всё окно меняется каждый кадр - кадр перерисовывается целиком, и стекло
-  // каждый раз считается заново. Слой прозрачен для мыши и не затемняет окно заметно (0,2-0,4%)
+  // невидимый слой на всё окно меняется в те же кадры, что и она, - кадр перерисовывается целиком, и
+  // стекло считается заново. Слой прозрачен для мыши и не затемняет окно заметно (0,2-0,4%)
   const moving = movingWhen(pw);
   if (moving) out += rule(`${moving}::after`, ['content: ""', 'position: fixed', 'inset: 0', 'z-index: 2147483647', 'pointer-events: none',
-    // Отдельный слой (will-change): иначе смена прозрачности заставит заново растрировать всё окно
-    'background: #000', 'opacity: 0.002', 'will-change: opacity', 'animation: kt-redraw 1s linear infinite alternate']);
+    // Отдельный слой (will-change): иначе смена прозрачности заставит заново растрировать всё окно.
+    // Шаги - по общей сетке кадров (frames.ts), у «Звёздного шара» своя: 20 кадров/с (particle-sphere.css)
+    'background: #000', 'opacity: 0.002', 'will-change: opacity', `animation: kt-redraw 1s steps(${st === 'sphere' ? 20 : FPS}) infinite alternate`]);
   return out;
 }
 
@@ -761,8 +841,8 @@ export function powerKeyframes(cfg: ThemeConfig): Record<string, string> {
       kf['flame-big'] = 'from { transform: scaleY(1.15) scaleX(0.9); } to { transform: scaleY(1.6) scaleX(1.08); }';
       break;
     case 'orbit': {
-      // 36 точек по эллипсу, между ними линейно - на глаз это гладкая орбита
-      const n = 36;
+      // Точки по эллипсу, между ними линейно - на глаз это гладкая орбита
+      const n = ORBIT_POINTS;
       kf.orbit = Array.from({ length: n + 1 }, (_, i) => `${Math.round((i / n) * 10000) / 100}% { background-position: ${orbitPos(-0.35 + (i / n) * Math.PI * 2)}; }`).join(' ');
       break;
     }
@@ -781,6 +861,12 @@ export function powerKeyframes(cfg: ThemeConfig): Record<string, string> {
     case 'portal': kf.portal = 'from { transform: rotate(0deg) scale(1); } 50% { transform: rotate(180deg) scale(1.08); } to { transform: rotate(360deg) scale(1); }'; break;
   }
   if (pw.style === 'radar') kf.blink = '0%, 100% { opacity: 0.2; } 50% { opacity: 1; }';
+  // Сжатие по косинусу, как у вращения: у плоского положения лента быстрее всего и тускнеет, иначе она на миг
+  // становится тонкой резкой линией. Кривая разбита на отрезки, потому что steps() её не сохраняет: шаги на отрезке равные
+  if (pw.style === 'caustic' || orbToggle(pw)) kf['orb-twist'] = Array.from({ length: ORB_PARTS + 1 }, (_, i) => {
+    const y = Math.cos((Math.PI * i) / ORB_PARTS);
+    return `${Math.round((i / ORB_PARTS) * 10000) / 100}% { transform: scaleY(${Math.round(y * 1000) / 1000}); opacity: ${Math.round((0.35 + 0.65 * Math.abs(y)) * 1000) / 1000}; }`;
+  }).join(' ');
   if (movingWhen(pw)) kf.redraw = 'to { opacity: 0.004; }';
   return kf;
 }

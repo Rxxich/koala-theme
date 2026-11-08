@@ -6,7 +6,7 @@ import { useStore, useEditScheme } from '../../state/store';
 import { EASE } from '../../lib/generator';
 import { sphereImage } from '../../lib/sphere';
 import { POWER_PLAIN, POWER_STRETCH, POWER_TOGGLES } from '../../lib/power';
-import type { ClickEffect, DayScene, Easing, Entrance, PowerFill, PowerHover, PowerIcon, PowerIdle, PowerRing, PowerShape, PowerStyle, PowerVolume, ToggleLook } from '../../lib/types';
+import type { ClickEffect, DayScene, Easing, Entrance, OrbColor, PowerFill, PowerHover, PowerIcon, PowerIdle, PowerRing, PowerShape, PowerStyle, PowerVolume, ToggleLook } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
 import { PanelHead, useCfg } from './common';
@@ -25,6 +25,7 @@ const STYLES: { value: PowerStyle; label: string; note: string; fun?: boolean }[
   { value: 'globe', label: 'Глобус', note: 'Вращающаяся сетка меридианов и параллелей с огоньками городов' },
   { value: 'dots', label: 'Звёздный шар', note: 'Шар из 600 частиц вращается в 3D: ближние крупнее и ярче, дальние гаснут, вспыхивают искры' },
   { value: 'plasma', label: 'Плазма', note: 'Энергошар: внутри закручиваются два встречных вихря' },
+  { value: 'caustic', label: 'Шар света', note: 'Прозрачный стеклянный шар, внутри закручивается лента света' },
   { value: 'rocket', label: 'Ракета', note: 'Стоит на земле, при подключении взлетает с пламенем', fun: true },
   { value: 'orbit', label: 'Орбита', note: 'Планета, вокруг кружат спутники', fun: true },
   { value: 'radar', label: 'Радар', note: 'Бегущий луч и отметки целей', fun: true },
@@ -57,8 +58,20 @@ export function PowerPanel() {
     });
     setUi({ page: 'home', power: power === 'off' ? 'on' : power });
   };
-  const standard = !['sphere', 'rocket', 'equalizer', 'heartbeat', 'toggle', 'daynight', 'network', 'globe', 'dots'].includes(pw.style);
-  const ball = ['sphere', 'network', 'globe', 'dots', 'plasma'].includes(pw.style);
+  const standard = !['sphere', 'rocket', 'equalizer', 'heartbeat', 'toggle', 'daynight', 'network', 'globe', 'dots', 'caustic'].includes(pw.style);
+  const ball = ['sphere', 'network', 'globe', 'dots', 'plasma', 'caustic'].includes(pw.style);
+  // Настройки «Шара света»: и у стиля кнопки, и у ручки тумблера
+  const orbControls = (
+    <>
+      <Slider label="Сила фона" hint="Плотность стекла внутри шара. Меньше - сквозь шар виден фон, 0 - остаются только обод и лента" value={pw.orbBg} min={0} max={100} unit="%" onChange={(v) => set('power', 'orbBg', v)} />
+      <Row label="Цвет ленты" hint="Ядро ленты всегда белое, цвет получают свечение по её сторонам и блики на ободе. Призма - природные голубой и тёплый, цвет кнопки - «Подключено» из палитры" stack>
+        <Segmented<OrbColor> wrap size="sm" value={pw.orbColor} onChange={(v) => set('power', 'orbColor', v)} options={[
+          { value: 'prism', label: 'Призма' }, { value: 'power', label: 'Цвет кнопки' }, { value: 'primary', label: 'Акцент' }, { value: 'custom', label: 'Свой' }
+        ]} />
+      </Row>
+      {pw.orbColor === 'custom' && <Row label="Свой цвет"><ColorField value={pw.orbCustom} onChange={(v) => set('power', 'orbCustom', v)} /></Row>}
+    </>
+  );
   const toggle = POWER_TOGGLES.includes(pw.style);
   const plain = POWER_PLAIN.includes(pw.style);
   // Превью SVG-сфер - те же картинки, что попадут в тему: вращение под курсором, в покое неподвижный кадр
@@ -105,11 +118,21 @@ export function PowerPanel() {
         )}
       </Group>
 
+      {pw.style === 'caustic' && <Group title="Шар света" spot={SPOTS.power}>{orbControls}</Group>}
+
       {toggle && (
         <Group title="Тумблер" spot={SPOTS.power}>
           {pw.style === 'toggle' && (
             <>
-              <Row label="Вид"><Segmented<ToggleLook> size="sm" value={pw.toggleLook} onChange={(v) => set('power', 'toggleLook', v)} options={[{ value: 'classic', label: 'Классический' }, { value: 'glass', label: 'Стекло' }]} /></Row>
+              <Row label="Вид" stack><Segmented<ToggleLook> size="sm" value={pw.toggleLook} onChange={(v) => set('power', 'toggleLook', v)} options={[{ value: 'classic', label: 'Классический' }, { value: 'glass', label: 'Стекло' }, { value: 'orb', label: 'Шар света' }]} /></Row>
+              {pw.toggleLook === 'orb' && (
+                <>
+                  <p className="note">Дорожка - стекло карточек из «Поверхностей», как у вида «Стекло». На ручке маленький шар с лентой света.</p>
+                  {orbControls}
+                  <Slider label="Световой след" hint="Тонкая линия света за ручкой, когда подключено. 0 - без следа" value={pw.orbTrail} min={0} max={100} unit="%" onChange={(v) => set('power', 'orbTrail', v)} />
+                  <Slider label="Размер ручки" value={pw.knobSize} min={36} max={66} unit="px" onChange={(v) => set('power', 'knobSize', v)} />
+                </>
+              )}
               {pw.toggleLook === 'glass' && (
                 <>
                   <p className="note">Дорожка - стекло карточек из «Поверхностей»: непрозрачность, градиент, размытие, насыщенность, шероховатость, цвет и заметность рамки, блики по верхней и нижней кромке. Толщина рамки - ниже, в «Форме и заливке».</p>
@@ -120,7 +143,7 @@ export function PowerPanel() {
                   <Slider label="Непрозрачность ручки" hint="Меньше - сквозь ручку видна дорожка, как у стеклянной капли. Значок на ручке остаётся чётким" value={pw.knobOpacity} min={0} max={100} unit="%" onChange={(v) => set('power', 'knobOpacity', v)} />
                 </>
               )}
-              <Toggle label="Значок на ручке" hint="Питание и пауза. Спиннер подключения и знак ошибки видны всегда" checked={pw.toggleIcon} onChange={(v) => set('power', 'toggleIcon', v)} />
+              {pw.toggleLook !== 'orb' && <Toggle label="Значок на ручке" hint="Питание и пауза. Спиннер подключения и знак ошибки видны всегда" checked={pw.toggleIcon} onChange={(v) => set('power', 'toggleIcon', v)} />}
             </>
           )}
           {pw.style === 'daynight' && (
