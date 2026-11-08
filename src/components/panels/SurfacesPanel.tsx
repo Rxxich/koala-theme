@@ -183,12 +183,13 @@ export function SurfacesPanel() {
     setUi({ page: 'profiles' });
   };
   /** Любая настройка карточек включает "свои поверхности" */
-  const setCard = <K extends 'opacity' | 'blur' | 'saturate' | 'grain' | 'liquidStrength' | 'liquidEdge' | 'liquidSmooth' | 'liquidRainbow' | 'liquidRim' | 'liquidReach' | 'liquidShine' | 'liquidRimAlways' | 'liquidLightDiffuse' | 'liquidGlow'
+  const setCard = <K extends 'opacity' | 'blur' | 'saturate' | 'grain' | 'liquidStrength' | 'liquidEdge' | 'liquidSmooth' | 'liquidRainbow' | 'liquidRim' | 'liquidReach' | 'liquidShine' | 'liquidRimAlways' | 'liquidLightDiffuse' | 'liquidGlow' | 'liquidEdgeLight'
     | 'liquidLens' | 'liquidReflect' | 'liquidReflectShine' | 'liquidReflectWidth'
     | 'borderWidth' | 'borderOpacity' | 'gradient' | 'highlight' | 'highlightBottom' | 'borderColor' | 'borderCustom'>(k: K, v: (typeof s)[K]) =>
     update((c) => { c.surfaces[k] = v; c.surfaces.custom = true; }, `surfaces.${k}`);
   const liquid = liquidOn(s);
   const light = liquid && s.liquidLight;
+  const edgeLight = liquid && s.liquidEdgeLight > 0;
   const fill: FillChoice = !s.custom ? 'app' : glassKind(s) ?? s.fill;
   /**
    * Смена фона карточек. У каждого вида стекла свои непрозрачность, размытие и насыщенность: уходя с вида,
@@ -315,7 +316,8 @@ export function SurfacesPanel() {
               <MovingBgNote config={config} />
             </>
           )}
-          {s.fill !== 'transparent' && (
+          {liquid && <Slider label="Световая рамка" hint="Рамка как у толстого стекла: сверху и снизу кромка ловит свет, по бокам темнеет, а на скруглениях одно плавно переходит в другое. Заменяет обычную рамку и блики по кромке и при прокрутке ничего не стоит. 0 - обычная рамка" value={s.liquidEdgeLight} min={0} max={100} unit="%" onChange={(v) => setCard('liquidEdgeLight', v)} />}
+          {s.fill !== 'transparent' && !edgeLight && (
             <>
               <Slider label="Толщина рамки" value={s.borderWidth} min={0} max={3} step={0.5} unit="px" onChange={(v) => setCard('borderWidth', v)} />
               <Slider label="Заметность рамки" value={s.borderOpacity} min={0} max={100} unit="%" disabled={s.borderWidth === 0} onChange={(v) => setCard('borderOpacity', v)} />
@@ -327,8 +329,8 @@ export function SurfacesPanel() {
             <>
               <Toggle label="Градиент" hint="Заливка карточек и плиток градиентом. Действует и на боковую панель «Как карточки» и «Стекло»" checked={s.gradient} onChange={(v) => setCard('gradient', v)} />
               {s.gradient && <CardGradientBlock />}
-              <Toggle label="Блик по верхней кромке" hint="Светлая линия сверху, как у стекла. Работает при любом стиле теней, кроме «Неоморфизма» - у него свой объём" checked={s.highlight} onChange={(v) => setCard('highlight', v)} />
-              <Toggle label="Блик по нижней кромке" hint="Светлая линия снизу, слабее верхней - свет, прошедший сквозь толщу стекла. Вместе с верхним получается кромка жидкого стекла. Тоже не работает с «Неоморфизмом»" checked={s.highlightBottom} onChange={(v) => setCard('highlightBottom', v)} />
+              {!edgeLight && <Toggle label="Блик по верхней кромке" hint="Светлая линия сверху, как у стекла. Работает при любом стиле теней, кроме «Неоморфизма» - у него свой объём" checked={s.highlight} onChange={(v) => setCard('highlight', v)} />}
+              {!edgeLight && <Toggle label="Блик по нижней кромке" hint="Светлая линия снизу, слабее верхней - свет, прошедший сквозь толщу стекла. Вместе с верхним получается кромка жидкого стекла. Тоже не работает с «Неоморфизмом»" checked={s.highlightBottom} onChange={(v) => setCard('highlightBottom', v)} />}
             </>
           )}
         </div>

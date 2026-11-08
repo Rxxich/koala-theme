@@ -114,6 +114,10 @@ export function PowerPanel() {
                 <>
                   <p className="note">Дорожка - стекло карточек из «Поверхностей»: непрозрачность, градиент, размытие, насыщенность, шероховатость, цвет и заметность рамки, блики по верхней и нижней кромке. Толщина рамки - ниже, в «Форме и заливке».</p>
                   <Toggle label="Свечение ручки" hint="Ручка светится цветом кнопки подключения, свет растекается по стеклу. Выключите - останется ручка цвета кнопки с обычной тенью" checked={pw.toggleGlow} onChange={(v) => set('power', 'toggleGlow', v)} />
+                  {pw.toggleGlow && <Slider label="Сила свечения" hint="Насколько далеко и ярко свет от ручки расходится по стеклу. 0 - без свечения и без тени" value={pw.knobGlow} min={0} max={100} unit="%" onChange={(v) => set('power', 'knobGlow', v)} />}
+                  <Slider label="Свет внутри ручки" hint="Светлое пятно в середине ручки и блик сверху: из-за них ручка выглядит светящейся изнутри. 0 - ровный цвет кнопки" value={pw.knobShine} min={0} max={100} unit="%" onChange={(v) => set('power', 'knobShine', v)} />
+                  <Slider label="Размер ручки" value={pw.knobSize} min={36} max={66} unit="px" onChange={(v) => set('power', 'knobSize', v)} />
+                  <Slider label="Непрозрачность ручки" hint="Меньше - сквозь ручку видна дорожка, как у стеклянной капли. Значок на ручке остаётся чётким" value={pw.knobOpacity} min={0} max={100} unit="%" onChange={(v) => set('power', 'knobOpacity', v)} />
                 </>
               )}
               <Toggle label="Значок на ручке" hint="Питание и пауза. Спиннер подключения и знак ошибки видны всегда" checked={pw.toggleIcon} onChange={(v) => set('power', 'toggleIcon', v)} />

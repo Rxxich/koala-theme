@@ -95,15 +95,55 @@ export function shadowReach(s: Shadows, hover: boolean): { left: number; top: nu
 /**
  * Блики по кромке карточек: сверху и снизу. Нижний слабее - это свет, прошедший сквозь толщу стекла.
  * В тёмной схеме при 6% верхнего не было видно на прозрачных карточках поверх фона.
- * glow - мягкий ободок жидкого стекла light: свечение по всему краю изнутри, к середине сходит на нет
+ * glow - мягкий ободок жидкого стекла light: свечение по всему краю изнутри, к середине сходит на нет.
+ * edge - сила световой рамки (edgeLightImage), %: она заменяет оба блика, а снаружи от неё остаётся тонкая
+ * тёмная линия - отделяет стекло от фона той же яркости
  */
-export function highlightShadow(scheme: Scheme, top = true, bottom = false, glow = false): string {
+export function highlightShadow(scheme: Scheme, top = true, bottom = false, glow = false, edge = 0): string {
   const dark = scheme === 'dark';
-  return [glow && `inset 0 0 12px rgba(255, 255, 255, ${dark ? 0.07 : 0.4})`, top && `inset 0 1px 0 rgba(255, 255, 255, ${dark ? 0.18 : 0.7})`,
-    bottom && `inset 0 -1px 0 rgba(255, 255, 255, ${dark ? 0.12 : 0.5})`].filter(Boolean).join(', ');
+  return [glow && `inset 0 0 12px rgba(255, 255, 255, ${dark ? 0.07 : 0.4})`, edge > 0 && `0 0 0 1px rgba(0, 0, 0, ${Math.round((dark ? 0.15 : 0.06) * edge) / 100})`,
+    !edge && top && `inset 0 1px 0 rgba(255, 255, 255, ${dark ? 0.18 : 0.7})`, !edge && bottom && `inset 0 -1px 0 rgba(255, 255, 255, ${dark ? 0.12 : 0.5})`].filter(Boolean).join(', ');
+}
+/** Световая рамка: сторона куска угла в её картинке, px. Куски шире скругления и мягкого свечения у края */
+export const edgeLightSlice = (radius: number) => Math.max(Math.ceil(radius) + 1, 5);
+/**
+ * Световая рамка жидкого стекла: сверху и снизу кромка ловит свет, снизу ярче - там он выходит из толщи
+ * стекла, по бокам кромка темнеет. Яркости сняты с настоящего стекла по профилю поперёк края.
+ * Рисует её border-image: картинка режется на девять кусков, углы остаются как есть, края растягиваются, и
+ * рамка подходит блоку любого размера, не занимая псевдоэлементов (они у карточек заняты пингом, эффектом
+ * нажатия и бегущей рамкой). Цвет обводки - вертикальный градиент: высота y на дуге угла однозначно задаёт
+ * её угол, y = R(1 - cos θ), поэтому свет держится у прямого края, сходит на нет к 65° и только потом
+ * набирается тень. Внутренними тенями со сдвигом так нельзя: их серпы накладываются на всей дуге, и свет
+ * резко упирался в тёмную рамку. Рамке блока нужна ненулевая толщина, иначе border-image не рисуется
+ * (cardBorder). Сама картинка растрируется один раз и при прокрутке ничего не стоит
+ */
+export function edgeLightImage(radius: number, scheme: Scheme, pct: number): string {
+  const dark = scheme === 'dark';
+  const k = pct / 100;
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const c = edgeLightSlice(radius);
+  const n = 2 * c + 1;
+  const R = Math.max(0, radius);
+  const white = (a: number) => `stop-color='white' stop-opacity='${r2(a * k)}'`;
+  const black = (a: number) => `stop-color='black' stop-opacity='${r2(a * k)}'`;
+  const stops = (list: [number, string][]) => list.map(([y, st]) => `<stop offset='${(y / n).toFixed(4)}' ${st}/>`).join('');
+  // Прямой край занимает верхний пиксель: на нём свет ровный при любом скруглении
+  const hold = Math.max(1, 0.1 * R);
+  const fade = Math.max(hold + 0.5, 0.58 * R);
+  const side = Math.max(fade + 0.5, R);
+  const [top, bottom, shade, soft] = dark ? [0.6, 0.75, 0.33, 0.16] : [0.9, 1, 0.15, 0.4];
+  const line = stops([[0, white(top)], [hold, white(top)], [fade, white(0)], [fade, black(0)], [side, black(shade)],
+    [n - side, black(shade)], [n - fade, black(0)], [n - fade, white(0)], [n - hold, white(bottom)], [n, white(bottom)]]);
+  const glow = stops([[0, white(soft)], [4, white(0)], [n - 4, white(0)], [n, white(soft)]]);
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${n}' height='${n}'><defs><linearGradient id='l' x1='0' y1='0' x2='0' y2='1'>${line}</linearGradient>`
+    + `<linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>${glow}</linearGradient></defs><rect width='${n}' height='${n}' rx='${r2(R)}' fill='url(%23g)'/>`
+    + `<rect x='.5' y='.5' width='${n - 1}' height='${n - 1}' rx='${r2(Math.max(0, R - 0.5))}' fill='none' stroke='url(%23l)'/></svg>`;
+  return `url("data:image/svg+xml,${svg.replace(/</g, '%3C').replace(/>/g, '%3E')}")`;
 }
 /** Мягкий ободок жидкого стекла light */
 export const rimGlow = (s: Surfaces) => s.custom && s.fill === 'glass' && s.liquid && s.liquidLight && s.liquidGlow;
+/** Сила световой рамки жидкого стекла, %. 0 - выключена, тогда рамка карточек обычная */
+export const edgeLightPct = (s: Surfaces) => s.custom && s.fill === 'glass' && s.liquid ? s.liquidEdgeLight : 0;
 /** Кромка жидкого стекла (не light) отражает то, что вокруг или под карточкой */
 export const liquidReflects = (s: Surfaces, mode: Surfaces['liquidReflect']) => s.custom && s.fill === 'glass' && s.liquid && !s.liquidLight && s.liquidReflect === mode;
 /** Отражение того, что вокруг: стекло карточек и кнопки подключения рисует слой ::before больше них (generator.ts) */
@@ -111,9 +151,9 @@ export const liquidLayer = (s: Surfaces) => liquidReflects(s, 'outside');
 /** ::before карточек занят: слоем стекла (отражение того, что вокруг) или полосой поверх содержимого (того, что на карточке) */
 export const cardBeforeTaken = (s: Surfaces) => liquidReflects(s, 'outside') || liquidReflects(s, 'content');
 /** Есть хоть один блик по кромке */
-export const hasHighlight = (s: Surfaces) => s.highlight || s.highlightBottom || rimGlow(s);
+export const hasHighlight = (s: Surfaces) => s.highlight || s.highlightBottom || rimGlow(s) || edgeLightPct(s) > 0;
 
-export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: boolean, highlightBottom = false, glow = false): ShadowSet | null {
+export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: boolean, highlightBottom = false, glow = false, edge = 0): ShadowSet | null {
   if (s.preset === 'app') return null;
   const dark = scheme === 'dark';
   const k = s.intensity / 100;
@@ -140,7 +180,7 @@ export function shadowSet(s: Shadows, scheme: Scheme, pal: Palette, highlight: b
     const r = (v: number) => Math.round(v * 10) / 10;
     return `${l.inset ? 'inset ' : ''}${r(x)}px ${r(y)}px ${r(blur)}px ${r(spread)}px ${color(l, mul)}`;
   });
-  const hi = (highlight || highlightBottom || glow) && s.preset !== 'neumorph' ? [highlightShadow(scheme, highlight, highlightBottom, glow)] : [];
+  const hi = (highlight || highlightBottom || glow || edge > 0) && s.preset !== 'neumorph' ? [highlightShadow(scheme, highlight, highlightBottom, glow, edge)] : [];
   const join = (xs: string[]) => xs.join(', ') || 'none';
   const set = layersOf(s);
   const h = s.hover / 100;

@@ -147,6 +147,8 @@ export interface Surfaces {
   liquidLightDiffuse: boolean;
   /** Мягкий светлый ободок по краю стекла light */
   liquidGlow: boolean;
+  /** Световая рамка жидкого стекла, %: сверху и снизу кромка светлая, по бокам тёмная. 0 - обычная рамка */
+  liquidEdgeLight: number;
   /** Свои непрозрачность, размытие и насыщенность у каждого вида стекла: при переключении вида возвращаются */
   glassMemory: Record<GlassKind, GlassTone>;
   opacity: number;
@@ -292,6 +294,14 @@ export interface Power {
   toggleIcon: boolean;
   /** Тумблер «Стекло»: ручка светится цветом кнопки */
   toggleGlow: boolean;
+  /** Тумблер «Стекло»: сила свечения вокруг ручки, % */
+  knobGlow: number;
+  /** Тумблер «Стекло»: светлое пятно внутри ручки и блик сверху, %. 0 - ровный цвет */
+  knobShine: number;
+  /** Тумблер «Стекло»: диаметр ручки, px */
+  knobSize: number;
+  /** Тумблер «Стекло»: непрозрачность ручки, % */
+  knobOpacity: number;
   dayScene: DayScene;
   /** «День и ночь»: днём - подключено (иначе наоборот) */
   dayOn: boolean;

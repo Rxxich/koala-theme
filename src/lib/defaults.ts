@@ -127,7 +127,7 @@ export function defaultConfig(): ThemeConfig {
     surfaces: {
       custom: false, fill: 'glass', grain: 0, liquid: false, liquidStrength: 18, liquidEdge: 20, liquidSmooth: 'off', liquidRainbow: 0,
       liquidLens: 0, liquidReflect: 'off', liquidReflectShine: 50, liquidReflectWidth: 8,
-      liquidLight: false, liquidRim: 10, liquidReach: 30, liquidShine: 170, liquidRimAlways: false, liquidLightDiffuse: false, liquidGlow: true,
+      liquidLight: false, liquidRim: 10, liquidReach: 30, liquidShine: 170, liquidRimAlways: false, liquidLightDiffuse: false, liquidGlow: true, liquidEdgeLight: 0,
       glassMemory: { glass: { opacity: -1, blur: -1, saturate: -1 }, liquid: { opacity: -1, blur: -1, saturate: -1 }, light: { opacity: -1, blur: -1, saturate: -1 } },
       opacity: 50, blur: 24, saturate: 100, borderWidth: 1, borderOpacity: 100, radius: 0.625,
       gradient: false, gradientKind: 'soft', gradientAngle: 180, gradientX: 50, gradientY: 0,
@@ -150,7 +150,7 @@ export function defaultConfig(): ThemeConfig {
       glow: 0, glowSize: 170, glowBlur: 24, glowColor: 'power', glowCustom: '#7c8cff', glowOff: false, glowPulse: false,
       shape: 'circle', corner: 34, stretch: 100, fill: 'app', fillOpacity: 50, fillAngle: 145, ringWidth: 2,
       ringColor: 'app', ringCustom: '#7c8cff', outerRing: 0, outerGap: 6, volume: 'none', drop: 0, glassShine: 100,
-      toggleLook: 'classic', toggleIcon: true, toggleGlow: true, dayScene: 'clouds', dayOn: true,
+      toggleLook: 'classic', toggleIcon: true, toggleGlow: true, knobGlow: 100, knobShine: 100, knobSize: 58, knobOpacity: 100, dayScene: 'clouds', dayOn: true,
       hover: 'app', idle: 'none', icon: 'app', iconCustom: '#ffffff', iconSize: 100
     },
     motion: {
