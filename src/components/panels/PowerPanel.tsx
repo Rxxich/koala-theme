@@ -6,7 +6,7 @@ import { useStore, useEditScheme } from '../../state/store';
 import { EASE } from '../../lib/generator';
 import { sphereImage } from '../../lib/sphere';
 import { POWER_PLAIN, POWER_STRETCH, POWER_TOGGLES } from '../../lib/power';
-import type { ClickEffect, DayScene, Easing, Entrance, NameLook, OrbColor, PowerFill, PowerHover, PowerIcon, PowerIdle, PowerRing, PowerShape, PowerStyle, PowerVolume, ToggleLook } from '../../lib/types';
+import type { ClickEffect, DayScene, Easing, Entrance, NameGlassFill, NameLook, OrbColor, PowerFill, PowerHover, PowerIcon, PowerIdle, PowerRing, PowerShape, PowerStyle, PowerVolume, ToggleLook } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
 import { PanelHead, useCfg } from './common';
@@ -219,19 +219,42 @@ export function PowerPanel() {
       )}
 
       <Group title="Имя провайдера" spot={SPOTS.providerName} hint="Над кнопкой вместо «Отключено» и «Подключено»">
-        <Toggle label="Имя и логотип над кнопкой" hint="Выключено - буквы вдавлены, подключено - светятся, при подключении мигают, при ошибке красные"
+        <Toggle label="Имя и логотип над кнопкой" hint={pw.nameLook === 'app' ? 'Имя и логотип - как в карточке профиля, без своего вида' : 'Выключено - буквы вдавлены, подключено - светятся, при ошибке красные'}
           checked={pw.providerName} onChange={(v) => { set('power', 'providerName', v); setUi({ page: 'home' }); }} />
         {pw.providerName && (
           <>
-            <Row label="Вид при подключении" stack>
+            <Row label="Вид имени" stack>
               <Segmented<NameLook> wrap size="sm" value={pw.nameLook} onChange={(v) => set('power', 'nameLook', v)} options={[
-                { value: 'raised', label: 'Объёмные' }, { value: 'frost', label: 'Матовое стекло' }, { value: 'glass', label: 'Прозрачное стекло' }
+                { value: 'app', label: 'Как в клиенте' }, { value: 'raised', label: 'Объёмные' }, { value: 'frost', label: 'Матовое стекло' }, { value: 'glass', label: 'Прозрачное стекло' }, { value: 'pane', label: 'Стекло' }
               ]} />
             </Row>
             {pw.nameLook === 'glass' && <p className="note">Почти прозрачные буквы с бликами по кромке, сквозь них виден фон. Лучше смотрится крупно.</p>}
-            <Slider label="Размер" value={pw.nameSize} min={16} max={48} unit="px" onChange={(v) => set('power', 'nameSize', v)} />
-            <Row label="Цвет букв"><Segmented size="sm" value={pw.nameColor} onChange={(v) => set('power', 'nameColor', v)} options={[{ value: 'white', label: 'Белый' }, { value: 'custom', label: 'Свой' }]} /></Row>
-            {pw.nameColor === 'custom' && <Row label="Свой цвет" hint="В тёмной схеме буквы светлее этого цвета, в светлой - точно такие"><ColorField value={pw.nameCustom} onChange={(v) => set('power', 'nameCustom', v)} /></Row>}
+            {pw.nameLook === 'pane' && (
+              <>
+                <p className="note">Стекло плиток в форме букв: сквозь них виден размытый фон, по кромке - свет, как у световой рамки плиток. Свет вокруг букв и тень под ними у этого вида не рисуются, эмодзи в имени тоже становятся стеклом.</p>
+                <Row label="Заливка и размытие" stack>
+                  <Segmented<NameGlassFill> size="sm" value={pw.nameGlassFill} onChange={(v) => set('power', 'nameGlassFill', v)} options={[
+                    { value: 'tiles', label: 'Как у плиток' }, { value: 'color', label: 'Цветом букв' }
+                  ]} />
+                </Row>
+                {pw.nameGlassFill === 'tiles' && <p className="note">Заливка, размытие и насыщенность - из «Карточки и плитки».</p>}
+                {pw.nameGlassFill === 'color' && (
+                  <>
+                    <Slider label="Плотность заливки" hint="0 - буквы из чистого стекла, видны только по кромке и размытому фону" value={pw.nameGlassTint} min={0} max={60} unit="%" onChange={(v) => set('power', 'nameGlassTint', v)} />
+                    <Slider label="Размытие фона" hint="Заметно на обоях с картинкой или узором, на ровном градиенте почти не видно" value={pw.nameGlassBlur} min={0} max={24} unit="px" onChange={(v) => set('power', 'nameGlassBlur', v)} />
+                  </>
+                )}
+                <Slider label="Кромка" hint="Яркость света по кромке букв. 100 - как световая рамка плиток на полную силу" value={pw.nameGlassRim} min={0} max={150} unit="%" onChange={(v) => set('power', 'nameGlassRim', v)} />
+              </>
+            )}
+            {pw.nameLook === 'app' && <p className="note">Только перенос: имя остаётся таким же, как в карточке профиля, и почти не прибавляет теме веса. У остальных видов - фильтры по форме букв, это несколько килобайт.</p>}
+            {pw.nameLook !== 'app' && <Slider label="Размер" value={pw.nameSize} min={16} max={48} unit="px" onChange={(v) => set('power', 'nameSize', v)} />}
+            {pw.nameLook !== 'app' && (pw.nameLook !== 'pane' || pw.nameGlassFill === 'color') && (
+              <>
+                <Row label="Цвет букв"><Segmented size="sm" value={pw.nameColor} onChange={(v) => set('power', 'nameColor', v)} options={[{ value: 'white', label: 'Белый' }, { value: 'custom', label: 'Свой' }]} /></Row>
+                {pw.nameColor === 'custom' && <Row label="Свой цвет" hint="В тёмной схеме буквы светлее этого цвета, в светлой - точно такие"><ColorField value={pw.nameCustom} onChange={(v) => set('power', 'nameCustom', v)} /></Row>}
+              </>
+            )}
             <p className="note">Тема не копирует текст, а переносит его: имя и логотип уходят из карточки профиля сверху, объявление провайдера остаётся отдельной карточкой.</p>
           </>
         )}

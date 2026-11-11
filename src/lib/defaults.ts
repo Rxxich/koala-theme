@@ -151,7 +151,8 @@ export function defaultConfig(): ThemeConfig {
       shape: 'circle', corner: 34, stretch: 100, fill: 'app', fillOpacity: 50, fillAngle: 145, ringWidth: 2,
       ringColor: 'app', ringCustom: '#7c8cff', outerRing: 0, outerGap: 6, volume: 'none', drop: 0, glassShine: 100,
       toggleLook: 'classic', toggleVertical: false, toggleIcon: true, toggleGlow: true, knobGlow: 100, knobShine: 100, knobSize: 58, knobOpacity: 100, orbBg: 80, orbColor: 'prism', orbCustom: '#7c8cff', orbTrail: 90, dayScene: 'clouds', dayOn: true,
-      providerName: false, nameLook: 'raised', nameSize: 26, nameColor: 'white', nameCustom: '#7c8cff',
+      providerName: false, nameLook: 'app', nameSize: 26, nameColor: 'white', nameCustom: '#7c8cff',
+      nameGlassFill: 'tiles', nameGlassTint: 16, nameGlassBlur: 8, nameGlassRim: 100,
       hover: 'app', idle: 'none', icon: 'app', iconCustom: '#ffffff', iconSize: 100
     },
     motion: {
@@ -255,8 +256,9 @@ export function sanitizeConfig(raw: unknown): ThemeConfig {
   if (!['glass', 'solid', 'transparent'].includes(su.fill)) su.fill = 'glass';
   if (!['app', 'duo', 'solarDuo', 'solarBroken', 'chunk'].includes(su.sidebarIcons)) su.sidebarIcons = 'app';
   const pw = merged.power;
-  if (!['raised', 'frost', 'glass'].includes(pw.nameLook)) pw.nameLook = 'raised';
+  if (!['app', 'raised', 'frost', 'glass', 'pane'].includes(pw.nameLook)) pw.nameLook = 'app';
   if (!['white', 'custom'].includes(pw.nameColor)) pw.nameColor = 'white';
+  if (!['tiles', 'color'].includes(pw.nameGlassFill)) pw.nameGlassFill = 'tiles';
   // Тени текста. Раньше тень была одна, плоскими полями (textShadow, textShadowTarget - заголовки или весь текст)
   const rf: Record<string, unknown> = isObj(raw.fonts) ? raw.fonts : {};
   const layers: unknown[] = Array.isArray(rf.textShadows) ? rf.textShadows : typeof rf.textShadow === 'string'

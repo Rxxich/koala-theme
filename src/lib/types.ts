@@ -251,8 +251,13 @@ export type ToggleLook = 'classic' | 'glass' | 'orb' | 'filament';
 /** Цвет ленты «Шара света»: природная призма, цвета кнопки подключения, акцент или свой */
 export type OrbColor = 'prism' | 'power' | 'primary' | 'custom';
 export type DayScene = 'clouds' | 'hills';
-/** Вид имени провайдера при подключении: приподнятые буквы, матовое стекло, прозрачное стекло с бликами по кромке */
-export type NameLook = 'raised' | 'frost' | 'glass';
+/**
+ * Вид имени провайдера: как в карточке профиля (app - только перенос), приподнятые буквы, матовое стекло, прозрачное
+ * стекло с бликами по кромке, стекло плиток по форме букв (pane, «Стекло»)
+ */
+export type NameLook = 'app' | 'raised' | 'frost' | 'glass' | 'pane';
+/** Заливка букв «Стекла»: как у плиток или цветом букв */
+export type NameGlassFill = 'tiles' | 'color';
 export type PowerFill = 'app' | 'radial' | 'linear' | 'conic' | 'solid' | 'none';
 export type PowerHover = 'app' | 'scale' | 'lift' | 'tilt' | 'glow' | 'none';
 export type PowerIdle = 'none' | 'float' | 'breathe' | 'wobble';
@@ -325,6 +330,14 @@ export interface Power {
   /** Цвет букв: белый или свой */
   nameColor: 'white' | 'custom';
   nameCustom: string;
+  /** «Стекло»: заливка и размытие фона как у плиток или свои */
+  nameGlassFill: NameGlassFill;
+  /** «Стекло» с заливкой цветом букв: её непрозрачность, % */
+  nameGlassTint: number;
+  /** «Стекло» с заливкой цветом букв: размытие фона под буквами, px */
+  nameGlassBlur: number;
+  /** «Стекло»: яркость кромки, %. 100 - как световая рамка плиток на полную силу */
+  nameGlassRim: number;
   /* Поведение */
   hover: PowerHover;
   idle: PowerIdle;

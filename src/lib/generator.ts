@@ -13,7 +13,7 @@ import { fontStack, isGoogleFontsUrl, isMonoFont } from './fonts';
 import { APP_WRAPPER, cardStops, isAppPalette, type CardGradientShape } from './defaults';
 import { cardBeforeTaken, edgeLightImage, edgeLightPct, edgeLightSlice, hasHighlight, highlightShadow, liquidLayer, liquidReflects, rimGlow, shadowReach, shadowSet, textShadowCss, textShadowReach, TOP_ROOM } from './shadows';
 import { powerGlassy, powerKeyframes, powerRules, toggleTrack, type GlassLook } from './power';
-import { announceAsTile, providerNameKeyframes, providerNameRules } from './providerName';
+import { announceAsTile, providerNameRules } from './providerName';
 import { particleSet, patternLayer } from './backdrop';
 import { clickRules, funRules, PROXY_SEL } from './effects';
 import { dividerRules } from './dividers';
@@ -740,7 +740,8 @@ function refraction(scale: number, smooth: LiquidSmooth, rainbow: number, res = 
  * Им же рисуются стеклянная боковая панель, окошко режима и тумблер «Стекло»
  */
 function glassLook(s: ThemeConfig['surfaces']): GlassLook {
-  const fill = (ownGradient(s) ? 'var(--kt-glass-grad)' : s.gradient ? shade(s.opacity, Math.max(0, s.opacity - 14)) : cm('var(--card)', s.opacity)) + edgeBox(s);
+  const tint = ownGradient(s) ? 'var(--kt-glass-grad)' : s.gradient ? shade(s.opacity, Math.max(0, s.opacity - 14)) : cm('var(--card)', s.opacity);
+  const fill = tint + edgeBox(s);
   // Шероховатость стекла - зерно отдельным верхним слоем фона: матовое стекло вместо гладкого
   const grain = s.grain > 0 ? `${noiseUri(s.grain * 0.45)} 0 0 / 180px 180px, ` : '';
   const stroke = pickColor(s.borderColor, s.borderCustom) ?? 'var(--stroke)';
@@ -750,7 +751,7 @@ function glassLook(s: ThemeConfig['surfaces']): GlassLook {
   const blur = s.blur > 0 ? `blur(${s.blur}px) saturate(${s.saturate}%)` : '';
   const look = (v: string) => [blur, liquidOn(s) && `var(${v})`].filter(Boolean).join(' ') || 'none';
   return {
-    grain, fill,
+    grain, fill, tint, tintAlpha: (!ownGradient(s) && s.gradient ? Math.max(0, s.opacity - 14) : s.opacity) / 100,
     filter: look('--kt-liquid'),
     filterPower: look(liquidOn(s) && (s.liquidLight || liquidReflects(s, 'surface')) ? '--kt-liquid-pw' : '--kt-liquid'),
     layer: liquidLayer(s) ? { pad: reflectGeo(s).pad, filter: look('--kt-liquid-out-pw') } : null,
@@ -1813,7 +1814,7 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
   css += section(++n, 'Карта на фоне', 'Картинка map_darktheme / map_lighttheme из App.tsx', mapRules(cfg));
   css += section(++n, 'Поверхности', 'Карточки, плитки главной, боковая панель, окна, меню, выбранный сервер, кнопки, тени', surfaceRules(cfg));
   css += section(++n, 'Кнопка подключения', 'pages/home.tsx, data-guide="home-power-toggle". Состояния определяются по классам круга и видимой иконке', powerRules(cfg, rule, glassLook(cfg.surfaces)));
-  if (cfg.power.providerName) css += section(++n, 'Имя провайдера', 'Шапка карточки профиля (data-guide="home-profile-header") переезжает к кнопке подключения\nвместо надписи «Отключено» / «Подключено». Вид букв - SVG-фильтр по их форме', providerNameRules(cfg, rule, schemeScopes(cfg.mode)));
+  if (cfg.power.providerName) css += section(++n, 'Имя провайдера', 'Шапка карточки профиля (data-guide="home-profile-header") переезжает к кнопке подключения\nвместо надписи «Отключено» / «Подключено»' + (cfg.power.nameLook === 'app' ? '' : '. Вид букв - SVG-фильтр по их форме'), providerNameRules(cfg, rule, schemeScopes(cfg.mode), glassLook(cfg.surfaces)));
   css += section(++n, 'Флаги серверов', 'Название сервера - <span class="flag-emoji" title="...">. Правила срабатывают, только если\nназвание начинается с флага (буквы-регионы U+1F1E6...U+1F1FF)', flagRules(cfg));
 
   const div = dividerRules(cfg, rule);
@@ -1828,7 +1829,7 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
     ...(liquidLayer(cfg.surfaces) && (m.entrance !== 'none' || rowsFixed(cfg)) ? ['--kt-in-o'] : []),
     ...(bgAnimation(cfg.background.light) === 'flow' || bgAnimation(cfg.background.dark) === 'flow' ? ['--kt-flow'] : [])])];
   const propsCss = props.map((p) => `@property ${p} {\n    ${PROPS[p].replace(/; /g, ';\n    ')}\n}\n`).join('');
-  const allKf = { ...baseKeyframes(cfg), ...powerKeyframes(cfg), ...providerNameKeyframes(cfg, schemeScopes(cfg.mode)), ...fun.keyframes, ...div.keyframes, ...kfs };
+  const allKf = { ...baseKeyframes(cfg), ...powerKeyframes(cfg), ...fun.keyframes, ...div.keyframes, ...kfs };
   css += section(++n, 'Анимации', 'Переходы, появление карточек, эффект нажатия, ключевые кадры', propsCss + motionRules(cfg) + click.css + kfCss(allKf));
   css += section(++n, 'Мелочи', 'Полоса прокрутки, выделение текста, подсказки, заголовок страницы', extrasRules(cfg));
   if (m.reduce) {

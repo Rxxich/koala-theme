@@ -66,8 +66,6 @@ function movingWhen(pw: ThemeConfig['power']): string | null {
   const btn = '[data-guide="home-power-toggle"]';
   if (MOVING_ALWAYS.includes(pw.style) || (pw.idle !== 'none' && pw.style !== 'sphere')) return `:root:has(${btn})`;
   if (MOVING_ON.includes(pw.style) || orbToggle(pw) || (pw.glowPulse && pw.glow > 0)) return `:root:has(${btn} > div[class*="border-stroke-power-on"], ${btn} svg[role="status"].opacity-100)`;
-  // Имя провайдера мигает, пока идёт подключение (providerName.ts). Свет вокруг букв задевает стекло тумблера под ним
-  if (pw.providerName) return `:root:has(${btn} svg[role="status"].opacity-100)`;
   return null;
 }
 
@@ -78,7 +76,8 @@ type RuleFn = (selector: string | string[], decls: Decl[]) => string;
 /** filterPower - то же стекло для кнопки подключения: у жидкого light полоса повторяет её скругление */
 /** layer - если кромка отражает то, что вокруг: стекло рисует слой больше кнопки на pad px, его фильтр - filter */
 /** rimOver - если кромка отражает то, что на кнопке (значок, ручку тумблера): фильтр слоя поверх них */
-export interface GlassLook { grain: string; fill: string; filter: string; filterPower: string; layer: { pad: number; filter: string } | null; rimOver: string | null; stroke: string; edge: boolean }
+/** tint - заливка без привязки к рамке (fill - с border-box под световой рамкой), tintAlpha - её наименьшая непрозрачность, 0-1 */
+export interface GlassLook { grain: string; fill: string; tint: string; tintAlpha: number; filter: string; filterPower: string; layer: { pad: number; filter: string } | null; rimOver: string | null; stroke: string; edge: boolean }
 
 /** Кнопка подключения - из стекла карточек: стиль «Стекло» или стеклянный тумблер */
 export const powerGlassy = (pw: ThemeConfig['power']) => pw.style === 'glass' || (pw.style === 'toggle' && pw.toggleLook !== 'classic');
