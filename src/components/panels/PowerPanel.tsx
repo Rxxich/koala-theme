@@ -6,7 +6,7 @@ import { useStore, useEditScheme } from '../../state/store';
 import { EASE } from '../../lib/generator';
 import { sphereImage } from '../../lib/sphere';
 import { POWER_PLAIN, POWER_STRETCH, POWER_TOGGLES } from '../../lib/power';
-import type { ClickEffect, DayScene, Easing, Entrance, OrbColor, PowerFill, PowerHover, PowerIcon, PowerIdle, PowerRing, PowerShape, PowerStyle, PowerVolume, ToggleLook } from '../../lib/types';
+import type { ClickEffect, DayScene, Easing, Entrance, NameLook, OrbColor, PowerFill, PowerHover, PowerIcon, PowerIdle, PowerRing, PowerShape, PowerStyle, PowerVolume, ToggleLook } from '../../lib/types';
 import { ColorField } from '../ColorPicker';
 import { Button, Choice, Group, Row, Segmented, Slider, Toggle, cx } from '../ui';
 import { PanelHead, useCfg } from './common';
@@ -124,7 +124,9 @@ export function PowerPanel() {
         <Group title="Тумблер" spot={SPOTS.power}>
           {pw.style === 'toggle' && (
             <>
-              <Row label="Вид" stack><Segmented<ToggleLook> size="sm" value={pw.toggleLook} onChange={(v) => set('power', 'toggleLook', v)} options={[{ value: 'classic', label: 'Классический' }, { value: 'glass', label: 'Стекло' }, { value: 'orb', label: 'Шар света' }]} /></Row>
+              <Row label="Вид" stack><Segmented<ToggleLook> wrap size="sm" value={pw.toggleLook} onChange={(v) => set('power', 'toggleLook', v)} options={[{ value: 'classic', label: 'Классический' }, { value: 'glass', label: 'Стекло' }, { value: 'orb', label: 'Шар света' }, { value: 'filament', label: 'Нить' }]} /></Row>
+              <Toggle label="Вертикально" hint="Тумблер стоит стоймя: «подключено» вверху" checked={pw.toggleVertical} onChange={(v) => set('power', 'toggleVertical', v)} />
+              {pw.toggleLook === 'filament' && <p className="note">Дорожка - стекло карточек из «Поверхностей», как у вида «Стекло». Вдоль неё тонкая нить: при подключении она загорается цветами кнопки, бусина уезжает к концу «подключено».</p>}
               {pw.toggleLook === 'orb' && (
                 <>
                   <p className="note">Дорожка - стекло карточек из «Поверхностей», как у вида «Стекло». На ручке маленький шар с лентой света.</p>
@@ -143,7 +145,7 @@ export function PowerPanel() {
                   <Slider label="Непрозрачность ручки" hint="Меньше - сквозь ручку видна дорожка, как у стеклянной капли. Значок на ручке остаётся чётким" value={pw.knobOpacity} min={0} max={100} unit="%" onChange={(v) => set('power', 'knobOpacity', v)} />
                 </>
               )}
-              {pw.toggleLook !== 'orb' && <Toggle label="Значок на ручке" hint="Питание и пауза. Спиннер подключения и знак ошибки видны всегда" checked={pw.toggleIcon} onChange={(v) => set('power', 'toggleIcon', v)} />}
+              {(pw.toggleLook === 'classic' || pw.toggleLook === 'glass') && <Toggle label="Значок на ручке" hint="Питание и пауза. Спиннер подключения и знак ошибки видны всегда" checked={pw.toggleIcon} onChange={(v) => set('power', 'toggleIcon', v)} />}
             </>
           )}
           {pw.style === 'daynight' && (
@@ -215,6 +217,25 @@ export function PowerPanel() {
           {pw.icon !== 'hide' && <Slider label="Размер иконки" value={pw.iconSize} min={50} max={140} unit="%" onChange={(v) => set('power', 'iconSize', v)} />}
         </Group>
       )}
+
+      <Group title="Имя провайдера" spot={SPOTS.providerName} hint="Над кнопкой вместо «Отключено» и «Подключено»">
+        <Toggle label="Имя и логотип над кнопкой" hint="Выключено - буквы вдавлены, подключено - светятся, при подключении мигают, при ошибке красные"
+          checked={pw.providerName} onChange={(v) => { set('power', 'providerName', v); setUi({ page: 'home' }); }} />
+        {pw.providerName && (
+          <>
+            <Row label="Вид при подключении" stack>
+              <Segmented<NameLook> wrap size="sm" value={pw.nameLook} onChange={(v) => set('power', 'nameLook', v)} options={[
+                { value: 'raised', label: 'Объёмные' }, { value: 'frost', label: 'Матовое стекло' }, { value: 'glass', label: 'Прозрачное стекло' }
+              ]} />
+            </Row>
+            {pw.nameLook === 'glass' && <p className="note">Почти прозрачные буквы с бликами по кромке, сквозь них виден фон. Лучше смотрится крупно.</p>}
+            <Slider label="Размер" value={pw.nameSize} min={16} max={48} unit="px" onChange={(v) => set('power', 'nameSize', v)} />
+            <Row label="Цвет букв"><Segmented size="sm" value={pw.nameColor} onChange={(v) => set('power', 'nameColor', v)} options={[{ value: 'white', label: 'Белый' }, { value: 'custom', label: 'Свой' }]} /></Row>
+            {pw.nameColor === 'custom' && <Row label="Свой цвет" hint="В тёмной схеме буквы светлее этого цвета, в светлой - точно такие"><ColorField value={pw.nameCustom} onChange={(v) => set('power', 'nameCustom', v)} /></Row>}
+            <p className="note">Тема не копирует текст, а переносит его: имя и логотип уходят из карточки профиля сверху, объявление провайдера остаётся отдельной карточкой.</p>
+          </>
+        )}
+      </Group>
 
       <Group title="Поведение" spot={SPOTS.power}>
         {pw.style !== 'sphere' && (

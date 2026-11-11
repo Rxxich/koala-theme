@@ -12,7 +12,8 @@ import { mix, readableOn, rgba, rgbToHsl, parseColor } from './color';
 import { fontStack, isGoogleFontsUrl, isMonoFont } from './fonts';
 import { APP_WRAPPER, cardStops, isAppPalette, type CardGradientShape } from './defaults';
 import { cardBeforeTaken, edgeLightImage, edgeLightPct, edgeLightSlice, hasHighlight, highlightShadow, liquidLayer, liquidReflects, rimGlow, shadowReach, shadowSet, textShadowCss, textShadowReach, TOP_ROOM } from './shadows';
-import { powerGlassy, powerKeyframes, powerRules, type GlassLook } from './power';
+import { powerGlassy, powerKeyframes, powerRules, toggleTrack, type GlassLook } from './power';
+import { announceAsTile, providerNameKeyframes, providerNameRules } from './providerName';
 import { particleSet, patternLayer } from './backdrop';
 import { clickRules, funRules, PROXY_SEL } from './effects';
 import { dividerRules } from './dividers';
@@ -696,8 +697,8 @@ function liquidFilter(s: ThemeConfig['surfaces'], radius?: number, outer = false
     { lens, inset: g && outer ? g.pad : 0, reflect: g ? { rim: g.rim, reach: g.reach, shine: g.shine, radius: Math.max(0, radius!), outward: outer } : undefined });
   return lens > 1 ? `${lensXUri(lens)} ${main}` : main;
 }
-/** Скругление стеклянной кнопки подключения: тумблер 152×74 - капсула, шар - круг 128px или углы из настроек */
-const powerRadius = (pw: ThemeConfig['power']) => pw.style === 'toggle' ? 37 : pw.shape === 'circle' ? 64 : 1.28 * pw.corner;
+/** Скругление стеклянной кнопки подключения: тумблер - капсула (152×74, у «Нити» 176×52), шар - круг 128px или углы из настроек */
+const powerRadius = (pw: ThemeConfig['power']) => pw.style === 'toggle' ? toggleTrack(pw).short / 2 : pw.shape === 'circle' ? 64 : 1.28 * pw.corner;
 /** Фильтр стекла light для блока со скруглением radius */
 const lightFilter = (s: ThemeConfig['surfaces'], radius: number) =>
   lightRimUri(s.liquidRim, s.liquidReach, s.liquidShine, s.blur < 2 ? 'soft' : 'off', radius, s.liquidRimAlways, s.liquidLightDiffuse);
@@ -1812,6 +1813,7 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
   css += section(++n, 'Карта на фоне', 'Картинка map_darktheme / map_lighttheme из App.tsx', mapRules(cfg));
   css += section(++n, 'Поверхности', 'Карточки, плитки главной, боковая панель, окна, меню, выбранный сервер, кнопки, тени', surfaceRules(cfg));
   css += section(++n, 'Кнопка подключения', 'pages/home.tsx, data-guide="home-power-toggle". Состояния определяются по классам круга и видимой иконке', powerRules(cfg, rule, glassLook(cfg.surfaces)));
+  if (cfg.power.providerName) css += section(++n, 'Имя провайдера', 'Шапка карточки профиля (data-guide="home-profile-header") переезжает к кнопке подключения\nвместо надписи «Отключено» / «Подключено». Вид букв - SVG-фильтр по их форме', providerNameRules(cfg, rule, schemeScopes(cfg.mode)));
   css += section(++n, 'Флаги серверов', 'Название сервера - <span class="flag-emoji" title="...">. Правила срабатывают, только если\nназвание начинается с флага (буквы-регионы U+1F1E6...U+1F1FF)', flagRules(cfg));
 
   const div = dividerRules(cfg, rule);
@@ -1826,12 +1828,13 @@ export function generateCSS(cfg: ThemeConfig, opts: GenerateOptions = {}): strin
     ...(liquidLayer(cfg.surfaces) && (m.entrance !== 'none' || rowsFixed(cfg)) ? ['--kt-in-o'] : []),
     ...(bgAnimation(cfg.background.light) === 'flow' || bgAnimation(cfg.background.dark) === 'flow' ? ['--kt-flow'] : [])])];
   const propsCss = props.map((p) => `@property ${p} {\n    ${PROPS[p].replace(/; /g, ';\n    ')}\n}\n`).join('');
-  const allKf = { ...baseKeyframes(cfg), ...powerKeyframes(cfg), ...fun.keyframes, ...div.keyframes, ...kfs };
+  const allKf = { ...baseKeyframes(cfg), ...powerKeyframes(cfg), ...providerNameKeyframes(cfg, schemeScopes(cfg.mode)), ...fun.keyframes, ...div.keyframes, ...kfs };
   css += section(++n, 'Анимации', 'Переходы, появление карточек, эффект нажатия, ключевые кадры', propsCss + motionRules(cfg) + click.css + kfCss(allKf));
   css += section(++n, 'Мелочи', 'Полоса прокрутки, выделение текста, подсказки, заголовок страницы', extrasRules(cfg));
   if (m.reduce) {
     css += section(++n, 'Уменьшение анимации', 'Если в системе выключены эффекты анимации, всё становится мгновенным', `@media (prefers-reduced-motion: reduce) {\n    ${P} *, ${P} *::before, ${P} *::after {\n        animation-duration: 0.01ms !important;\n        animation-iteration-count: 1 !important;\n        transition-duration: 0.01ms !important;\n    }\n}\n`);
   }
+  if (cfg.power.providerName) css = announceAsTile(css);
   if (cfg.extras.customCss.trim()) css += section(++n, 'Свой CSS', 'Добавлено вручную в конструкторе', cfg.extras.customCss.trim() + '\n');
   if (opts.embedConfig !== false) css += `\n/* koala-theme:config\n${encodeConfig(cfg)}\n*/\n`;
   return css;

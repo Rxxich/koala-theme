@@ -55,6 +55,8 @@ const MOVING_ALWAYS = ['liquid', 'plasma', 'portal'];
 const MOVING_ON = ['pulse', 'ring', 'network', 'globe', 'dots', 'sphere', 'caustic', 'rocket', 'orbit', 'radar', 'equalizer', 'heartbeat'];
 /** Тумблер, на ручке которого «Шар света» */
 const orbToggle = (pw: ThemeConfig['power']) => pw.style === 'toggle' && pw.toggleLook === 'orb';
+/** Дорожка тумблера: длинная и короткая сторона и ход ручки от середины, px. «Нить» - узкая длинная капсула с бусиной */
+export const toggleTrack = (pw: ThemeConfig['power']) => pw.toggleLook === 'filament' ? { long: 176, short: 52, travel: 70 } : { long: 152, short: 74, travel: 39 };
 /** Отрезков в кадрах kt-orb-twist и точек орбиты: с такими числами ступеньки ложатся на общую сетку кадров (frames.ts) */
 const ORB_PARTS = 10, ORBIT_POINTS = 32;
 
@@ -64,6 +66,8 @@ function movingWhen(pw: ThemeConfig['power']): string | null {
   const btn = '[data-guide="home-power-toggle"]';
   if (MOVING_ALWAYS.includes(pw.style) || (pw.idle !== 'none' && pw.style !== 'sphere')) return `:root:has(${btn})`;
   if (MOVING_ON.includes(pw.style) || orbToggle(pw) || (pw.glowPulse && pw.glow > 0)) return `:root:has(${btn} > div[class*="border-stroke-power-on"], ${btn} svg[role="status"].opacity-100)`;
+  // Имя провайдера мигает, пока идёт подключение (providerName.ts). Свет вокруг букв задевает стекло тумблера под ним
+  if (pw.providerName) return `:root:has(${btn} svg[role="status"].opacity-100)`;
   return null;
 }
 
@@ -687,13 +691,19 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
 
     case 'toggle': {
       const glassy = pw.toggleLook !== 'classic';
+      // Вертикальный тумблер - та же дорожка, повёрнутая стоймя: «подключено» вверху, ручка ходит по вертикали
+      const vert = pw.toggleVertical;
+      const { long, short, travel } = toggleTrack(pw);
+      const size = [`width: ${vert ? short : long}px !important`, `height: ${vert ? long : short}px !important`];
+      /** Сдвиг ручки к концу «подключено» на d px: вправо, у вертикального - вверх */
+      const shift = (d: number) => `${vert ? 'translateY' : 'translateX'}(${d ? `${vert ? -d : d}px` : 0})`;
       if (glassy) {
         // Дорожка - стекло карточек из «Поверхностей» (заливка, зерно, размытие, цвет рамки), толщина
         // рамки - своя. Ручка - светящийся шар цвета кнопки; свечение растекается по стеклу
         out += rule(B, ['--kt-tg-a: var(--gradient-start-power-off)', '--kt-tg-b: var(--gradient-end-power-off)']);
         out += rule([ON, LOAD], ['--kt-tg-a: var(--gradient-start-power-on)', '--kt-tg-b: var(--gradient-end-power-on)']);
         out += rule(ERR, ['--kt-tg-a: var(--destructive)', '--kt-tg-b: color-mix(in srgb, var(--destructive) 70%, black)']);
-        out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important', 'overflow: hidden',
+        out += rule(C, [...size, 'border-radius: 999px !important', 'justify-content: center !important', 'overflow: hidden',
           `background: ${glass.layer ? 'transparent' : `${glass.grain}${glass.fill}`} !important`,
           ...glassBorder(glass, pw.ringWidth), `backdrop-filter: ${glass.layer ? 'none' : glass.filterPower} !important`,
           glass.layer && 'position: relative', glass.layer && 'isolation: isolate',
@@ -704,17 +714,40 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
         if (pw.toggleLook === 'orb') {
           // Ручка - маленький «Шар света». Лента на ней толще, чем на большом шаре: при 58 px ядро иначе теряется
           out += rule(I, [`width: ${pw.knobSize}px !important`, `height: ${pw.knobSize}px !important`, 'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4)',
-            'transform: translateX(-39px)', 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
+            `transform: ${shift(-travel)}`, 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
           orbLook(10, 1.08, 24, 1.1);
-          // След за ручкой: тонкая линия вдоль оси дорожки, заканчивается у центра ручки во включённом положении
+          // След за ручкой: тонкая линия вдоль оси дорожки, заканчивается у центра ручки во включённом положении.
+          // Середина следа - в 66 px от конца «отключено», поперёк оси холодная сторона и тёплая
           if (pw.orbTrail > 0) {
             const k = pw.orbTrail / 100;
-            const side = (c: string, sign: string) => `radial-gradient(ellipse 52px 5px at 66px calc(50% ${sign} 3px), color-mix(in srgb, ${c} 70%, transparent), transparent)`;
+            const at = (across: string) => vert ? `${across} calc(100% - 66px)` : `66px ${across}`;
+            const ell = (along: number, across: number) => vert ? `${across}px ${along}px` : `${along}px ${across}px`;
+            const side = (c: string, sign: string) => `radial-gradient(ellipse ${ell(52, 5)} at ${at(`calc(50% ${sign} 3px)`)}, color-mix(in srgb, ${c} 70%, transparent), transparent)`;
             out += rule(`${C}::after`, ['content: ""', 'position: absolute', 'inset: 0', 'pointer-events: none', 'opacity: 0', 'transition: opacity 0.9s ease',
-              `background: radial-gradient(ellipse 56px 1.5px at 66px 50%, #fff, transparent), ${side(orbA, '-')}, ${side(orbB, '+')}`]);
+              `background: radial-gradient(ellipse ${ell(56, 1.5)} at ${at('50%')}, #fff, transparent), ${side(orbA, '-')}, ${side(orbB, '+')}`]);
             out += rule(`${ON} > div::after`, [`opacity: ${k}`]);
             out += rule(`${LOAD} > div::after`, [`opacity: ${Math.round(k * 50) / 100}`]);
           }
+        } else if (pw.toggleLook === 'filament') {
+          // «Неоновая нить»: вдоль дорожки тонкая нить, вместо ручки бусина. Отключено - нить тусклая, при подключении
+          // светится половина до бусины, подключено - вся, с белым ядром и свечением цвета кнопки. Постоянной анимации
+          // нет: всё меняется переходами между состояниями
+          const dim = 'color-mix(in srgb, var(--foreground) 14%, transparent)';
+          const along = vert ? 'to top' : 'to right';
+          const line = vert ? ['left: 50%', 'top: 34px', 'bottom: 34px', 'width: 4px', 'margin-left: -2px'] : ['top: 50%', 'left: 34px', 'right: 34px', 'height: 4px', 'margin-top: -2px'];
+          out += rule(C, ['position: relative']);
+          out += rule(`${C}::after`, ['content: ""', 'position: absolute', ...line, 'border-radius: 2px', 'pointer-events: none',
+            `background: ${dim}`, 'transition: background 0.6s ease, box-shadow 0.6s ease']);
+          out += rule(`${LOAD} > div::after`, [`background: linear-gradient(${along}, var(--kt-tg-a) 0 50%, ${dim} 50%)`]);
+          out += rule(`${ON} > div::after`, [`background: linear-gradient(${along}, var(--kt-tg-a), #fff 45% 55%, var(--kt-tg-b))`,
+            'box-shadow: 0 0 6px 1px color-mix(in srgb, var(--kt-tg-a) 90%, transparent), 0 0 20px 5px color-mix(in srgb, var(--kt-tg-b) 50%, transparent), 0 0 40px 10px color-mix(in srgb, var(--kt-tg-b) 22%, transparent)']);
+          out += rule(`${ERR} > div::after`, ['background: var(--destructive)', 'box-shadow: 0 0 8px 1px color-mix(in srgb, var(--destructive) 70%, transparent)']);
+          out += rule(I, ['width: 12px !important', 'height: 12px !important', 'border-radius: 50%', 'background: color-mix(in srgb, var(--foreground) 25%, transparent)',
+            `transform: ${shift(-travel)}`, 'transition: transform 0.7s cubic-bezier(0.34, 1.3, 0.64, 1), background 0.5s ease, box-shadow 0.5s ease']);
+          out += rule(`${ON} > div > div`, ['background: #fff', 'box-shadow: 0 0 8px 2px var(--kt-tg-a), 0 0 18px 6px color-mix(in srgb, var(--kt-tg-b) 60%, transparent)']);
+          out += rule(`${ERR} > div > div`, ['background: var(--destructive)', 'box-shadow: 0 0 10px 2px color-mix(in srgb, var(--destructive) 60%, transparent)']);
+          // На бусине значки не помещаются: ошибку показывает красная нить
+          out += rule(`${I} > :is(img, svg)`, ['visibility: hidden']);
         } else {
           // Ручка: светлое пятно внутри (knobShine), свечение вокруг (knobGlow), диаметр и непрозрачность. Ход
           // ручки от диаметра не зависит: при любом её центр стоит в центре полукруга дорожки
@@ -727,19 +760,19 @@ export function powerRules(cfg: ThemeConfig, baseRule: RuleFn, glass: GlassLook)
             `box-shadow: ${[shine > 0 && `inset 0 1px 2px rgba(255, 255, 255, ${Math.round(60 * shine) / 100})`, !pw.toggleGlow ? '0 4px 12px rgba(0, 0, 0, 0.3)'
               : halo > 0 ? `0 0 ${Math.round(16 * halo)}px ${Math.round(4 * halo)}px color-mix(in srgb, var(--kt-tg-a) ${Math.round(70 * halo)}%, transparent), 0 0 ${Math.round(46 * halo)}px ${Math.round(16 * halo)}px color-mix(in srgb, var(--kt-tg-b) ${Math.round(40 * halo)}%, transparent)`
               : false].filter(Boolean).join(', ') || 'none'}`,
-            'transform: translateX(-39px)', 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
+            `transform: ${shift(-travel)}`, 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
         }
       } else {
-        out += rule(C, ['width: 152px !important', 'height: 74px !important', 'border-radius: 999px !important', 'justify-content: center !important',
+        out += rule(C, [...size, 'border-radius: 999px !important', 'justify-content: center !important',
           'background: linear-gradient(135deg, var(--gradient-start-power-off), var(--gradient-end-power-off)) !important',
           'box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.25) !important']);
         out += rule(`${ON} > div`, ['background: linear-gradient(135deg, var(--gradient-start-power-on), var(--gradient-end-power-on)) !important']);
         out += rule(I, ['width: 58px !important', 'height: 58px !important', 'border-radius: 50%', 'background: radial-gradient(circle at 35% 28%, #ffffff, #e4e7ee)',
           'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.08)',
-          'transform: translateX(-39px)', 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
+          `transform: ${shift(-travel)}`, 'transition: transform 0.55s cubic-bezier(0.34, 1.45, 0.64, 1)']);
       }
-      out += rule(`${ON} > div > div`, ['transform: translateX(39px)']);
-      out += rule(`${LOAD} > div > div`, ['transform: translateX(0)']);
+      out += rule(`${ON} > div > div`, [`transform: ${shift(travel)}`]);
+      out += rule(`${LOAD} > div > div`, [`transform: ${shift(0)}`]);
       out += rule(ICONS, ['inset: 22% !important', 'width: 56% !important', 'height: 56% !important']);
       // Без значка на ручке остаются только спиннер подключения и знак ошибки
       if (!pw.toggleIcon) out += rule([`${I} > img:nth-child(2)`, `${I} > img:nth-child(3)`], ['visibility: hidden']);

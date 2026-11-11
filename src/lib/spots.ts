@@ -21,6 +21,7 @@ export const SPOTS = {
   buttons: { sel: '[data-slot="button"][data-variant="default"]', pages: ['settings'] },
   dividers: { sel: '[data-slot="separator"], .h-8.w-px.bg-stroke, .h-3.w-px.bg-stroke', pages: ['home', 'settings'] },
   power: { sel: '[data-guide="home-power-toggle"]', pages: ['home'] },
+  providerName: { sel: '[data-guide="home-profile-header"]', pages: ['home'] },
   map: { sel: '[data-slot="sidebar-wrapper"] > img.pointer-events-none', pages: ['home'] },
   title: { sel: '.title' },
   flags: { sel: 'span.flag-emoji', pages: ['proxies', 'home'] }

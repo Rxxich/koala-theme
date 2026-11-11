@@ -247,10 +247,12 @@ export type PowerShape = 'circle' | 'squircle' | 'square';
 /** Цвет рамки круга: 'app' - цвета рамки кнопки из палитры, 'gradient' - градиентом цветов кнопки */
 export type PowerRing = 'app' | 'gradient' | 'primary' | 'foreground' | 'custom';
 export type PowerVolume = 'none' | 'convex' | 'concave' | 'gloss';
-export type ToggleLook = 'classic' | 'glass' | 'orb';
+export type ToggleLook = 'classic' | 'glass' | 'orb' | 'filament';
 /** Цвет ленты «Шара света»: природная призма, цвета кнопки подключения, акцент или свой */
 export type OrbColor = 'prism' | 'power' | 'primary' | 'custom';
 export type DayScene = 'clouds' | 'hills';
+/** Вид имени провайдера при подключении: приподнятые буквы, матовое стекло, прозрачное стекло с бликами по кромке */
+export type NameLook = 'raised' | 'frost' | 'glass';
 export type PowerFill = 'app' | 'radial' | 'linear' | 'conic' | 'solid' | 'none';
 export type PowerHover = 'app' | 'scale' | 'lift' | 'tilt' | 'glow' | 'none';
 export type PowerIdle = 'none' | 'float' | 'breathe' | 'wobble';
@@ -293,6 +295,8 @@ export interface Power {
   glassShine: number;
   /* Тумблеры */
   toggleLook: ToggleLook;
+  /** Тумблер стоит вертикально: «подключено» - вверху */
+  toggleVertical: boolean;
   toggleIcon: boolean;
   /** Тумблер «Стекло»: ручка светится цветом кнопки */
   toggleGlow: boolean;
@@ -313,6 +317,14 @@ export interface Power {
   dayScene: DayScene;
   /** «День и ночь»: днём - подключено (иначе наоборот) */
   dayOn: boolean;
+  /* Имя провайдера над кнопкой вместо «Отключено» / «Подключено» */
+  providerName: boolean;
+  nameLook: NameLook;
+  /** Размер имени, px */
+  nameSize: number;
+  /** Цвет букв: белый или свой */
+  nameColor: 'white' | 'custom';
+  nameCustom: string;
   /* Поведение */
   hover: PowerHover;
   idle: PowerIdle;

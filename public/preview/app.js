@@ -189,13 +189,29 @@
   $('groupSelector').onclick = () => go('proxies');
 
   /* ---------- Профили ---------- */
+  /* Логотипы провайдеров (заголовок подписки profile-logo): клиент скачивает картинку и кладёт её в профиль как data: */
+  const logo = (bg, body) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">${bg}</linearGradient></defs><rect width="64" height="64" fill="url(#g)"/>${body}</svg>`);
+  const LOGOS = {
+    premium: logo('<stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#8b5cf6"/>', '<path d="M32 14l14 5v11c0 9-6 16-14 20-8-4-14-11-14-20V19z" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>'),
+    lite: logo('<stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f43f5e"/>', '<path d="M35 12 20 36h11l-3 16 16-25H33z" fill="#fff"/>'),
+    family: logo('<stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#f1f5f9"/>', '<circle cx="32" cy="32" r="17" fill="#16a34a"/><path d="M24 33l6 6 11-13" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>')
+  };
   /* updated/every - подвал удалённого профиля: «Обновлено: ...» и интервал автообновления */
   const PROFILES = [
-    { name: 'Koala VPN · Premium', traffic: '184.2 GB', days: '23', updated: '5 минут назад', every: '12 ч' },
+    { name: 'Koala VPN · Premium', traffic: '184.2 GB', days: '23', updated: '5 минут назад', every: '12 ч', logo: LOGOS.premium },
     { name: 'Рабочий', traffic: '∞', days: '∞' },
-    { name: 'Резервный · Lite', traffic: '12.7 GB', days: '4', updated: 'день назад', every: '1 д' },
-    { name: 'Семейный', traffic: '512 GB', days: '61', updated: '2 часа назад', every: '6 ч' }
+    { name: 'Резервный · Lite', traffic: '12.7 GB', days: '4', updated: 'день назад', every: '1 д', logo: LOGOS.lite },
+    { name: 'Семейный', traffic: '512 GB', days: '61', updated: '2 часа назад', every: '6 ч', logo: LOGOS.family }
   ];
+  /* Логотип на главной - как в home.tsx: картинки нет совсем, если у профиля нет логотипа */
+  function setHomeLogo(src) {
+    const head = document.querySelector('[data-guide="home-profile-header"]');
+    let img = head.querySelector(':scope > img');
+    if (!src) { img?.remove(); return; }
+    if (!img) { img = document.createElement('img'); img.alt = ''; img.className = 'w-10 h-10 rounded-full'; head.prepend(img); }
+    img.src = src;
+  }
+  setHomeLogo(PROFILES[state.profile].logo);
   const clock = svg('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', 'size-3');
   function renderProfiles() {
     $('profileGrid').innerHTML = PROFILES.map((p, i) => {
@@ -203,7 +219,7 @@
       const remote = !!p.updated;
       const foot = remote ? `<span>Обновлено: ${p.updated}</span><span class="flex items-center gap-1">${clock}${p.every}</span>` : '<span>Локальный профиль</span>';
       return `<div class="relative col-span-1"><div role="button" tabindex="0" aria-selected="${act}" aria-busy="false" data-profile="${i}" class="group relative rounded-2xl backdrop-blur-3xl border px-4 pt-3 pb-2 cursor-pointer transition-all duration-200 ${act ? 'border-stroke-profile-active bg-profile-active hover:bg-profile-active/90' : 'border-stroke-profile-inactive bg-profile-inactive hover:bg-accent/60'}"><div class="w-full h-full">
-        <div class="flex items-center gap-2"><h3 class="text-sm font-semibold truncate flex-1 leading-tight">${esc(p.name)}</h3><div class="shrink-0 -mr-1 flex items-center">${remote ? `<button data-act="refresh-profile" data-slot="button" data-variant="ghost" data-size="icon-sm" class="inline-flex items-center justify-center rounded-lg transition-all hover:bg-accent/50 text-foreground size-8 p-1 bg-clip-content cursor-pointer">${svg(LUCIDE.refresh, 'text-base text-muted-foreground size-4')}</button>` : ''}<button data-menu="profile" data-slot="button" data-variant="ghost" data-size="icon-sm" class="inline-flex items-center justify-center rounded-lg transition-all hover:bg-accent/50 text-foreground size-8 p-1 bg-clip-content cursor-pointer">${svg(LUCIDE.dots, 'text-base text-muted-foreground size-4')}</button></div></div>
+        <div class="flex items-center gap-2">${p.logo ? `<img src="${p.logo}" alt="" class="size-7 rounded-full object-cover shrink-0">` : ''}<h3 class="text-sm font-semibold truncate flex-1 leading-tight">${esc(p.name)}</h3><div class="shrink-0 -mr-1 flex items-center">${remote ? `<button data-act="refresh-profile" data-slot="button" data-variant="ghost" data-size="icon-sm" class="inline-flex items-center justify-center rounded-lg transition-all hover:bg-accent/50 text-foreground size-8 p-1 bg-clip-content cursor-pointer">${svg(LUCIDE.refresh, 'text-base text-muted-foreground size-4')}</button>` : ''}<button data-menu="profile" data-slot="button" data-variant="ghost" data-size="icon-sm" class="inline-flex items-center justify-center rounded-lg transition-all hover:bg-accent/50 text-foreground size-8 p-1 bg-clip-content cursor-pointer">${svg(LUCIDE.dots, 'text-base text-muted-foreground size-4')}</button></div></div>
         <div class="grid grid-cols-2 mt-2"><div class="pr-3 border-r border-foreground/10 justify-items-center"><div class="text-[11px] text-muted-foreground">Трафика осталось:</div><div class="text-sm font-bold mt-0.5 leading-tight">${p.traffic}</div></div><div class="pl-3 justify-items-center"><div class="text-[11px] text-muted-foreground">Дней осталось:</div><div class="text-sm font-bold mt-0.5 leading-tight">${p.days}</div></div></div>
         <div class="border-t border-foreground/10 mt-3 pt-2 flex items-center justify-between text-[11px] text-muted-foreground">${foot}</div>
       </div></div></div>`;
@@ -231,6 +247,7 @@
       if (prevCard) { prevCard.classList.remove(...ACT); prevCard.classList.add(...INACT); prevCard.setAttribute('aria-selected', 'false'); }
       card.classList.remove(...INACT); card.classList.add(...ACT); card.setAttribute('aria-selected', 'true');
       $('homeProfile').textContent = PROFILES[i].name;
+      setHomeLogo(PROFILES[i].logo);
       $('trafficLeft').textContent = PROFILES[i].traffic;
       setTimeout(() => {
         card.classList.remove('opacity-60', 'scale-[0.98]');
