@@ -1,3 +1,5 @@
+![Конструктор koala-theme](.github/screenshot.webp)
+
 # koala-theme
 
 Конструктор тем для Koala Clash с живым превью. В центре сайта работает
