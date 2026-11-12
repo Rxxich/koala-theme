@@ -1,7 +1,8 @@
 @import 'tailwindcss' source(none);
-@source '../../../koala-clash-1.5.0/src/renderer/src';
+@source '../../../koala-clash-1.6.0/src/renderer/src';
 @source '../../public/preview/index.html';
 @source '../../public/preview/app.js';
+@source '../../public/preview/tray.html';
 @import 'tw-animate-css';
 @custom-variant dark (&:is(.dark *));
 
@@ -19,6 +20,8 @@
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
+  /* фон окна меню трея (assets/traymenu.css), у главного окна он инлайн-стилем в App.tsx */
+  --app-bg: #c5d4f1;
   --stroke-power-off: oklch(0.8245 0.0724 24);
   --gradient-start-power-off: oklch(0.8962 0.0921 28);
   --gradient-end-power-off: oklch(0.7065 0.1648 25);
@@ -69,6 +72,7 @@
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
+  --app-bg: #080f16;
   --stroke-power-off: oklch(0.5682 0.0961 25);
   --gradient-start-power-off: oklch(0.7014 0.1722 25);
   --gradient-end-power-off: oklch(0.3828 0.095 25);
@@ -119,6 +123,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-app-bg: var(--app-bg);
   --color-stroke-power-off: var(--stroke-power-off);
   --color-gradient-start-power-off: var(--gradient-start-power-off);
   --color-gradient-end-power-off: var(--gradient-end-power-off);

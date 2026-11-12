@@ -693,6 +693,13 @@ code { font-family: var(--mono); font-size: 0.86em; background: rgba(255, 255, 2
 }
 .stage-light .app-window { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12), 0 30px 70px rgba(30, 40, 70, 0.28), 0 6px 18px rgba(30, 40, 70, 0.15); }
 .app-window iframe { display: block; width: 100%; height: 100%; border: 0; }
+/* Меню трея - своё прозрачное окно 380 × 520, панель со скруглением рисует его страница. Тень - по её форме */
+.tray-window {
+  position: absolute; right: 16px; bottom: 16px; width: 380px; height: 520px; transform-origin: 100% 100%;
+  filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.5)) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+}
+.stage-light .tray-window { filter: drop-shadow(0 18px 40px rgba(30, 40, 70, 0.3)) drop-shadow(0 4px 12px rgba(30, 40, 70, 0.18)); }
+.tray-window iframe { display: block; width: 100%; height: 100%; border: 0; background: transparent; color-scheme: normal; }
 .stage-caption { font-size: 11.5px; color: var(--text-3); letter-spacing: 0.02em; }
 .stage-light .stage-caption { color: #6b7280; }
 

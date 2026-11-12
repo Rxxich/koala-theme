@@ -5,7 +5,7 @@ import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState
 import {
   Moon, Sun, Power, Loader, AlertTriangle, PanelLeft, MessageSquare, MousePointer2, Bell, SquareStack,
   RotateCcw, Maximize2, ScanLine, Palette as PaletteIcon, X, Download, Wand2, Home, Users, Server, Cable, ListChecks, ScrollText, Settings,
-  Eye, ChevronDown
+  Eye, ChevronDown, AppWindow
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { generateCSS } from '../lib/generator';
@@ -34,6 +34,12 @@ interface KTApi {
   highlight: (sel: string | null) => void;
   getState: () => { page: PreviewPage; dark: boolean; power: PowerState; sidebar: boolean };
   listen: (fn: (e: { type: string; value: unknown }) => void) => () => void;
+}
+/** Макет меню трея (public/preview/tray.html) */
+interface TrayApi {
+  setCSS: (css: string) => void;
+  setDark: (d: boolean) => void;
+  setPower: (s: string) => void;
 }
 
 const SIZES = [
@@ -86,9 +92,14 @@ export function Stage() {
   const [showOpen, setShowOpen] = useState(false);
   const showBtn = useRef<HTMLButtonElement>(null);
   const win = SIZES.find((s) => s.id === size) ?? SIZES[0];
+  // Меню трея: с 1.6.0 клиент красит темой и его окно
+  const trayFrame = useRef<HTMLIFrameElement>(null);
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [tray, setTray] = useState<TrayApi | null>(null);
 
   // Меню «Показать»: всплывающие элементы макета, которые иначе пришлось бы искать в нём самом
   const SHOW: { label: string; icon: typeof Bell; run: () => void }[] = [
+    { label: trayOpen ? 'Скрыть меню трея' : 'Меню трея', icon: AppWindow, run: () => setTrayOpen(!trayOpen) },
     { label: 'Выпадающее меню', icon: SquareStack, run: () => kt?.menu() },
     { label: 'Подсказку', icon: MousePointer2, run: () => kt?.tooltip() },
     { label: 'Уведомление', icon: Bell, run: () => kt?.toast('Профиль обновлён', 'success') },
@@ -129,7 +140,23 @@ export function Stage() {
   useEffect(() => {
     const shown = viewing ? viewCss ?? '' : css;
     kt?.setCSS(svgBackdrop ? shown : shown + NO_REFRACTION);
-  }, [kt, css, viewing, viewCss]);
+    tray?.setCSS(svgBackdrop ? shown : shown + NO_REFRACTION);
+  }, [kt, tray, css, viewing, viewCss]);
+  // Меню трея повторяет схему и подключение окна. Его кнопка подключения переключает и окно
+  const onTrayLoad = () => {
+    const w = trayFrame.current?.contentWindow as (Window & { KT?: TrayApi }) | null;
+    if (w?.KT) setTray(w.KT);
+  };
+  useEffect(() => { if (!trayOpen) setTray(null); }, [trayOpen]);
+  useEffect(() => { tray?.setDark(dark); }, [tray, dark]);
+  useEffect(() => { tray?.setPower(power); }, [tray, power]);
+  useEffect(() => {
+    const on = (e: MessageEvent) => {
+      if (e.source === trayFrame.current?.contentWindow && e.data?.type === 'kt-tray-power') set({ power: e.data.value as PowerState });
+    };
+    window.addEventListener('message', on);
+    return () => window.removeEventListener('message', on);
+  }, [set]);
   useEffect(() => { if (kt && kt.getState().dark !== dark) kt.setDark(dark); }, [kt, dark]);
   useEffect(() => { if (kt && kt.getState().page !== page) kt.go(page); }, [kt, page]);
   useEffect(() => { if (kt && kt.getState().power !== power) kt.setPower(power); }, [kt, power]);
@@ -265,6 +292,11 @@ export function Stage() {
           <div className="app-window" style={{ width: win.w, height: win.h, ...(zoomOk ? { zoom: scale } : { transform: `scale(${scale})` }) }}>
             <iframe ref={frame} src="preview/index.html" title="Превью Koala Clash" onLoad={onLoad} />
           </div>
+          {trayOpen && (
+            <div className="tray-window" style={zoomOk ? { zoom: scale } : { transform: `scale(${scale})` }}>
+              <iframe ref={trayFrame} src="preview/tray.html" title="Превью меню трея" onLoad={onTrayLoad} />
+            </div>
+          )}
         </div>
         <div className="stage-caption">
           {viewTheme ? viewTheme.name : config.name || 'Моя тема'} · {dark ? 'тёмная' : 'светлая'} · {Math.round(scale * 100)}%

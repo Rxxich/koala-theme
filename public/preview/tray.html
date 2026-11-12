@@ -1,0 +1,144 @@
+<!doctype html>
+<!--
+  Макет меню трея Koala Clash 1.6.0 («Расширенное меню в трее», TrayMenuApp.tsx). С 1.6.0 клиент
+  вставляет тему и в это окно. Окно отдельное, 380 × 520, прозрачное - панель со скруглением рисует
+  сама страница. Здесь оно в своём iframe, чтобы h-screen, w-screen и фон html вели себя как там.
+  Тема - в <style id="kt-theme"> до стилей клиента, как в index.html.
+-->
+<!-- Без color-scheme: при схеме, отличной от сцены, Chromium подложил бы под iframe непрозрачный фон -->
+<html lang="ru" class="dark">
+<head>
+<meta charset="utf-8">
+<title>Koala Clash Tray Menu</title>
+<style id="kt-theme"></style>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="mock.css">
+<style>
+  /* Свои стили окна трея (assets/traymenu.css), кроме Tailwind */
+  html, body { background: none !important; background-color: transparent !important; }
+  * { user-select: none; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.3); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.5); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(() => {
+  const I = {
+    up: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+    down: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+    route: '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
+    globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+    pointer: '<path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"/>',
+    zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+    shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>',
+    gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+    window: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/>',
+    logout: '<path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>',
+    spin: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>'
+  };
+  const svg = (k, cls, extra = '') => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${cls}"${extra}>${I[k]}</svg>`;
+  const POWER_ICON = "data:image/svg+xml,%3Csvg width='72' height='72' viewBox='0 0 72 72' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M56.4058 19.6319C60.3907 23.5336 63.1041 28.5042 64.203 33.9152C65.302 39.3262 64.737 44.9347 62.5797 50.0315C60.4223 55.1283 56.7694 59.4845 52.0828 62.5493C47.3962 65.6142 41.8864 67.25 36.25 67.25C30.6136 67.25 25.1038 65.6142 20.4172 62.5493C15.7306 59.4845 12.0777 55.1283 9.92034 50.0315C7.76297 44.9347 7.19803 39.3262 8.29695 33.9152C9.39588 28.5042 12.1093 23.5336 16.0942 19.6319M36.2658 5.25V36.2455' stroke='%23FAFAFA' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E";
+  const PAUSE_ICON = "data:image/svg+xml,%3Csvg width='72' height='72' viewBox='0 0 72 72' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M21 10V62M51 10V62' stroke='%23FAFAFA' stroke-width='9' stroke-linecap='round'/%3E%3C/svg%3E";
+  // components/proxies/group-type.tsx
+  const TYPE = {
+    Selector: ['border-blue-500/40 bg-blue-500/8 text-blue-600 dark:text-blue-400 dark:border-blue-400/40', 'pointer'],
+    URLTest: ['border-emerald-500/40 bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 dark:border-emerald-400/40', 'zap'],
+    Fallback: ['border-amber-500/40 bg-amber-500/8 text-amber-600 dark:text-amber-400 dark:border-amber-400/40', 'shield']
+  };
+  // Те же серверы, что в макете окна (app.js)
+  const GROUPS = [
+    { name: '🚀 Выбор сервера', type: 'Selector', now: 0, open: true, all: [['🇳🇱 Нидерланды · Амстердам', 48], ['🇩🇪 Германия · Франкфурт', 62], ['🇫🇮 Финляндия · Хельсинки', 71], ['🇯🇵 Япония · Токио', 614], ['🇬🇧 Великобритания · Лондон', 0], ['🇺🇸 США · Нью-Йорк', -1]] },
+    { name: '🎬 YouTube', type: 'URLTest', now: 1, all: [['🇳🇱 Нидерланды · Амстердам', 48], ['🇩🇪 Германия · Франкфурт', 62]] },
+    { name: '🌍 Остальной трафик', type: 'Fallback', now: 0, all: [['DIRECT', -1], ['🚀 Выбор сервера', 48]] }
+  ];
+  const state = { power: 'on', dark: true, ping: 'ping' };
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  // utils/ping-display.ts
+  const delayCls = (d) => d === -1 ? 'text-primary' : d === 0 ? 'text-destructive' : d < 500 ? 'text-success' : 'text-warning';
+  const dot = (d) => `<span aria-hidden="true" class="inline-block size-2 shrink-0 rounded-full ${d === 0 ? 'border-[1.5px] border-current' : 'bg-current'} ${delayCls(d)}"></span>`;
+  const delayContent = (d) => d < 0 ? svg('gauge', 'lucide size-3.5 text-muted-foreground/70', ' aria-hidden="true"')
+    : state.ping === 'indicator' ? dot(d) : `<span class="text-xs font-medium tabular-nums ${delayCls(d)}">${d === 0 ? '–' : d}</span>`;
+  const label = (d) => d === 0 ? 'Тайм-аут' : `${d} ms`;
+
+  function group(g) {
+    const [color, icon] = TYPE[g.type];
+    const [nowName, nowDelay] = g.all[g.now];
+    const st = g.open ? 'open' : 'closed';
+    const cur = nowDelay < 0 ? '' : `<span aria-hidden="true" class="h-3 w-px shrink-0 bg-muted-foreground/40"></span><span role="img" aria-label="${label(nowDelay)}" title="${label(nowDelay)}" class="inline-flex shrink-0 items-center tabular-nums">${state.ping === 'indicator' ? dot(nowDelay) : nowDelay === 0 ? `<span class="font-medium text-destructive">${label(0)}</span>` : `<span class="font-medium ${delayCls(nowDelay)}">${nowDelay}</span>`}</span>`;
+    const rows = g.all.map(([name, d], i) => {
+      const active = i === g.now;
+      return `<div class="flex overflow-hidden rounded-lg border text-xs transition-colors ${active ? 'border-stroke-power-on/50 bg-gradient-to-br from-gradient-start-power-on/15 to-gradient-end-power-on/15 font-medium' : 'border-transparent hover:bg-accent/50'}"><button type="button"${active ? ' aria-current="true"' : ''} class="flex min-w-0 flex-1 cursor-pointer items-center py-1.5 pr-1 pl-2.5 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"><span class="flag-emoji truncate" title="${esc(name)}">${esc(name)}</span></button><button type="button" class="flex w-10 shrink-0 cursor-pointer items-center justify-center transition-colors outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset disabled:cursor-default disabled:hover:bg-transparent">${delayContent(d)}</button></div>`;
+    }).join('');
+    return `<div data-state="${st}" data-orientation="vertical" class="overflow-hidden rounded-xl border border-stroke bg-card/50 backdrop-blur-xl"><h3 data-orientation="vertical" data-state="${st}" class="relative flex"><button type="button" data-tray-group aria-expanded="${g.open}" data-state="${st}" data-orientation="vertical" class="group/trigger flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 py-2 pr-2.5 pl-2 text-left transition-colors outline-none hover:bg-card/30 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"><span class="flex size-7 shrink-0 items-center justify-center rounded-md border [&_svg]:size-3.5 ${color}">${svg(icon, 'lucide')}</span><span class="flex min-w-0 flex-1 flex-col gap-0.5"><span class="flag-emoji truncate text-sm leading-tight font-semibold">${esc(g.name)}</span><span class="flex min-w-0 items-center gap-1.5 text-xs leading-tight"><span class="flag-emoji truncate text-muted-foreground">${esc(nowName)}</span>${cur}</span></span><span class="w-6 shrink-0" aria-hidden="true"></span>${svg('chevron', 'lucide size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]/trigger:rotate-180', ' aria-hidden="true"')}</button><button data-slot="button" data-variant="ghost" data-size="icon-xs" aria-label="Проверить задержку" title="Проверить задержку" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-stroke hover:bg-accent/50 size-6 [&_svg:not([class*='size-'])]:size-3 absolute top-1/2 right-9 -translate-y-1/2 text-muted-foreground hover:text-foreground">${svg('gauge', 'lucide size-3.5')}</button></h3>${g.open ? `<div data-state="open" role="region" data-orientation="vertical" class="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"><div class="flex flex-col gap-0.5 border-t border-stroke/60 p-1.5">${rows}</div></div>` : ''}</div>`;
+  }
+
+  function render() {
+    const on = state.power === 'on', loading = state.power === 'loading', error = state.power === 'error';
+    const status = loading ? 'Подключение...' : error ? 'Проблема с ядром' : on ? 'Подключено' : 'Отключено';
+    document.getElementById('root').innerHTML = `<div tabindex="-1" class="relative isolate flex h-screen w-screen flex-col overflow-hidden rounded-xl border border-stroke bg-app-bg text-foreground outline-none">
+  <img src="${state.dark ? 'map-dark.svg' : 'map-light.svg'}" alt="" class="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-65 blur-3xl">
+  <div class="flex flex-col gap-2 p-2">
+    <div class="flex items-center gap-3 rounded-xl border border-stroke bg-card/50 p-2.5 backdrop-blur-xl">
+      <button type="button" data-tray-power aria-pressed="${on}" aria-label="${status}" class="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 bg-radial-[at_30%_45%] transition-[transform,background-color,border-color] duration-300 active:scale-95 disabled:cursor-default disabled:opacity-60 disabled:active:scale-100 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${on ? 'from-gradient-start-power-on/60 to-gradient-end-power-on/60 border-stroke-power-on' : 'from-gradient-start-power-off/50 to-gradient-end-power-off/50 border-stroke-power-off'}">${loading ? svg('spin', 'lucide size-5 animate-spin text-[#FAFAFA]', ' role="status" aria-label="Loading"') : `<img src="${on ? PAUSE_ICON : POWER_ICON}" alt="" class="size-5">`}</button>
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <span class="truncate text-sm leading-none font-semibold uppercase">${status}</span>
+        <div class="flex items-center gap-3 text-xs leading-none tabular-nums text-muted-foreground">
+          <span class="flex items-center gap-1">${svg('up', 'lucide size-3 text-gradient-end-power-on', ' aria-hidden="true"')}${on ? '116 KB' : '0 B'}/s</span>
+          <span class="flex items-center gap-1">${svg('down', 'lucide size-3 text-gradient-end-power-on', ' aria-hidden="true"')}${on ? '4.2 MB' : '0 B'}/s</span>
+        </div>
+      </div>
+    </div>
+    <div role="radiogroup" class="flex items-center gap-1 rounded-lg border border-stroke bg-card/50 p-0.75 backdrop-blur-xl">
+      <button type="button" role="radio" aria-checked="true" class="flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 border border-stroke-power-on/50 bg-gradient-to-br from-gradient-start-power-on/15 to-gradient-end-power-on/15 text-foreground shadow-sm">${svg('route', 'lucide size-3.5 shrink-0', ' aria-hidden="true"')}<span>Правила</span></button>
+      <button type="button" role="radio" aria-checked="false" class="flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 border border-transparent text-muted-foreground hover:text-foreground">${svg('globe', 'lucide size-3.5 shrink-0', ' aria-hidden="true"')}<span>Глобальный</span></button>
+    </div>
+  </div>
+  <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+    <div class="flex flex-col gap-2">${GROUPS.map(group).join('')}</div>
+  </div>
+  <div class="flex items-center gap-1 border-t border-stroke/60 bg-card/30 p-2 backdrop-blur-xl">
+    <button type="button" role="combobox" data-slot="select-trigger" data-size="sm" class="border-stroke data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:ring-2 focus-visible:ring-stroke flex w-fit items-center justify-between gap-2 rounded-xl border bg-card/50 backdrop-blur-xl px-3 py-2 text-sm whitespace-nowrap transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 flag-emoji min-w-0 flex-1"><span class="flex min-w-0 items-center gap-1.5"><span class="min-w-0 truncate"><span data-slot="select-value" style="pointer-events: none;">Koala VPN · Premium</span></span></span>${svg('chevron', 'lucide size-4 opacity-50', ' aria-hidden="true"')}</button>
+    <button data-slot="button" data-variant="ghost" data-size="icon-sm" aria-label="Открыть Koala Clash" title="Открыть Koala Clash" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-stroke hover:bg-accent/50 text-foreground size-8 p-1 bg-clip-content">${svg('window', 'lucide size-4')}</button>
+    <button data-slot="button" data-variant="ghost" data-size="sm" class="inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-stroke hover:bg-accent/50 h-8 gap-1.5 px-3 has-[>svg]:px-2.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">${svg('logout', 'lucide size-4')}Выход</button>
+  </div>
+</div>`;
+  }
+
+  // Клики - как в клиенте: группы раскрываются, кнопка подключения переключает состояние
+  document.addEventListener('click', (e) => {
+    const g = e.target.closest('[data-tray-group]');
+    if (g) {
+      const name = g.querySelector('.font-semibold').textContent;
+      const it = GROUPS.find((x) => x.name === name);
+      if (it) { it.open = !it.open; render(); }
+      return;
+    }
+    if (e.target.closest('[data-tray-power]')) {
+      state.power = state.power === 'on' ? 'off' : 'on';
+      render();
+      try { window.parent?.postMessage({ type: 'kt-tray-power', value: state.power }, '*'); } catch (err) { /* без родителя */ }
+    }
+  });
+
+  const themeEl = document.getElementById('kt-theme');
+  window.KT = {
+    setCSS(css) { if (themeEl.textContent !== css) themeEl.textContent = css; },
+    setDark(dark) {
+      state.dark = dark;
+      document.documentElement.classList.toggle('dark', dark);
+      render();
+    },
+    setPower(p) { if (state.power !== p) { state.power = p; render(); } },
+    setPing(p) { if (state.ping !== p) { state.ping = p; render(); } }
+  };
+  render();
+  window.dispatchEvent(new Event('kt-ready'));
+})();
+</script>
+</body>
+</html>

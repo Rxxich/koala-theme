@@ -15,7 +15,7 @@ import { cardBeforeTaken, edgeLightImage, edgeLightPct, edgeLightSlice, hasHighl
 import { powerGlassy, powerKeyframes, powerRules, toggleTrack, type GlassLook } from './power';
 import { announceAsTile, providerNameRules } from './providerName';
 import { particleSet, patternLayer } from './backdrop';
-import { clickRules, funRules, PROXY_SEL } from './effects';
+import { clickRules, funRules, PROXY_SEL, TRAY } from './effects';
 import { dividerRules } from './dividers';
 import { FPS, pace } from './frames';
 import { sidebarIconRules } from './sidebarIcons';
@@ -24,8 +24,10 @@ import type { Background, BgAnimation, GradientStop, IconPlate, LiquidSmooth, Pa
 const P = ':root';
 /** Анимация фона перерисовывает всё окно, а градиент мягкий и ступенек на нём не видно. BG_PARTS - отрезков в кадрах хода туда-обратно */
 const BG_FPS = 20, BG_PARTS = 10;
-const WRAP = `${P} [data-slot="sidebar-wrapper"]`;
-const MAP = `${WRAP} > img.pointer-events-none`;
+/** Карточки меню трея: шапка с кнопкой (rounded-xl), режимы (rounded-lg) и группы (rounded-xl) */
+const TRAY_CARDS = `${TRAY} :is(div.rounded-xl, div.rounded-lg[role="radiogroup"]).border-stroke.bg-card\\/50`;
+/** Карта главного окна и меню трея. :where - чтобы вес селектора остался прежним */
+const MAP = `${P} :is([data-slot="sidebar-wrapper"], :where(${TRAY})) > img.pointer-events-none`;
 const CARD_BASE = '[data-slot="card"]:not([class*="border-primary/"]):not([class*="bg-amber-500"])';
 const SELECTED = `${P} [data-slot="card"][class*="border-primary/"]`;
 const PINNED = `${P} [data-slot="card"][class*="bg-amber-500"]`;
@@ -173,7 +175,10 @@ function noiseUri(amount: number): string {
 function backgroundRules(cfg: ThemeConfig, scheme: Scheme, scope: string, kfs: Record<string, string>): string {
   const bg = cfg.background[scheme];
   const pal = cfg.palette[scheme];
-  const w = `${scope} [data-slot="sidebar-wrapper"]`;
+  // Обёртка главного окна и панель меню трея. У панели слои фона ниже содержимого (оно в ней без z-index)
+  // и в одном слое с картой (-z-10), а не над ней, как у обёртки
+  const w = `${scope} :is([data-slot="sidebar-wrapper"], :where(${TRAY}))`;
+  const tray = `${scope} ${TRAY}`;
   let out = '';
   if (bg.kind !== 'app') out += rule(w, [`background: ${bg.kind === 'palette' ? pal.background : bg.color} !important`, 'isolation: isolate']);
   // Тема одной палитры, фон "как в клиенте": в "чужом" режиме клиент красит обёртку в цвет своей схемы
@@ -206,6 +211,7 @@ function backgroundRules(cfg: ThemeConfig, scheme: Scheme, scope: string, kfs: R
     // На внутренних страницах клиент вешает на карту класс blur-3xl - по нему узнаём, что мы не на главной.
     // Карта при этом может быть скрыта: класс всё равно переключается
     if (bg.blurPages) out += rule(`${w}:has(> img.blur-3xl)::before`, [`filter: blur(${bg.blurPagesAmount + (isImage ? bg.imageBlur : 0)}px)`]);
+    out += rule(`${tray}::before`, ['z-index: -10']);
   }
 
   // ::after - частицы (если "под интерфейсом"), узор, зерно, виньетка
@@ -227,15 +233,17 @@ function backgroundRules(cfg: ThemeConfig, scheme: Scheme, scope: string, kfs: R
       animDecl = `animation: kt-${name} ${parts.duration}s steps(${parts.steps}) infinite`;
     }
     out += rule(`${w}::after`, ['content: ""', 'position: absolute', 'inset: 0', 'z-index: 0', 'pointer-events: none', `background: ${overlays.join(',\n        ')}`, animDecl]);
+    out += rule(`${tray}::after`, ['z-index: -1']);
   }
 
-  // Частицы поверх интерфейса
+  // Частицы поверх интерфейса. Не в меню трея: его окно прозрачно за скруглёнными углами панели, и слой на всё
+  // окно рисовал бы частицы и там
   if (cfg.fun.particlesOver) {
     const ps = particleSet(cfg.fun, pal, scheme);
     if (ps) {
       const name = `pto-${scheme}`;
       kfs[name] = `from { background-position: ${ps.from.join(', ')}; } to { background-position: ${ps.to.join(', ')}; }`;
-      out += rule(`${scope} body::after`, ['content: ""', 'position: fixed', 'inset: 0', 'z-index: 45', 'pointer-events: none', `background: ${ps.layers.join(',\n        ')}`, `animation: kt-${name} ${ps.duration}s steps(${ps.steps}) infinite`]);
+      out += rule(`${scope} body:not(:has(${TRAY}))::after`, ['content: ""', 'position: fixed', 'inset: 0', 'z-index: 45', 'pointer-events: none', `background: ${ps.layers.join(',\n        ')}`, `animation: kt-${name} ${ps.duration}s steps(${ps.steps}) infinite`]);
     }
   }
   return out;
@@ -263,8 +271,9 @@ function mapRules(cfg: ThemeConfig): string {
   if (cfg.mode !== 'both') {
     const wrong = cfg.mode === 'dark' ? 'html:not(.dark)' : 'html.dark';
     const inv = `invert(1) hue-rotate(180deg) ${cfg.mode === 'dark' ? 'brightness(0.75)' : 'brightness(1.25)'}`;
-    out += rule(`${wrong} [data-slot="sidebar-wrapper"] > img.pointer-events-none`, [`filter: ${inv} ${f} !important`]);
-    out += rule(`${wrong} [data-slot="sidebar-wrapper"] > img.pointer-events-none.blur-3xl`, [`filter: ${inv} ${m.blurPages ? 'blur(64px)' : ''} ${f} !important`]);
+    const map = `${wrong} :is([data-slot="sidebar-wrapper"], :where(${TRAY})) > img.pointer-events-none`;
+    out += rule(map, [`filter: ${inv} ${f} !important`]);
+    out += rule(`${map}.blur-3xl`, [`filter: ${inv} ${m.blurPages ? 'blur(64px)' : ''} ${f} !important`]);
   }
   return out;
 }
@@ -809,6 +818,10 @@ function surfaceRules(cfg: ThemeConfig): string {
       `border-width: ${bw}px !important`,
       `backdrop-filter: ${cardBlur} !important`
     ]);
+    // Меню трея: шапка, режимы и группы - как плитки. Слоя жидкого стекла у них нет (glassTargets),
+    // поэтому стекло и зерно свои, как у окон
+    out += rule(`${P} ${TRAY_CARDS}`, [`background: ${grain}${fill} !important`, `border-color: ${border} !important`,
+      `border-width: ${bw}px !important`, `backdrop-filter: ${blur} !important`]);
     // Подложка раскрытой группы прокси - прозрачнее карточек. --kt-row-k проявляет её при раскрытии (см. ниже)
     out += rule(`${P} div[class*="bg-card/30"]`, [`background: ${rowFade('var(--card)', alpha * 0.5)} !important`,
       `border-color: ${border === 'transparent' ? 'transparent' : rowFade(stroke, Math.min(100, s.borderOpacity))} !important`]);
@@ -838,6 +851,8 @@ function surfaceRules(cfg: ThemeConfig): string {
     const T = `${P} :is(${CARD_BASE}, [data-slot="accordion"])`;
     out += rule(T, [edgeFrame('--kt-edge', cardRadius(s))]);
     out += rule(`${T}.rounded-lg`, [edgeFrame('--kt-edge-lg', s.radius * 16)]);
+    out += rule(`${P} ${TRAY_CARDS}`, [edgeFrame('--kt-edge', cardRadius(s))]);
+    out += rule(`${P} ${TRAY_CARDS}.rounded-lg`, [edgeFrame('--kt-edge-lg', s.radius * 16)]);
     out += rule([`${P} ${TILE}:not(:where([data-slot]))`, `${P} ${PROFILE}:not([aria-selected="true"])`], [edgeFrame('--kt-edge-2xl', s.radius * 16 * 1.6)]);
     if (sbLiquid) out += rule(sbSel, [edgeFrame('--kt-edge-sb', sidebarRadius(s))]);
     for (const { scheme, sel } of schemeScopes(cfg.mode)) {

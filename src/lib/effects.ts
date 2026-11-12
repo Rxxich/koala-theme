@@ -14,6 +14,13 @@ type RuleFn = (selector: string | string[], decls: Decl[]) => string;
 
 const P = ':root';
 export const PROXY_SEL = '[data-slot="card"].cursor-pointer.overflow-hidden:not(.isolate)';
+/**
+ * Панель меню трея (TrayMenuApp.tsx, «Расширенное меню в трее»). С 1.6.0 клиент вставляет тему и в это окно.
+ * У него своя обёртка с картой вместо [data-slot="sidebar-wrapper"]: фон, карта и стекло темы дописаны и ей
+ */
+export const TRAY = 'div.bg-app-bg.isolate';
+/** Строка сервера в меню трея: две кнопки рядом - выбора и проверки задержки */
+const TRAY_ROW = `${P} ${TRAY} div.flex.overflow-hidden.rounded-lg.border.text-xs`;
 const SELECTED = `${P} [data-slot="card"][class*="border-primary/"]`;
 const POWER_ON = '[data-guide="home-power-toggle"] > div[class*="border-stroke-power-on"]';
 
@@ -137,6 +144,46 @@ function sparkLayers(cols: string[], r: number): string {
   }).join(', ');
 }
 
+/**
+ * Подсветка по пингу в меню трея. Строка ниже карточки главного окна (около 30px): свечение уже, точка
+ * стоит слева посередине и отодвигает название. Подсветка - под текстом: isolation даёт строке свой слой,
+ * и z-index: -1 кладёт её поверх фона строки (у выбранной он свой), но под кнопками. Во время проверки
+ * клиент ставит вместо задержки значок загрузки - подсветка гаснет до ответа
+ */
+function trayPingRules(f: ThemeConfig['fun'], rule: RuleFn, delay: string, digits: string): string {
+  const row = `${TRAY_ROW}:has(${delay})`;
+  const btn = `${TRAY_ROW} > button:last-child`;
+  const base = ['content: ""', 'position: absolute', 'pointer-events: none', 'z-index: -1', 'transition: background 0.4s ease, box-shadow 0.4s ease'];
+  const inPlace = f.ping === 'dot' && f.pingDotInPlace;
+  const d = f.pingDotSize;
+  let css = inPlace ? '' : rule(row, ['position: relative', 'isolation: isolate']);
+  // Полоска - не у края: при скруглении больше половины высоты строка почти круглая с торцов, и угол срезал её в серп
+  if (f.ping === 'bar') css += rule(`${row}::after`, [...base, 'left: 4px', 'top: 22%', 'bottom: 22%', 'width: 3px', 'border-radius: 3px', 'background: var(--kt-ping)', 'box-shadow: 0 0 6px var(--kt-ping)']);
+  if (f.ping === 'glow') css += rule(`${row}::after`, [...base, 'inset: 0', 'border-radius: inherit', 'box-shadow: inset 0 0 12px -4px var(--kt-ping)']);
+  if (f.ping === 'tint') css += rule(`${row}::after`, [...base, 'inset: 0', 'border-radius: inherit', 'background: linear-gradient(90deg, color-mix(in srgb, var(--kt-ping) 16%, transparent), transparent 65%)']);
+  if (f.ping === 'dot' && !inPlace) {
+    css += rule(`${row}::after`, [...base, 'left: 7px', `top: calc(50% - ${d / 2}px)`, `width: ${d}px`, `height: ${d}px`, 'border-radius: 50%', 'background: var(--kt-ping)', `box-shadow: 0 0 ${d}px var(--kt-ping)`]);
+    css += rule(`${row} > button:first-child`, [`padding-left: ${d + 14}px`]);
+  }
+  // На месте пинга - только у числа: точку вида «Точка» клиент рисует сам, пустой ободок у таймаута тоже
+  if (inPlace) {
+    const num = `${btn} > ${digits}.tabular-nums`;
+    css += rule(num, ['position: relative', 'display: block', `width: ${d}px`, `height: ${d}px`, 'font-size: 0 !important']);
+    css += rule(`${num}::before`, ['content: ""', 'position: absolute', 'inset: 0', 'border-radius: 50%', 'background: currentColor', `box-shadow: 0 0 ${d}px currentColor`]);
+    if (!f.pingHideHover) {
+      css += rule(`${btn}:hover > ${digits}.tabular-nums`, ['width: auto', 'height: auto', 'font-size: inherit !important']);
+      css += rule(`${btn}:hover > ${digits}.tabular-nums::before`, ['display: none']);
+    }
+  }
+  if (f.pingHide && !inPlace) {
+    css += rule(`${btn} > ${digits}`, ['opacity: 0', 'transition: opacity 0.2s ease']);
+    if (!f.pingHideHover) css += rule(`${btn}:hover > ${digits}`, ['opacity: 1']);
+    // Цифр нет совсем - без плашки наведения (hover:bg-foreground/5) на пустом месте
+    else css += rule(`${btn}:has(> ${digits}):hover`, ['background: transparent']);
+  }
+  return css;
+}
+
 export function funRules(cfg: ThemeConfig, rule: RuleFn): { css: string; keyframes: Record<string, string>; props: string[] } {
   const f = cfg.fun;
   const kf: Record<string, string> = {};
@@ -149,9 +196,11 @@ export function funRules(cfg: ThemeConfig, rule: RuleFn): { css: string; keyfram
     // text-success - до 500 мс, text-warning - 500 мс и больше, text-destructive - таймаут
     const DIGITS = 'span:is(.text-success, .text-warning, .text-destructive)';
     const DELAY = `[data-slot="button"] ${DIGITS}`;
-    css += rule(`${PX}:has([data-slot="button"] .text-success)`, ['--kt-ping: var(--success)']);
-    css += rule(`${PX}:has([data-slot="button"] .text-warning)`, ['--kt-ping: var(--warning)']);
-    css += rule(`${PX}:has([data-slot="button"] .text-destructive)`, ['--kt-ping: var(--destructive)']);
+    // В меню трея тот же класс - у числа или точки (вид задержки «Точка») во второй кнопке строки
+    const T_DELAY = `> button:last-child ${DIGITS}`;
+    for (const c of ['success', 'warning', 'destructive']) {
+      css += rule([`${PX}:has([data-slot="button"] .text-${c})`, `${TRAY_ROW}:has(> button:last-child .text-${c})`], [`--kt-ping: var(--${c})`]);
+    }
     // ::before карточки занят, если кромка жидкого стекла отражает то, что вокруг или на карточке, - тогда
     // подсветка у содержимого карточки. Оно занимает всю карточку, а скругление срезает сама карточка (overflow-hidden)
     const content = `${PX}:has(${DELAY}) > [data-slot="card-content"]`;
@@ -198,6 +247,7 @@ export function funRules(cfg: ThemeConfig, rule: RuleFn): { css: string; keyfram
       // на месте пинга не загоралась пустая плашка. Значок непроверенного сервера (без цифр) подсвечивается как раньше
       else css += rule(`${PX} [data-slot="button"]:has(${DIGITS}):hover`, ['background: transparent !important']);
     }
+    css += trayPingRules(f, rule, T_DELAY, DIGITS);
   }
 
   if (f.reactive) {
