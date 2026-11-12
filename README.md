@@ -1,4 +1,4 @@
-![Конструктор koala-theme](.github/screenshot.webp)
+![Конструктор koala-theme](.github/screenshot.png)
 
 # koala-theme
 
