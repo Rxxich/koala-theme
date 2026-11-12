@@ -1501,12 +1501,17 @@ function motionRules(cfg: ThemeConfig): string {
   if (m.press) {
     out += rule(`${P} :is(${PROXY_SEL}, [data-slot="button"], ${PROFILE}, [data-slot="sidebar-menu-button"]):active:not(:disabled):not(:has(button:active))`, [`transform: scale(${m.pressScale / 100}) !important`, 'transition-duration: 90ms !important']);
   }
+  // Список (select.tsx) закрывается по animationend своей анимации исчезновения, пока у него data-closing:
+  // её не перебиваем, иначе список так и висит на экране
   if (m.popups === 'spring' || m.popups === 'fade') {
     const kf = m.popups === 'spring' ? 'kt-pop-spring' : 'kt-pop-fade';
-    out += rule(`${P} :is(${POPUPS}, [data-slot="tooltip-content"])[data-state="open"]`, [`animation: ${kf} var(--kt-dur-slow) ${m.popups === 'spring' ? 'var(--kt-spring)' : 'var(--kt-ease-out)'} !important`]);
+    out += rule(`${P} :is(${POPUPS}, [data-slot="tooltip-content"])[data-state="open"]:not([data-closing])`, [`animation: ${kf} var(--kt-dur-slow) ${m.popups === 'spring' ? 'var(--kt-spring)' : 'var(--kt-ease-out)'} !important`]);
     out += rule(`${P} [data-slot="dialog-overlay"][data-state="open"]`, ['animation: kt-pop-fade var(--kt-dur) var(--kt-ease-out) !important']);
   }
-  if (m.popups === 'none') out += rule(`${P} :is(${POPUPS}, [data-slot="dialog-overlay"], [data-slot="tooltip-content"])`, ['animation: none !important']);
+  if (m.popups === 'none') {
+    out += rule(`${P} :is(${POPUPS}, [data-slot="dialog-overlay"], [data-slot="tooltip-content"]):not([data-closing])`, ['animation: none !important']);
+    out += rule(`${P} [data-slot="select-content"][data-closing]`, ['animation-duration: 1ms !important']);
+  }
   return out;
 }
 
